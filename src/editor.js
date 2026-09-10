@@ -1,4 +1,5 @@
 import { displayFields } from './display-settings.js';
+import { prepareImportedConfig } from './import-images.js';
 import { styles } from './styles.js';
 import { normaliseConfig } from './lights.js';
 import { element, button, field } from './dom.js';
@@ -32,6 +33,19 @@ export class FloorplanEditor extends HTMLElement {
       await new Promise((resolve,reject)=>{const image=new Image();image.onload=resolve;image.onerror=()=>reject(Error('This artwork could not be displayed.'));image.src=url;});
       const floor=this.config.floors.find(f=>f.id===floorId);if(!floor)throw Error('This floor was removed during upload.');const target=objectId?floor.objects.find(item=>item.id===objectId):floor;if(!target)throw Error('This furniture was removed during upload.');target.style_images ??= {};target.style_images[mode]=url;this.uploadingStyle=false;this.emit();
     }catch(error){this.uploadingStyle=false;this.error=error.message;this.render();}
+  }
+  async importScene(file) {
+    if(!file||this.importing)return;
+    this.importing=true;this.error='';this.transferMessage='Preparing import and storing artwork…';this.render();
+    try{
+      if(file.size>32*1024*1024)throw Error('Choose a configuration smaller than 32 MB.');
+      const raw=JSON.parse(await file.text());
+      if(!raw||typeof raw!=='object'||Array.isArray(raw)||!Array.isArray(raw.floors))throw Error('Choose an exported floorplan configuration.');
+      const imported=await prepareImportedConfig(normaliseConfig(raw),this._hass);
+      this.config=imported;this.floorIndex=0;this.selectedObject='';this.roomId='';this.wallId='';this.pendingEntity='';this.pendingElement='';this.pendingObject='';this.draft=[];this.drawing=false;
+      this.transferMessage=`Imported ${imported.floors.length} floors and ${imported.groups.length} groups. Review the assignments, then use Home Assistant’s Save button.`;
+      this.importing=false;this.emit();
+    }catch(error){this.importing=false;this.transferMessage='';this.error=`Configuration was not imported: ${error.message}`;this.render();}
   }
   async exportScene() {
     this.error = ''; this.exporting = true; this.render();
@@ -93,7 +107,7 @@ export class FloorplanEditor extends HTMLElement {
     const transfer=element('section',{id:'configuration-transfer',className:'configuration-transfer',hidden:!this.transferOpen,'aria-label':'Full configuration transfer'},[element('h3',{text:'Move your configuration between environments'}),element('p',{text:'One JSON file contains all floors and embedded images, rooms, walls, furniture, light and sensor assignments, heating controls, groups and appearance settings. Keep it private; nothing needs to be committed to Git.'})]);
     const exportPanel=element('div',{},[element('h4',{text:'Export from dev'}),element('p',{text:'Download the complete configuration for this card. Live entity states and Home Assistant credentials are not included.'}),button(this.exporting?'Preparing export…':'Export full configuration',()=>this.exportScene(),{disabled:!!this.exporting})]);
     const importPanel=element('div',{},[element('h4',{text:'Import into production'}),element('p',{text:'Install the same or a newer card version, then choose the file here. Import replaces this card’s configuration; Undo restores it. Check entity IDs for the destination and use Home Assistant’s Save button.'})]);
-    importPanel.append(field('Import configuration JSON',element('input',{type:'file',accept:'.json,application/json',onchange:async e=>{const file=e.target.files?.[0];if(!file)return;this.transferMessage='';try{if(file.size>32*1024*1024)throw Error('Choose a configuration smaller than 32 MB.');const raw=JSON.parse(await file.text());if(!raw||typeof raw!=='object'||Array.isArray(raw)||!Array.isArray(raw.floors))throw Error('Choose an exported floorplan configuration.');const imported=normaliseConfig(raw);this.config=imported;this.floorIndex=0;this.selectedObject='';this.roomId='';this.wallId='';this.pendingEntity='';this.pendingElement='';this.pendingObject='';this.draft=[];this.drawing=false;this.transferMessage=`Imported ${imported.floors.length} floors and ${imported.groups.length} groups. Review the assignments before saving.`;this.emit();}catch(error){this.error=`Configuration was not imported: ${error.message}`;this.render();}}})));
+    importPanel.append(field('Import configuration JSON',element('input',{type:'file',accept:'.json,application/json',disabled:!!this.importing,onchange:e=>this.importScene(e.target.files?.[0])})));
     transfer.append(element('div',{className:'transfer-columns'},[exportPanel,importPanel]));
     if(this.transferMessage)transfer.append(element('p',{role:'status',text:this.transferMessage}));
     root.querySelector('.editor-heading').after(transfer);
