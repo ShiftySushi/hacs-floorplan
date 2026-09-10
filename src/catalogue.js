@@ -19,10 +19,10 @@ export const CATALOGUE = [
   ['kitchen_unit','Kitchen unit',.6,.6,.9,'Kitchen'], ['island','Kitchen island',1.6,.9,.9,'Kitchen'],
   ['fridge','Fridge',.6,.65,1.8,'Kitchen'], ['rug','Rug',2,1.5,.02,'Decor'],
   ['plant','Plant',.5,.5,.9,'Decor'], ['stairs','Stairs',.9,2.5,2.4,'Structure'],
-  ['lamp','Floor lamp',.4,.4,1.5,'Decor'],
+  ['lamp','Floor lamp',.4,.4,1.5,'Decor'], ['wall_light','Outdoor wall light',.14,.07,.26,'Lighting'],
   ['radiator','Radiator',1,.12,.6,'Heating'],
   ['tv_lightstrip','TV light strip',defaultTV.width,.05,defaultTV.height,'Lighting'], ['nanoleaf_panels','Nanoleaf hexagon panels',1.8,.05,.8,'Lighting'],
-  ['computer','Computer tower',.22,.45,.45,'Office'], ['ultrawide_monitor','Ultrawide monitor',.95,.22,.42,'Office'],
+  ['picture','Framed art',.734,.0355,.4724,'Living'], ['speaker','Speaker',.4,.16,.39,'Living'], ['computer','Computer tower',.22,.45,.45,'Office'], ['ultrawide_monitor','Ultrawide monitor',.95,.22,.42,'Office'],
 ].map(([type,name,width,depth,height,category])=>({type,name,width,depth,height,category}));
 
 export function panelArrangement(item,width,height) {
@@ -43,9 +43,10 @@ export function objectGlyph(item, mode='clean') {
   const line=(x1,y1,x2,y2,stroke=edge,width=2)=>g.append(svgElement('line',{x1,y1,x2,y2,stroke,'stroke-width':width}));
   const ellipse=(cx,cy,rx,ry,fill=white)=>g.append(svgElement('ellipse',{cx,cy,rx,ry,fill}));
   const colour=item.colour || fabric;
-  if(item.type==='nanoleaf_panels') {for(const [x,y] of [[22,30],[50,30],[78,30],[36,55],[64,55]])g.append(svgElement('polygon',{points:Array.from({length:6},(_,i)=>`${x+15*Math.cos((30+i*60)*Math.PI/180)},${y+15*Math.sin((30+i*60)*Math.PI/180)}`).join(' '),fill:white}));}
+  if(item.variant==='sword'){rect(0,43,25,14,'#e7d9b4');for(let x=2;x<25;x+=4){line(x,43,x+4,57,colour,2);line(x,57,x+4,43,colour,2);}g.append(svgElement('path',{d:'M25 50Q65 50 98 30',fill:'none',stroke:colour,'stroke-width':12}));line(25,35,25,65,colour,4);}
+  else if(item.type==='nanoleaf_panels') {for(const [x,y] of [[22,30],[50,30],[78,30],[36,55],[64,55]])g.append(svgElement('polygon',{points:Array.from({length:6},(_,i)=>`${x+15*Math.cos((30+i*60)*Math.PI/180)},${y+15*Math.sin((30+i*60)*Math.PI/180)}`).join(' '),fill:white}));}
   else if(item.type==='tv_lightstrip'){rect(4,10,92,75,edge);rect(10,16,80,63,item.colour || '#d1a4e5');rect(17,23,66,49,edge);}
-  else if(item.type==='computer'){rect(15,5,70,90,edge);rect(23,14,54,70,colour);ellipse(50,32,14,14,white);ellipse(50,64,14,14,white);}
+  else if(item.type==='computer'){rect(15,5,70,90,edge);rect(23,14,54,70,colour);if(item.variant!=='ps5'){ellipse(50,32,14,14,white);ellipse(50,64,14,14,white);}}
   else if(item.type==='ultrawide_monitor'){rect(2,12,96,55,edge);rect(8,18,84,42,'#729daa');rect(46,68,8,18,edge);rect(24,86,52,7,edge);}
   else if(item.type==='radiator') {rect(3,24,94,52,item.colour || white,3);for(let x=10;x<94;x+=8)line(x,29,x,71);rect(0,41,5,18,edge,1);rect(95,41,5,18,edge,1);}
   else if(item.type==='rug') {rect(2,2,96,96,wood);rect(10,10,80,80,colour);rect(20,20,60,60,wood);for(let i=8;i<96;i+=12){line(i,0,i,5);line(i,95,i,100);} }
@@ -61,7 +62,7 @@ export function objectGlyph(item, mode='clean') {
     else {line(50,5,50,95);line(41,26,41,40);line(59,26,59,40);}
   }
   else if(['side_table','dining_table','island','desk'].includes(item.type)) {rect(3,4,94,92,wood,8);rect(9,10,82,80,item.colour||wood,6);if(item.type==='desk'){rect(22,13,56,33,edge);rect(28,18,44,23,'#94b8bd');rect(28,56,44,18,white);line(34,64,67,64);}else if(item.type==='island'){rect(55,20,31,55,white);ellipse(70,44,10,17,'#acc5cd');}else {line(15,20,84,20,white,1);line(15,80,84,80,edge,1);}}
-  else if(['chair','office_chair'].includes(item.type)) {if(item.type==='office_chair'){line(50,50,10,90);line(50,50,90,90);line(50,50,50,99);}rect(16,10,68,74,colour,12);rect(12,4,76,20,wood,5);if(item.type==='office_chair'){rect(3,33,12,40,edge);rect(85,33,12,40,edge);}}
+  else if(['chair','office_chair'].includes(item.type)) {if(item.type==='office_chair'){line(50,50,10,90);line(50,50,90,90);line(50,50,50,99);}rect(16,10,68,74,colour,12);rect(12,4,76,20,item.colour || wood,5);if(item.type==='office_chair'){rect(3,33,12,40,edge);rect(85,33,12,40,edge);}}
   else if(item.type==='toilet') {rect(15,3,70,28,white);ellipse(50,62,33,34);ellipse(50,61,22,24,'#aec9cf');rect(66,9,10,7,edge);}
   else if(['sink','bath'].includes(item.type)) {rect(3,3,94,94,white,18);rect(13,18,74,69,'#bdd3d7',22);ellipse(50,72,4,3,edge);rect(43,3,14,23,edge);}
   else if(item.type==='shower') {rect(3,3,94,94,white);rect(12,12,76,76,'#c7dfe1');line(12,12,88,88,'#a5bfc4');line(12,88,88,12,'#a5bfc4');rect(65,12,15,15,edge);line(3,97,97,97,'#79aeb9',6);}

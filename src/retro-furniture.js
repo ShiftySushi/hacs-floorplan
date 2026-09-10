@@ -20,7 +20,13 @@ export function retroFurniture(item,mode,width,depth) {
   const planks=(x,y,w,h)=>{r(x,y,w,h,timber);const n=Math.max(2,Math.min(24,Math.round(w/(6*p))));for(let i=1;i<n;i++)ln(x+i*w/n,y,x+i*w/n,y+h,shade);};
   const textile=(x,y,w,h)=>{r(x,y,w,h,accent);for(let a=x+3*p;a<x+w-2*p;a+=7*p)if(modern){r(a,y+2*p,2*p,2*p,light,light);r(a+2*p,y+4*p,p,p,shade,shade);}else diamond(a,y+h/2,1.5*p,light);};
 
-  if(item.type==='sofa') {
+  if(item.type==='tv') {
+    // Keep the screen shallow and aligned with its supporting bench and strip.
+    r(0,depth*.12,width,depth*.5,modern?'#343b58':'#543c32');
+    r(width*.34,depth*.62,width*.32,depth*.38,shade);
+    ln(p,depth*.15,width-p,depth*.15,modern?'#89dee0':'#b5c884');
+    if(!modern)for(const x of [width*.08,width*.92])diamond(x,depth*.44,depth*.06,light);
+  } else if(item.type==='sofa') {
     if(modern){stepped(p,p,width-2*p,depth-2*p,accent);r(3*p,2*p,width-6*p,4*p,light);const n=Math.max(1,Math.min(20,Math.round((item.width || 2)/.65))),w=(width-8*p)/n;for(let i=0;i<n;i++){stepped(4*p+i*w,7*p,w-p,depth-11*p,'#eef2da');ln(5*p+i*w,8*p,Math.max(5*p+i*w,3*p+(i+1)*w),8*p,'#ffffff');}r(p,6*p,3*p,depth-9*p,accent);r(width-4*p,6*p,3*p,depth-9*p,accent);}
     else {base();r(2*p,2*p,width-4*p,4*p,shade);for(let x=4*p;x<width-3*p;x+=5*p)diamond(x,4*p,p,light);textile(4*p,7*p,width-8*p,depth-11*p);r(p,7*p,3*p,depth-9*p,timber);r(width-4*p,7*p,3*p,depth-9*p,timber);studs();}
     if(item.variant==='corner')textile(4*p,depth*.55,Math.min(u*.7,width-8*p),depth*.4);
@@ -29,12 +35,12 @@ export function retroFurniture(item,mode,width,depth) {
     if(modern){r(2*p,2*p,width-4*p,depth-4*p,'#ffffe4');stepped(4*p,3*p,width-8*p,5*p,'#fffefa');textile(3*p,10*p,width-6*p,depth-13*p);r(3*p,10*p,width-6*p,2*p,light,light);}
     else {for(const x of [p,width-4*p]){r(x,p,3*p,depth-2*p,timber);diamond(x+1.5*p,3*p,1.5*p,light);}r(4*p,4*p,width-8*p,depth-8*p,'#d6c59f');const count=item.variant==='single'?1:2;for(let i=0;i<count;i++)r(5*p+i*(width-10*p)/count,5*p,(width-12*p)/count,4*p,'#e7d9b3');textile(4*p,11*p,width-8*p,depth-15*p);r(2*p,depth-5*p,width-4*p,3*p,timber);}
   } else if(['tv_bench','display_cabinet','bookshelf','fridge'].includes(item.type)) {
-    base(modern?(item.type==='fridge'?'#d9e7ee':'#b8d8de'):timber);
+    base(item.colour || (modern?(item.type==='fridge'?'#d9e7ee':'#b8d8de'):timber));
     const bays=Math.max(1,Math.min(30,Math.round((item.width || 1)/.45))),bay=(width-4*p)/bays;
     for(let i=0;i<bays;i++) {
       const x=2*p+i*bay;
       if(item.type==='bookshelf'&&item.variant!=='cubes'){r(x+p,3*p,bay-2*p,depth-6*p,modern?'#708daf':shade);const count=Math.max(2,Math.floor(bay/(2*p)));for(let k=0;k<count;k++)r(x+1.5*p+k*(bay-3*p)/count,4*p,(bay-3*p)/count*.7,depth-8*p,(modern?['#e57987','#f1d37a','#83b9bd']:['#9e7860','#aaa16b','#6b805d'])[k%3]);}
-      else if(modern){r(x+p,3*p,bay-2*p,depth-6*p,item.type==='display_cabinet'?'#8fc8df':'#e5f0df');r(x+bay/2-p,depth-5*p,2*p,p,shade,shade);if(item.type==='display_cabinet')ln(x+2*p,5*p,x+bay-3*p,depth*.45,'#e7ffff');}
+      else if(modern){r(x+p,3*p,bay-2*p,depth-6*p,item.type==='display_cabinet'?'#8fc8df':item.colour || '#e5f0df');r(x+bay/2-p,depth-5*p,2*p,p,shade,shade);if(item.type==='display_cabinet')ln(x+2*p,5*p,x+bay-3*p,depth*.45,'#e7ffff');}
       else {planks(x+p,3*p,bay-2*p,depth-6*p);r(x+p,depth*.45,bay-2*p,2*p,shade);diamond(x+bay/2,depth*.5,p,light);}
     }
     if(!modern)studs();

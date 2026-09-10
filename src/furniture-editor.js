@@ -1,12 +1,20 @@
 import { element, button, field, svgElement } from './dom.js';
-import { renderPlan } from './plan.js';
+import { renderPlan as render2D } from './plan.js';
+import { render3D } from './plan3d.js';
 import { CATALOGUE, objectGlyph, TV_SIZES, tvDimensions } from './catalogue.js';
-import { objectArtwork } from './object-art.js';
+import { PRODUCT_PRESETS, productPreset, applyProductPreset, productDimensions } from './product-catalogue.js';
 import { floorDimensions } from './scene.js';
 import { furnitureStyles } from './furniture-styles.js';
 import { iconButton } from './icons.js';
 import { entitySelect } from './setup.js';
+const LIBRARY=[...CATALOGUE.map(item=>({...item,id:item.type})),...PRODUCT_PRESETS];
 export function furnitureSetup(host, floor) {
+  const preview=host.furniturePreview==='3d';
+  function renderPlan(floor,states,options){
+    if(!preview)return render2D(floor,states,{...options,mode:'clean'});
+    host.furniture3DViews??=new Map();if(!host.furniture3DViews.has(floor.id))host.furniture3DViews.set(floor.id,{});
+    return render3D(floor,states,{mode:'3d',edit:true,viewState:host.furniture3DViews.get(floor.id)});
+  }
   floor.objects ??= [];
   const root = element('div', { className: 'scene-editor furniture-editor' });
   const unlocked=!!host.furnitureUnlocked;
@@ -16,6 +24,11 @@ export function furnitureSetup(host, floor) {
   root.append(element('style',{text:furnitureStyles}),element('div',{className:'furniture-header'},[element('p',{text:unlocked?'Select furniture to move or resize it. Add objects from the catalogue.':'Explore your layout. Unlock editing to add, move or resize furniture.'}),iconButton(unlocked?'Lock editing':'Unlock editing','edit',()=>{host.furnitureUnlocked=!unlocked;host.pendingObject='';host.render();},{'aria-pressed':String(unlocked)})]));
   const workspace=element('div',{className:'furniture-workspace'}),canvas=element('div',{className:'furniture-canvas'}),panel=element('div',{className:'furniture-panel'}),actions=element('div',{className:'furniture-actions','aria-label':'Selected furniture actions'});
   workspace.append(canvas,panel);root.append(workspace);
+  canvas.append(element('div',{className:'row','aria-label':'Furniture editor view'},[
+    button('2D edit',()=>{host.furniturePreview='clean';host.render();},{'aria-pressed':String(!preview)}),
+    button('3D preview',()=>{host.furniturePreview='3d';host.pendingObject='';host.render();},{'aria-pressed':String(preview)})
+  ]));
+  if(preview)canvas.append(element('p',{className:'furniture-lock-hint',text:'Rotate the preview to check height and clearance. Edit dimensions below; use 2D to place and move furniture.'}));
   panel.append(button('Add furniture',()=>{host.furnitureUnlocked=true;host.selectedObject='';host.pendingObject='';host.render();}),button('Add lights & sensors',()=>{host.step=3;host.pendingElement='spot';host.pendingEntity='';host.render();}));
   const palette = element('div', { className: 'furniture-palette row', 'aria-label': 'Furniture catalogue' });
   const startPaletteDrag=(event,item,tile)=>{
@@ -23,13 +36,13 @@ export function furnitureSetup(host, floor) {
     cancelPaletteDrag();const start=[event.clientX,event.clientY],pointerId=event.pointerId;let ghost,dragged=false;
     const cleanup=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',finish);window.removeEventListener('pointercancel',cancel);ghost?.remove();cancelPaletteDrag=()=>{};};
     const move=e=>{if(e.pointerId!==pointerId)return;if(!dragged&&Math.hypot(e.clientX-start[0],e.clientY-start[1])<8)return;dragged=true;e.preventDefault();if(!ghost){ghost=element('div',{'aria-hidden':'true'});ghost.style.cssText='position:fixed;z-index:10000;pointer-events:none;width:52px;height:52px;padding:6px;background:#ffffffdf;border:2px solid #007c91;border-radius:9px;box-shadow:0 3px 12px #0003;transform:translate(-50%,-50%)';ghost.append(tile.querySelector('svg').cloneNode(true));document.body.append(ghost);}ghost.style.left=`${e.clientX}px`;ghost.style.top=`${e.clientY}px`;};
-    const finish=e=>{if(e.pointerId!==pointerId)return;const point=dragged?plan.pointFromClient(e.clientX,e.clientY):null;if(dragged)suppressPaletteClickUntil=Date.now()+500;cleanup();if(point)place(point,item.type);};
+    const finish=e=>{if(e.pointerId!==pointerId)return;const point=dragged?plan.pointFromClient?.(e.clientX,e.clientY):null;if(dragged)suppressPaletteClickUntil=Date.now()+500;cleanup();if(point)place(point,item.id);};
     const cancel=e=>{if(e.pointerId===pointerId)cleanup();};cancelPaletteDrag=cleanup;
     window.addEventListener('pointermove',move,{passive:false});window.addEventListener('pointerup',finish);window.addEventListener('pointercancel',cancel);
   };
   const filter = value => {
     palette.replaceChildren();
-    CATALOGUE.filter(item => `${item.name} ${item.category}`.toLowerCase().includes(value.toLowerCase())).forEach(item => { const tile=button(item.name, () => { if(Date.now()<suppressPaletteClickUntil)return;host.pendingObject = item.type; host.render(); }, { disabled:!unlocked,draggable:unlocked,'aria-pressed': String(host.pendingObject === item.type),title:`Drag ${item.name} onto the plan, or select and tap its position.` }); const thumbnail=svgElement('svg',{viewBox:'0 0 100 100',width:48,height:48,'aria-hidden':'true'});const art=svgElement('g',{transform:['pokemon','zelda'].includes(host.config.appearance?.mode)?'translate(5 15)':'translate(0 0)'});art.append(['pokemon','zelda'].includes(host.config.appearance?.mode)?objectArtwork(item,host.config.appearance.mode,90,70):objectGlyph(item,host.config.appearance?.mode));thumbnail.append(art);tile.prepend(thumbnail);if(unlocked)tile.style.touchAction='none';tile.addEventListener('dragstart',e=>{if(!unlocked)return;e.dataTransfer.setData('application/x-floorplan-object',item.type);e.dataTransfer.effectAllowed='copy';});tile.addEventListener('pointerdown',e=>startPaletteDrag(e,item,tile));palette.append(tile); });
+    LIBRARY.filter(item => `${item.name} ${item.category}`.toLowerCase().includes(value.toLowerCase())).forEach(item => { const tile=button(item.name, () => { if(Date.now()<suppressPaletteClickUntil)return;host.furniturePreview='clean';host.pendingObject = item.id; host.render(); }, { disabled:!unlocked,draggable:unlocked,'aria-pressed': String(host.pendingObject === item.id),title:`Drag ${item.name} onto the plan, or select and tap its position.` }); const thumbnail=svgElement('svg',{viewBox:'0 0 100 100',width:48,height:48,'aria-hidden':'true'});const art=svgElement('g');art.append(objectGlyph(item,'clean'));thumbnail.append(art);tile.prepend(thumbnail);if(item.category==='Products')tile.append(element('small',{text:productDimensions(item)}));if(unlocked)tile.style.touchAction='none';tile.addEventListener('dragstart',e=>{if(!unlocked)return;e.dataTransfer.setData('application/x-floorplan-object',item.id);e.dataTransfer.effectAllowed='copy';});tile.addEventListener('pointerdown',e=>startPaletteDrag(e,item,tile));palette.append(tile); });
     if (!palette.childNodes.length) palette.append(element('p', { text: 'No matching objects.' }));
   };
   panel.append(element('details',{open:unlocked&&(!host.selectedObject||!!host.pendingObject)},[element('summary',{text:'Add furniture'}),field('Find furniture', element('input', { type: 'search', value: host.furnitureQuery || '', placeholder: 'Bed, piano, sofa…',disabled:!unlocked, oninput: e => { host.furnitureQuery = e.target.value; filter(e.target.value); } })), palette]));
@@ -39,42 +52,60 @@ export function furnitureSetup(host, floor) {
   const place = (point,type=host.pendingObject) => {
     if(!unlocked)return;
     point = snap(point);
-    const item = CATALOGUE.find(value => value.type === type); if (!item) return;
-    const object = { id: crypto.randomUUID(), type: item.type, x: point[0], y: point[1], width: item.width, depth: item.depth, height: item.height, rotation: 0 };
+    const item = LIBRARY.find(value => value.id === type); if (!item) return;
+    let object = { id: crypto.randomUUID(), type: item.type, x: point[0], y: point[1], width: item.width, depth: item.depth, height: item.height, rotation: 0 };
+    if(item.category==='Products')object=applyProductPreset(object,item);
     floor.objects.push(object); host.selectedObject = object.id; host.pendingObject = ''; host.emit();
   };
-  if (host.pendingObject) canvas.append(element('div', { className: 'row furniture-placement', role: 'status' }, [element('span', { text: `Tap to place ${CATALOGUE.find(i => i.type === host.pendingObject)?.name || 'furniture'}.` }), button('Place furniture in centre', () => place([50,50])), button('Cancel placement', () => { host.pendingObject = ''; host.render(); })]));
+  if (host.pendingObject) canvas.append(element('div', { className: 'row furniture-placement', role: 'status' }, [element('span', { text: `Tap to place ${LIBRARY.find(i => i.id === host.pendingObject)?.name || 'furniture'}.` }), button('Place furniture in centre', () => place([50,50])), button('Cancel placement', () => { host.pendingObject = ''; host.render(); })]));
   const plan=renderPlan(floor, host._hass?.states || {}, { edit: true,viewState, mode: ['3d','sims'].includes(host.config.appearance?.mode) ? 'clean' : host.config.appearance?.mode, selectedObject: host.selectedObject, onPoint: place, onObject: id => { host.selectedObject = id; host.pendingObject = ''; host.render(); },onObjectContext:id=>{host.selectedObject=id;host.pendingObject='';host.render();host.shadowRoot.querySelector('[data-object-tools]')?.focus();}, onObjectMove: unlocked?(id, point) => { const item = floor.objects.find(o => o.id === id); if (item) { point=snap(point); item.x = point[0]; item.y = point[1]; host.selectedObject = id; host.emit(); } }:undefined,onObjectResize:unlocked?(id,size)=>{const item=floor.objects.find(o=>o.id===id);if(item){item.width=size.width;item.depth=size.depth;host.emit();}}:undefined });
   canvas.append(plan);
   plan.addEventListener('dragover',e=>{if(unlocked&&e.dataTransfer.types.includes('application/x-floorplan-object')){e.preventDefault();e.dataTransfer.dropEffect='copy';}});
-  plan.addEventListener('drop',e=>{if(!unlocked)return;const type=e.dataTransfer.getData('application/x-floorplan-object'),point=plan.pointFromClient(e.clientX,e.clientY);if(!point||!CATALOGUE.some(item=>item.type===type))return;e.preventDefault();e.stopPropagation();place(point,type);});
+  plan.addEventListener('drop',e=>{if(!unlocked)return;const type=e.dataTransfer.getData('application/x-floorplan-object'),point=plan.pointFromClient?.(e.clientX,e.clientY);if(!point||!LIBRARY.some(item=>item.id===type))return;e.preventDefault();e.stopPropagation();place(point,type);});
   let fitFrame=0,fitDisposed=false;
-  const fitPlan=()=>{fitFrame=0;if(fitDisposed||!plan.isConnected)return;const top=plan.getBoundingClientRect().top,canvasStyle=getComputedStyle(canvas),width=canvas.clientWidth-parseFloat(canvasStyle.paddingLeft)-parseFloat(canvasStyle.paddingRight),ratio=Number(plan.style.getPropertyValue('--plan-ratio')) || 1,height=Math.max(160,window.innerHeight-top-125);plan.style.setProperty('width',`${Math.max(1,Math.min(width,height*ratio))}px`,'important');};
+  const fitPlan=()=>{fitFrame=0;if(fitDisposed||!plan.isConnected)return;const top=plan.getBoundingClientRect().top,canvasStyle=getComputedStyle(canvas),width=canvas.clientWidth-parseFloat(canvasStyle.paddingLeft)-parseFloat(canvasStyle.paddingRight),ratio=Number(plan.style.getPropertyValue('--plan-ratio')) || 1,height=Math.max(160,window.innerHeight-top-125);if(preview){plan.style.setProperty('width',`${Math.max(1,width)}px`,'important');plan.style.height=`${Math.max(320,height)}px`;}else plan.style.setProperty('width',`${Math.max(1,Math.min(width,height*ratio))}px`,'important');};
   const scheduleFit=()=>{if(!fitFrame&&!fitDisposed)fitFrame=requestAnimationFrame(fitPlan);};
   const fitObserver=new ResizeObserver(scheduleFit);fitObserver.observe(canvas);fitObserver.observe(root);window.addEventListener('resize',scheduleFit);scheduleFit();
   const disposePlan=plan.dispose;plan.dispose=()=>{cancelPaletteDrag();fitDisposed=true;cancelAnimationFrame(fitFrame);fitObserver.disconnect();window.removeEventListener('resize',scheduleFit);disposePlan?.();};
   canvas.append(element('p',{className:'furniture-lock-hint',text:unlocked?'Drag a selected object’s corner to resize it. Right-click an object to focus its tools; the same actions work by touch below.':'Editing is locked. You can select objects and inspect their dimensions.'}));
   const selection = element('select', { onchange: e => { host.selectedObject = e.target.value; host.render(); } }, [element('option', { value: '', text: 'Select placed furniture…' })]);
-  floor.objects.forEach((item, index) => selection.append(element('option', { value: item.id, selected: item.id === host.selectedObject, text: `${CATALOGUE.find(i => i.type === item.type)?.name || item.type} ${index + 1}` })));
+  floor.objects.forEach((item, index) => selection.append(element('option', { value: item.id, selected: item.id === host.selectedObject, text: `${item.name || CATALOGUE.find(i => i.type === item.type)?.name || item.type} ${index + 1}` })));
   panel.append(field('Placed furniture', selection));
   panel.append(actions);
   const selected = floor.objects.find(item => item.id === host.selectedObject);
   if (selected) {
     const inspector = element('fieldset', { className: 'object-inspector',disabled:!unlocked }, [element('legend', { text: 'Furniture position and size' })]);
+    const presets=PRODUCT_PRESETS.filter(p=>p.type===selected.type),product=productPreset(selected);
+    if(presets.length){
+      const picker=element('select',{disabled:!unlocked,onchange:e=>{const preset=PRODUCT_PRESETS.find(p=>p.id===e.target.value);if(preset)Object.assign(selected,applyProductPreset(selected,preset));else {delete selected.product_id;delete selected.name;}host.emit();}},[element('option',{value:'',text:'Custom / generic dimensions',selected:!product})]);
+      for(const preset of presets)picker.append(element('option',{value:preset.id,text:preset.name,selected:product?.id===preset.id}));
+      picker.setAttribute('aria-label','Product preset');const presetField=field('Product preset',picker);presetField.classList.add('product-field');inspector.append(presetField);
+    }
+    if(product){
+      inspector.append(element('p',{text:productDimensions(product)}),element('a',{href:product.source,target:'_blank',rel:'noopener noreferrer',text:'Product dimensions source'}));
+      if(product.note)inspector.append(element('p',{className:'muted',text:product.note}));
+      const finishes=element('div',{className:'row product-finishes','aria-label':'Suggested product finishes'});
+      for(const [name,colour] of product.colours){const swatch=button(name,()=>{selected.colour=colour;host.emit();},{disabled:!unlocked,'aria-pressed':String(selected.colour===colour)});const chip=element('span',{'aria-hidden':'true'});chip.style.cssText=`display:inline-block;width:16px;height:16px;border-radius:50%;border:1px solid #888;background:${colour}`;swatch.prepend(chip);finishes.append(swatch);}
+      inspector.append(finishes,element('p',{className:'muted',text:'Suggested finishes are approximate on-screen colours. Custom colours and dimensions remain editable.'}),button('Restore product dimensions',()=>{for(const key of ['width','depth','height'])selected[key]=product[key];host.emit();},{disabled:!unlocked}));
+    }
     if(['tv','tv_lightstrip'].includes(selected.type)){
       const current=TV_SIZES.find(size=>{const dims=tvDimensions(size);return Math.abs(selected.width-dims.width)<.0001&&Math.abs(selected.height-dims.height)<.0001;}),screen=element('select',{onchange:e=>{if(!e.target.value)return;Object.assign(selected,tvDimensions(Number(e.target.value)));host.emit();}},[element('option',{value:'',text:'Custom dimensions',selected:!current})]);
       for(const size of TV_SIZES)screen.append(element('option',{value:size,text:`${size} inch · 16:9`,selected:current===size}));
       inspector.append(field('TV screen size',screen),element('p',{className:'muted',text:'Presets set screen width and height together. Custom dimensions stay unchanged until you choose a size.'}));
     }
     if(selected.type==='radiator')inspector.append(field('Radiator heating entity',entitySelect(host,/^(climate|switch|binary_sensor)\./,selected.heating_entity || '',id=>{selected.heating_entity=id;host.emit();})),element('p',{className:'muted',text:'A thermostat glows only while actively heating. A switch or activity sensor glows when on. Tap the radiator in live view to open its Home Assistant controls.'}));
+    if(selected.type==='picture')inspector.append(field('Artwork media player (HA-Meural)',entitySelect(host,/^media_player\./,selected.media_entity || '',id=>{selected.media_entity=id;host.emit();})),field('Fallback artwork URL or data image',element('input',{value:selected.artwork_image || '',onchange:e=>{selected.artwork_image=e.target.value;host.emit();}})),element('p',{className:'muted',text:'Follows the media player image. Tap the frame in 3D to change its displayed orientation.'}));
     if(selected.type==='tv')inspector.append(field('TV media player',entitySelect(host,/^media_player\./,selected.media_entity || '',id=>{selected.media_entity=id;host.emit();})),element('p',{className:'muted',text:'TV screen activity follows this media player. The reactive light binding is separate and follows a light’s power, brightness and colour. Leave the media player blank if you do not want to link TV activity.'}));
     inspector.append(field('Reactive light entity',entitySelect(host,/^light\./,selected.light_entity || '',id=>{selected.light_entity=id;host.emit();})),field('Height above floor (metres)',element('input',{type:'number',min:0,max:100,step:.01,value:selected.elevation_m || 0,onchange:e=>{const value=Number(e.target.value);if(!Number.isFinite(value)||value<0||value>100){host.error='Height above floor must be between zero and 100 metres.';host.render();return;}selected.elevation_m=value;host.emit();}})),element('p',{className:'muted',text:'For a TV or monitor on furniture, set its height above floor to the supporting bench or desk height. Link a light to make the object follow its power, brightness and colour.'}));
-    for (const [key, label, min, max, step] of [['width','Width (metres)',.05,30,.05],['depth','Depth (metres)',.05,30,.05],['rotation','Object rotation (degrees)',0,359,1],['height','Height (metres)',.05,10,.05],['x','X position (%)',0,100,.1],['y','Y position (%)',0,100,.1]]) inspector.append(field(label, element('input', { type: 'number', value: selected[key], min, max, step, onchange: e => { const value = Number(e.target.value); if (!Number.isFinite(value) || value < min || value > max) { host.error = `${label} must be between ${min} and ${max}.`; host.render(); return; } selected[key] = value; host.emit(); } })));
+    for (const [key, label, min, max, step] of [['width','Width (metres)',.001,30,'any'],['depth','Depth (metres)',.001,30,'any'],['rotation','Object rotation (degrees)',0,359,1],['height','Height (metres)',.001,10,'any'],['x','X position (%)',0,100,.1],['y','Y position (%)',0,100,.1]]) inspector.append(field(label, element('input', { type: 'number', value: selected[key], min, max, step, onchange: e => { const value = Number(e.target.value); if (!Number.isFinite(value) || value < min || value > max) { host.error = `${label} must be between ${min} and ${max}.`; host.render(); return; } selected[key] = value; host.emit(); } })));
     inspector.append(field('Furniture colour', element('input', { type: 'color', value: selected.colour || '#b58b65', onchange: e => { selected.colour = e.target.value; host.emit(); } })));
+    if(['kitchen_unit','island','kitchen_island'].includes(selected.type))for(const [key,label,fallback] of [['worktop_colour','Worktop colour','#eee9dc'],['handle_colour','Handle colour','#334148']])inspector.append(field(label,element('input',{type:'color',value:selected[key] || fallback,onchange:e=>{selected[key]=e.target.value;host.emit();}})));
+    if(['dining_table','chair','side_table','desk'].includes(selected.type))inspector.append(field('Leg colour',element('input',{type:'color',value:selected.leg_colour || selected.colour || '#334148',onchange:e=>{selected.leg_colour=e.target.value;host.emit();}})));
+    if(selected.type==='dining_table'){const finish=element('select',{onchange:e=>{selected.surface_finish=e.target.value;host.emit();}});for(const [value,text] of [['plain','Plain'],['speckled','Speckled']])finish.append(element('option',{value,text,selected:(selected.surface_finish || 'plain')===value}));inspector.append(field('Tabletop finish',finish));}
     const spriteUpload=element('details',{open:host.spriteArtworkId===selected.id},[element('summary',{text:'Custom pixel artwork'}),element('p',{text:'Upload a transparent furniture sprite for each game style. Artwork keeps its proportions and position. Upright furniture can extend beyond its shallow floor footprint so the front remains visible. Keep extracted game artwork private.'})]);
     spriteUpload.addEventListener('toggle',()=>{host.spriteArtworkId=spriteUpload.open?selected.id:null;});
     for(const [mode,label] of [['pokemon','Pokémon'],['zelda','Zelda']]){spriteUpload.append(field(`${label} furniture sprite`,element('input',{type:'file',accept:'image/png,image/jpeg,image/webp,image/svg+xml',disabled:!!host.uploadingStyle,onchange:e=>host.uploadStyleImage(floor.id,mode,e.target.files?.[0],selected.id)})));if(selected.style_images?.[mode])spriteUpload.append(button(`Remove ${label} sprite`,()=>{delete selected.style_images[mode];host.emit();}));}inspector.append(spriteUpload);
-    const variants={sofa:[['','Straight sofa'],['corner','Corner sofa']],piano:[['','Upright piano'],['grand','Grand piano']],bed:[['','Double bed'],['single','Single bed']],desk:[['','Desk with computer'],['plain','Plain desk']],bookshelf:[['','Bookshelf'],['cubes','Cube storage']]};
+    const variants={kitchen_unit:[['','Base unit'],['wall','Wall cupboard']],fridge:[['','Freestanding'],['integrated','Integrated']],sofa:[['','Straight sofa'],['corner','Corner sofa']],piano:[['','Upright piano'],['grand','Grand piano']],bed:[['','Double bed'],['single','Single bed']],desk:[['','Desk with computer'],['plain','Plain desk']],bookshelf:[['','Bookshelf'],['cubes','Cube storage']]};
     if(selected.type==='nanoleaf_panels'){
       const effect=element('select',{onchange:e=>{selected.panel_effect=e.target.value;host.emit();}});for(const [value,text] of [['static','Static'],['breathe','Breathe'],['wave','Wave'],['rainbow','Rainbow']])effect.append(element('option',{value,text,selected:(selected.panel_effect || 'static')===value}));inspector.append(field('Panel light effect',effect));
       const layout=selected.panel_layout || Array.from({length:21},(_,i)=>[Math.floor(i/3),i%3+Math.floor(i/3)%2]),cells=new Map();

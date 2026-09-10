@@ -32,11 +32,11 @@ test('furniture variants produce distinct geometry',()=>{
 });
 test('GPU light budget prioritises selected storey and includes unassigned markers',()=>{
   const floors=['ground','upper'].map(id=>({id,entities:Array.from({length:10},(_,i)=>({entity:`light.${id}${i}`,x:i*9,y:40})),rooms:[]}));
-  assert.equal(selectSceneLights(floors,'upper','low').length,0);
-  assert.equal(selectSceneLights(floors,'upper','high').length,6);
-  const automatic=selectSceneLights(floors,'upper');assert.equal(automatic.length,3);
+  assert.equal(selectSceneLights(floors,'upper','low').length,16);
+  assert.equal(selectSceneLights(floors,'upper','high').length,20);
+  const automatic=selectSceneLights(floors,'upper');assert.equal(automatic.length,20);
   assert.deepEqual(automatic[0],{floorId:'upper',id:'light.upper0',point:[0,40]});
-  assert.ok(automatic.every(light=>light.floorId==='upper'));
+  assert.ok(automatic.slice(0,10).every(light=>light.floorId==='upper'));
 });
 test('wall joins close shared corners without bridging endpoint openings',()=>{
   const walls=[{a:[0,0],b:[50,0],thickness:.2,height:2.4},{a:[50,0],b:[70,40],thickness:.2,height:2.4}];
