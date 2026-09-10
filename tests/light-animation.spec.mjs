@@ -11,13 +11,13 @@ test('lights fade through intermediate levels and panels animate only when enabl
   const glow=page.locator('[data-object-glow="panels"]'),panel=page.locator('[data-object-id="panels"] [data-panel-index]').first();
   const initial=await panel.getAttribute('fill');
   await expect.poll(()=>panel.getAttribute('fill')).not.toBe(initial);
+  const opacity=()=>glow.evaluate(el=>Number(el.ownerSVGElement.querySelector(el.getAttribute('fill').slice(4,-1)).firstElementChild.getAttribute('stop-opacity')));
   await page.evaluate(()=>{const c=document.querySelector('floorplan-card');c.hass={...c._hass,states:{'light.test':{state:'off',attributes:{}}}};});
-  await expect.poll(async()=>Number(await glow.getAttribute('fill-opacity'))).toBeLessThan(.44);
-  expect(Number(await glow.getAttribute('fill-opacity'))).toBeGreaterThan(0);
+  await expect.poll(async()=>{const level=await opacity();return level>0&&level<.44;},{intervals:[20]}).toBe(true);
   await expect(glow).toHaveCount(0);
   await page.emulateMedia({reducedMotion:'reduce'});
   await page.evaluate(()=>{const c=document.querySelector('floorplan-card');c.hass={...c._hass,states:{'light.test':{state:'on',attributes:{rgb_color:[50,150,255]}}}};});
-  await expect(glow).toHaveAttribute('fill-opacity','0.45');
+  await expect.poll(opacity).toBe(.45);
   const stable=await panel.getAttribute('fill');
   await page.waitForTimeout(150);expect(await panel.getAttribute('fill')).toBe(stable);
 });

@@ -25,6 +25,8 @@ test('a decorative light can be placed, raised and connected in the furniture ed
   await card.getByRole('button',{name:'Diner: Off',exact:true}).click();
   await expect(glow).toHaveCount(1);
   await page.evaluate(()=>{const c=document.querySelector('floorplan-card');c.hass={...c._hass,states:{...c._hass.states,'light.diner':{state:'on',attributes:{supported_color_modes:['rgb'],brightness:128,rgb_color:[20,80,255]}}}};});
-  await expect(glow).toHaveAttribute('fill','rgb(20,80,255)');
-  await expect(glow).toHaveAttribute('fill-opacity',String(.45*128/255));
+  await expect.poll(()=>glow.evaluate(el=>{
+    const gradient=el.ownerSVGElement.querySelector(el.getAttribute('fill').slice(4,-1));
+    return {colour:gradient.firstElementChild.getAttribute('stop-color'),opacity:Number(gradient.firstElementChild.getAttribute('stop-opacity')),edge:Number(gradient.lastElementChild.getAttribute('stop-opacity'))};
+  })).toEqual({colour:'rgb(20,80,255)',opacity:.45*128/255,edge:0});
 });
