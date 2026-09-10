@@ -1,0 +1,30 @@
+import {test,expect} from '@playwright/test';
+
+test('a decorative light can be placed, raised and connected in the furniture editor',async({page})=>{
+  await page.goto('/demo/');
+  await page.getByRole('button',{name:'Edit layout',exact:true}).click();
+  const editor=page.locator('floorplan-card-editor');
+  await editor.getByRole('button',{name:'Unlock editing',exact:true}).click();
+  await editor.getByLabel('Find furniture').fill('TV light');
+  await editor.getByRole('button',{name:'TV light strip',exact:true}).click();
+  await editor.getByRole('button',{name:'Place furniture in centre',exact:true}).click();
+  await expect(editor.getByRole('combobox',{name:'TV screen size',exact:true})).toHaveValue('65');
+  await editor.getByRole('combobox',{name:'TV screen size',exact:true}).selectOption('75');
+  await editor.getByLabel('Height above floor (metres)',{exact:true}).fill('0.55');
+  await editor.getByLabel('Height above floor (metres)',{exact:true}).press('Tab');
+  await editor.getByRole('combobox',{name:'Reactive light entity',exact:true}).selectOption('light.diner');
+  const config=JSON.parse(await page.locator('#config').textContent()),strip=config.floors[0].objects.at(-1);
+  expect(strip).toMatchObject({type:'tv_lightstrip',elevation_m:.55,light_entity:'light.diner'});
+  expect(strip.width).toBeCloseTo(75*.0254*16/Math.hypot(16,9),4);
+  expect(strip.height).toBeCloseTo(75*.0254*9/Math.hypot(16,9),4);
+  await page.getByRole('button',{name:'Live view',exact:true}).click();
+  const card=page.locator('floorplan-card'),glow=card.locator(`[data-object-glow="${strip.id}"]`);
+  await expect(glow).toHaveCount(1);
+  await card.getByRole('button',{name:'Diner: On',exact:true}).click();
+  await expect(glow).toHaveCount(0);
+  await card.getByRole('button',{name:'Diner: Off',exact:true}).click();
+  await expect(glow).toHaveCount(1);
+  await page.evaluate(()=>{const c=document.querySelector('floorplan-card');c.hass={...c._hass,states:{...c._hass.states,'light.diner':{state:'on',attributes:{supported_color_modes:['rgb'],brightness:128,rgb_color:[20,80,255]}}}};});
+  await expect(glow).toHaveAttribute('fill','rgb(20,80,255)');
+  await expect(glow).toHaveAttribute('fill-opacity',String(.45*128/255));
+});

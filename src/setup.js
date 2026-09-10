@@ -182,6 +182,8 @@ export function entitySetup(host,floor) {
       const fixture=element('select',{onchange:e=>{item.fixture=e.target.value;host.emit();}});
       for(const [value,text] of [['bulb','Generic light'],['pendant','Pendant'],['spot','Spotlight']])fixture.append(element('option',{value,text,selected:(item.fixture || 'bulb')===value}));
       row.append(field('Light fixture',fixture));
+      const wallHeights=(floor.walls || []).map(wall=>wall.height).filter(height=>Number.isFinite(height)&&height>0),ceiling=wallHeights.length?Math.max(...wallHeights):2.4,defaultHeight=item.fixture==='pendant'?Math.max(0,ceiling-.3):ceiling;
+      row.append(field('Light height above floor (metres)',element('input',{type:'number',min:0,max:100,step:.05,value:item.height_m ?? Number(defaultHeight.toFixed(2)),onchange:e=>{item.height_m=Number(e.target.value);host.emit();}})),element('p',{className:'muted',text:'Defaults follow wall height: spotlights at the ceiling, pendants 30 cm below. Set a height for table lamps or low-mounted lights.'}));
     }
     for(const axis of ['x','y'])row.append(field(`${axis.toUpperCase()} position (%)`,element('input',{type:'number',min:0,max:100,step:.1,value:item[axis],onchange:e=>{item[axis]=Number(e.target.value);host.emit();}})));
     row.append(button('Remove marker',()=>{floor.entities=floor.entities.filter(e=>e!==item);host.emit();}));
@@ -190,7 +192,7 @@ export function entitySetup(host,floor) {
   return layoutSetup(root,1);
 }
 export function groupSetup(host) {
-  const root=element('div',{},[element('p',{text:'Optional: create named selections such as Kitchen spots or Downstairs. Group buttons select their member lights together, across floors.'})]);
+  const root=element('div',{},[element('p',{text:'Create named groups such as Kitchen spots or Downstairs. Tap a group in live view to switch its lights together; Adjust selects them for brightness and colour.'}),element('p',{className:'muted',text:'For a separate marker and individual control of every bulb, assign the individual Home Assistant light entities here. These card groups are named selections, not new Home Assistant groups. A Home Assistant light-group or smart-group entity is controlled as one entity; the card cannot discover or position its individual bulbs automatically. Choose either its individual members or the group entity to avoid sending the same command twice.'})]);
   if(host.config.floors.length){
     const floors=element('select',{onchange:e=>{host.floorIndex=Number(e.target.value);host.render();}});
     host.config.floors.forEach((f,i)=>floors.append(element('option',{value:i,text:f.name || f.id,selected:i===host.floorIndex})));

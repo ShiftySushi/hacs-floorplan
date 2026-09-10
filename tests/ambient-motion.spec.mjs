@@ -1,0 +1,31 @@
+import {test,expect} from '@playwright/test';
+test('entrance, progressive controls and optional idle orbit respect interaction',async({page},info)=>{
+ await page.goto('/demo/');const card=page.locator('floorplan-card');
+ await expect(card.locator('ha-card')).toHaveClass(/has-entered/);
+ await card.getByRole('button',{name:'3D',exact:true}).click();
+ await card.locator('.display-settings summary').click();
+ await card.getByLabel('Slow idle rotation (3D)',{exact:true}).check();
+ await card.locator('.display-settings summary').click();
+ await page.mouse.move(0,0);
+ await expect.poll(async()=>Number(await card.locator('.plan').getAttribute('data-idle-angle')),{timeout:12000}).toBeGreaterThan(.001);
+ await card.locator('canvas').dispatchEvent('pointermove');
+ await expect(card.locator('.plan')).toHaveAttribute('data-idle-angle','0');
+ await card.locator('.display-settings summary').click();
+ await card.getByLabel('Slow idle rotation (3D)',{exact:true}).uncheck();
+ await card.locator('.display-settings summary').click();
+ await card.getByRole('button',{name:'Lighting',exact:true}).click();
+ await page.screenshot({path:`/tmp/ambient-controls-${info.project.name}.png`});
+});
+test('reduced motion suppresses decoration but honours explicit idle rotation',async({page})=>{
+ await page.emulateMedia({reducedMotion:'reduce'});await page.goto('/demo/');const card=page.locator('floorplan-card');
+ await card.getByRole('button',{name:'3D',exact:true}).click();
+ await expect(card.locator('.plan')).toHaveCSS('animation-name','none');
+ await expect(card.locator('.plan')).toHaveAttribute('data-idle-state','disabled');
+ await card.locator('.display-settings summary').click();await card.getByLabel('Slow idle rotation (3D)',{exact:true}).check();
+ await card.locator('.display-settings summary').click();await page.mouse.move(0,0);
+ await expect.poll(async()=>Number(await card.locator('.plan').getAttribute('data-idle-angle')),{timeout:12000}).toBeGreaterThan(.001);
+ await page.reload();
+ await expect.poll(async()=>Number(await card.locator('.plan').getAttribute('data-idle-angle')),{timeout:12000}).toBeGreaterThan(.001);
+ await card.locator('.display-settings summary').click();await card.getByLabel('Slow idle rotation (3D)',{exact:true}).uncheck();
+ await expect(card.locator('.plan')).toHaveAttribute('data-idle-state','disabled');
+});

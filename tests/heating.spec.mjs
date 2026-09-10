@@ -42,7 +42,7 @@ test('room temperature and radiator status follow entities and expose HA control
   await page.evaluate(()=>{const c=document.querySelector('floorplan-card');c.hass={...c._hass,states:{...c._hass.states,'climate.room':{state:'heat',attributes:{hvac_action:'heating'}}}};});
   await expect(card.locator('[data-heating-glow="radiator-test"]')).toHaveCount(1);
   await expect(card.getByRole('button',{name:'Radiator: heating',exact:true})).toBeVisible();
-  await card.getByRole('button',{name:'Furnished 3D',exact:true}).click();
+  await card.getByRole('button',{name:'3D',exact:true}).click();
   await expect(card.getByRole('button',{name:/temperature: 20.4 °C/})).toBeVisible();
   await expect(card.getByRole('button',{name:'Radiator: heating',exact:true})).toBeVisible();
   await page.evaluate(()=>{const c=document.querySelector('floorplan-card');c.hass={...c._hass,states:{...c._hass.states,'sensor.room_temperature':{state:'unavailable'},'climate.room':{state:'unavailable'}}};});

@@ -9,6 +9,7 @@ export function reassignEntity(config, oldId, nextId) {
   const result = structuredClone(config);
   const replace = list => [...new Set(list.map(id => id === oldId ? nextId : id))];
   for (const floor of result.floors) {
+    for (const item of floor.objects || []) if (item.light_entity === oldId) item.light_entity = nextId;
     for (const item of floor.entities) if (item.entity === oldId) {item.entity = nextId;if(oldId!==nextId)delete item.unbound;}
     for (const room of floor.rooms || []) {
       if (room.lights) room.lights = replace(room.lights);

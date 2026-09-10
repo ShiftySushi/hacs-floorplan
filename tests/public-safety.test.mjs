@@ -19,6 +19,13 @@ test('publication gate rejects forced private files, image payloads and deleted 
     writeFileSync(join(cwd, '.gitignore'), 'floorplans/\n');
     writeFileSync(join(cwd, 'README.md'), 'Public fixture\n');
     git('add', '.gitignore', 'README.md'); assert.equal(check().status, 0);
+    mkdirSync(join(cwd, 'src', 'assets'), { recursive: true });
+    writeFileSync(join(cwd, 'src/assets/kenney-furniture.json'), '{}');
+    writeFileSync(join(cwd, 'src/assets/kenney-furniture-LICENSE.txt'), 'CC0');
+    git('add', 'src/assets'); assert.equal(check().status, 0);
+    writeFileSync(join(cwd, 'src/assets/personal-house.json'), '{}');
+    git('add', 'src/assets/personal-house.json'); assert.equal(check().status, 1);
+    git('rm', '-f', 'src/assets/personal-house.json');
     mkdirSync(join(cwd, 'floorplans'));
     writeFileSync(join(cwd, 'floorplans', 'private.svg'), '<svg/>');
     git('add', '-f', 'floorplans/private.svg'); assert.equal(check().status, 1);

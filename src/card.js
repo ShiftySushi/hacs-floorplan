@@ -1,4 +1,5 @@
 import { available, capabilities, normaliseConfig, serviceCalls } from './lights.js';
+import { displaySettings, displayFields } from './display-settings.js';
 import { styles } from './styles.js';
 import { element, button, field, preserveFocus } from './dom.js';
 import { renderPlan } from './plan.js';
@@ -6,37 +7,47 @@ import { roomState } from './rooms.js';
 import { icon, iconButton } from './icons.js';
 import { render3D } from './plan3d.js';
 import { roomTemperature, roomReadoutPoint, heatingState, temperatureTone } from './heating.js';
+import { daylightLevel, stageColour } from './daylight.js';
+const collectionStyles='.collection-controls{display:grid;grid-template-columns:minmax(0,1fr) 70px;gap:4px;align-items:center;width:100%;padding:3px 0}.collection-controls .collection-adjust{display:inline-flex;align-items:center;justify-content:center;gap:4px;align-self:center;width:70px;min-width:0;min-height:44px;padding:3px;font-size:11px;line-height:1.2;border-color:transparent;background:transparent;color:var(--secondary-text-color,#63776e);box-shadow:none}.collection-controls .collection-adjust .icon{width:15px;height:15px}.collection-controls .collection-adjust:hover,.collection-controls .collection-adjust[aria-pressed=true]{background:var(--secondary-background-color,#eef4f0);color:var(--primary-text-color,#26343d)}.collection-controls .collection-adjust:focus-visible{outline:2px solid var(--primary-color,#007c91);outline-offset:1px}';
 export class FloorplanCard extends HTMLElement {
   constructor() {
-    super(); this.attachShadow({ mode: 'open' }); this.selected = new Set(); this.busy = false;
+    super(); this.attachShadow({ mode: 'open' });
+    for(const event of ['pointermove','pointerdown','keydown'])this.shadowRoot.addEventListener(event,()=>this.plan?.pauseIdle?.()); this.selected = new Set(); this.busy = false;
     this.shadowRoot.addEventListener('focusout', e => {
-      if (e.target.tagName === 'INPUT' && this.deferredUpdate) requestAnimationFrame(() => { this.deferredUpdate = false; this.render(); });
+      if (['INPUT','SELECT'].includes(e.target.tagName) && this.deferredUpdate) requestAnimationFrame(() => { this.deferredUpdate = false; this.render(); });
     });
   }
   static getConfigElement() { return document.createElement('floorplan-card-editor'); }
-  connectedCallback() { if (this.config) this.render(); }
-  disconnectedCallback() { this.plan?.dispose?.(); this.plan=null; this.planKey=null; this.stageObserver?.disconnect(); this.planObserver?.disconnect(); }
+  connectedCallback() { if (this.config) this.render();clearInterval(this.daylightTimer);this.daylightTimer=setInterval(()=>{if(!document.hidden&&this.config)this.render();},60000); }
+  disconnectedCallback() { clearInterval(this.daylightTimer);this.entranceObserver?.disconnect();this.plan?.dispose?.(); this.plan=null; this.planKey=null; this.stageObserver?.disconnect(); this.planObserver?.disconnect(); }
   fitPlan() {
     if(!this.plan || !this.planSlot?.clientWidth)return;
     const ratioText=this.plan.style.aspectRatio || '1.15',parts=ratioText.split('/').map(Number),ratio=parts.length===2?parts[0]/parts[1]:parts[0];
     if(!Number.isFinite(ratio) || ratio<=0)return;
     const bounds=getComputedStyle(this.planSlot), availableWidth=this.planSlot.clientWidth-parseFloat(bounds.paddingLeft)-parseFloat(bounds.paddingRight),availableHeight=this.planSlot.clientHeight-parseFloat(bounds.paddingTop)-parseFloat(bounds.paddingBottom);
-    const width=Math.max(1,Math.min(availableWidth,availableHeight*ratio)),height=width/ratio;
+    const three=this.plan.classList.contains('plan-3d');
+    this.planSlot.classList.toggle('has-3d-canvas',three);
+    const width=Math.max(1,three?this.planSlot.clientWidth:Math.min(availableWidth,availableHeight*ratio)),height=three?this.planSlot.clientHeight:width/ratio;
     for(const [key,value] of [['width',`${width}px`],['height',`${height}px`],['minHeight','0px']])if(this.plan.style[key]!==value)this.plan.style[key]=value;
   }
   static getStubConfig() { return { type: 'custom:floorplan-card', title: 'Floorplan', floors: [], groups: [] }; }
   setConfig(config) {
     if (config.appearance?.mode !== this.config?.appearance?.mode) this.viewMode=null;
     this.config = normaliseConfig(config);
+    const identity=JSON.stringify([location.pathname,this.config.title,this.config.floors.map(f=>f.id)]);
+    let hash=2166136261;for(const char of identity)hash=Math.imul(hash^char.charCodeAt(0),16777619);
+    const key=`floorplan-view-${hash>>>0}`;
+    if(this.viewStorageKey!==key){this.viewStorageKey=key;this.viewStates={};this.inspectorOpen=false;try{const saved=JSON.parse(localStorage.getItem(key));if(saved){if(['clean','3d','pokemon','zelda','sims'].includes(saved.mode))this.viewMode=saved.mode;this.floorId=saved.floorId;this.building=!!saved.building;this.hideOverlays=!!saved.hideOverlays;this.inspectorOpen=!!saved.inspectorOpen;this.displayPreferences=saved.display;this.viewStates=saved.cameras || {};}}catch{}}
     if (!this.config.floors.some(f => f.id === this.floorId)) this.floorId = this.config.floors[0]?.id;
-    const configured = new Set([...this.config.floors.flatMap(f => [...f.entities.map(e => e.entity), ...f.rooms.flatMap(r => r.lights)]), ...this.config.groups.flatMap(g => g.entities)]);
+    const configured = new Set([...this.config.floors.flatMap(f => [...f.entities.map(e => e.entity), ...f.rooms.flatMap(r => r.lights), ...(f.objects || []).map(o=>o.light_entity).filter(Boolean)]), ...this.config.groups.flatMap(g => g.entities)]);
     this.selected = new Set([...this.selected].filter(id => configured.has(id))); this.render();
   }
   set hass(hass) { this._hass = hass; if (!['INPUT', 'SELECT'].includes(this.shadowRoot.activeElement?.tagName)) this.render(); else this.deferredUpdate = true; }
+  saveView(){try{localStorage.setItem(this.viewStorageKey,JSON.stringify({mode:this.viewMode || this.config.appearance.mode,floorId:this.floorId,building:!!this.building,hideOverlays:!!this.hideOverlays,inspectorOpen:!!this.inspectorOpen,display:this.displayPreferences,cameras:this.viewStates}));}catch{}}
   getCardSize() { return 12; }
   getGridOptions() { return { columns: 12, min_columns: 6 }; }
   toggle(ids) {
-    this.selectionMode=true;
+    this.selectionMode=true;this.inspectorOpen=true;
     const remove = ids.every(id => this.selected.has(id));
     ids.forEach(id => remove ? this.selected.delete(id) : this.selected.add(id)); this.render();
   }
@@ -60,21 +71,40 @@ export class FloorplanCard extends HTMLElement {
       this.card=element('ha-card',{className:'floorplan-dashboard'});
       this.headerSlot=element('div');this.planSlot=element('div',{className:'plan-slot'});this.controlsSlot=element('div',{className:'inspector-slot'});
       this.card.append(this.headerSlot,element('div',{className:'card-workspace'},[this.planSlot,this.controlsSlot]));
-      this.shadowRoot.replaceChildren(element('style',{text:styles}),this.card);
+      this.shadowRoot.replaceChildren(element('style',{text:styles+collectionStyles}),this.card);
+      this.entranceObserver=new IntersectionObserver(entries=>{if(entries.some(entry=>entry.isIntersecting)){this.card.classList.add('has-entered');this.entranceObserver.disconnect();}});this.entranceObserver.observe(this.card);
     }
+    const display=displaySettings({...this.config.appearance?.display,...this.displayPreferences});
+    this.card.style.setProperty('--fp-marker-scale',display.size);
+    for(const key of ['lights','temperatures','heating','controls'])this.card.dataset[key]=display[key];
     this.stageObserver ||= new ResizeObserver(()=>this.fitPlan());this.stageObserver.observe(this.planSlot);
     this.planSlot.classList.toggle('has-outdoor',!!roomTemperature({temperature_entity:this.config.outdoor_temperature_entity},states));
-    const title=element('div',{className:'card-title'},[icon('floor'),element('h2',{text:this.config.title})]);
-    const header = element('header', {className:'card-header'}, [title]);
+    const header = element('div', {className:'card-header stage-style'});
     const tabs = element('div', { className: 'row floor-tabs', role: 'group', 'aria-label': 'Floors' });
     this.config.floors.forEach(floor => tabs.append(iconButton(floor.name || floor.id,'floor', () => { this.floorId = floor.id; this.render(); }, { 'aria-pressed': String(floor.id === this.floorId) })));
-    header.append(tabs);
     const mode=this.viewMode || this.config.appearance?.mode || 'clean';
+    const daylight=daylightLevel(states);this.planSlot.style.setProperty('--fp-stage-background',stageColour(mode,daylight));
     const modes=element('div',{className:'row view-modes',role:'group','aria-label':'Render style'});
-    for(const [id,label,glyph] of [['clean','Clean 2D','grid'],['pokemon','Pokémon style','grid'],['zelda','Zelda style','grid'],['3d','Furnished 3D','cube']]) modes.append(iconButton(label,glyph,()=>{this.viewMode=id;this.render();},{'aria-pressed':String(mode===id)}));
+    for(const [id,label,glyph] of [['clean','2D','grid'],['3d','3D','cube']]) modes.append(iconButton(label,glyph,()=>{this.viewMode=id;this.render();},{'aria-pressed':String(mode===id)}));
+    const customStyle=element('select',{'aria-label':'Custom style',onchange:e=>{this.viewMode=e.target.value;this.render();}},[element('option',{value:'',text:'Custom',disabled:true,selected:!['pokemon','zelda','sims'].includes(mode)})]);
+    for(const [value,text] of [['pokemon','Pokémon'],['zelda','Zelda'],['sims','Sims-like']])customStyle.append(element('option',{value,text,selected:mode===value}));modes.append(customStyle);
     if(this.config.floors.length)header.append(modes);
-    if(mode==='3d'&&this.config.floors.length>1)header.append(iconButton('All storeys','floor',()=>{this.building=!this.building;this.render();},{'aria-pressed':String(!!this.building)}));
-    this.headerSlot.replaceChildren(header);
+    if(['3d','sims'].includes(mode)&&this.config.floors.length>1)tabs.append(iconButton('All storeys','floor',()=>{this.building=!this.building;this.render();},{'aria-pressed':String(!!this.building)}));
+    const stageTools=element('div',{className:'stage-tools'},[tabs,iconButton(this.hideOverlays?'Show overlays':'Hide overlays','eye',()=>{this.hideOverlays=!this.hideOverlays;this.render();},{'aria-pressed':String(!!this.hideOverlays),title:this.hideOverlays?'Show overlays':'Hide overlays',className:'overlay-toggle'})]);
+    stageTools.append(iconButton(this.inspectorOpen?'Hide lighting':'Lighting','bulb',()=>{this.inspectorOpen=!this.inspectorOpen;this.render();},{'aria-expanded':String(!!this.inspectorOpen),'aria-controls':'lighting-panel',title:this.inspectorOpen?'Hide lighting':'Lighting',className:'inspector-toggle'}));
+    const settings=element('details',{className:'display-settings',open:!!this.displayOpen},[element('summary',{'aria-label':'Display settings',title:'Display settings'},[icon('sliders')]),element('div',{className:'display-popover'},[element('h3',{text:'Display settings'}),element('p',{className:'display-description',text:'Choose what stays visible on your floorplan.'}),...displayFields(display,next=>{this.displayPreferences=next;this.displayOpen=true;this.render();}),element('p',{className:'muted',text:'Saved for this browser. Set shared defaults in the card editor.'})])]);
+    settings.addEventListener('toggle',()=>{if(settings.isConnected)this.displayOpen=settings.open;});
+    // Icon-only controls must not retain an anonymous text flex item and its gap.
+    for(const control of stageTools.querySelectorAll('.overlay-toggle,.inspector-toggle')){
+      control.setAttribute('aria-label',control.textContent.trim());
+      control.replaceChildren(control.querySelector('svg'));
+    }
+    const utilities=element('div',{className:'stage-utilities',role:'group','aria-label':'Floorplan tools'},[stageTools.querySelector('.overlay-toggle'),stageTools.querySelector('.inspector-toggle'),settings]);
+    stageTools.append(utilities,header);
+    this.headerSlot.replaceChildren();
+    this.card.classList.toggle('inspector-collapsed',!this.inspectorOpen);
+    this.controlsSlot.id='lighting-panel';
+    this.controlsSlot.hidden=!this.inspectorOpen;
     const floor = this.config.floors.find(f => f.id === this.floorId);
     if (!floor || (!floor.image && !floor.rooms.length && !floor.walls?.length)) {
       this.plan?.dispose?.();this.plan=null;this.planKey=null;
@@ -82,6 +112,8 @@ export class FloorplanCard extends HTMLElement {
     }
     else {
       const markers = [];
+      const markerFloors=this.building&&['3d','sims'].includes(mode)?this.config.floors:[floor];
+      for(const floor of markerFloors) {
       floor.entities.forEach(item => {
         const state = item.unbound?undefined:states[item.entity]; const light = item.entity.startsWith('light.');
         const name = item.name || state?.attributes.friendly_name || item.entity;
@@ -93,11 +125,11 @@ export class FloorplanCard extends HTMLElement {
             else this.control(state?.state==='on'?'off':'on',undefined,[item.entity]);
           }
           else this.dispatchEvent(new CustomEvent('hass-more-info', { detail: { entityId: item.entity }, bubbles: true, composed: true }));
-        }, { className: `marker ${light ? state?.state === 'on' ? 'on' : '' : 'sensor'}`, title: `${name}: ${text}`, 'aria-label': `${name}: ${text}`, ...(light ? {disabled:this.busy || !available(state),'aria-description':this.selectionMode?'Select this light for group controls':'Toggle this light on or off',...(this.selectionMode?{'aria-pressed':String(this.selected.has(item.entity))}:{})} : {}) });
+        }, { className: `marker ${light?'overlay-lights':'overlay-temperatures'} ${light ? state?.state === 'on' ? 'on' : '' : 'sensor'}`, title: `${name}: ${text}`, 'aria-label': `${name}: ${text}`, ...(light ? {disabled:this.busy || !available(state),'aria-description':this.selectionMode?'Select this light for group controls':'Toggle this light on or off',...(this.selectionMode?{'aria-pressed':String(this.selected.has(item.entity))}:{})} : {}) });
         marker.append(icon(light?(item.fixture || 'bulb'):item.entity.startsWith('binary_sensor.')?'presence':'temperature'));
         if(!light)marker.append(element('small',{text}));
         if(this.config.appearance?.labels)marker.append(element('span',{className:'marker-label',text:name}));
-        markers.push({ node: marker, x: item.x, y: item.y });
+        markers.push({ node: marker, x: item.x, y: item.y, entity:item.entity, floorId:floor.id });
       });
       for(const room of floor.rooms || []) {
         const temperature=roomTemperature(room,states);
@@ -106,27 +138,43 @@ export class FloorplanCard extends HTMLElement {
         const centre=roomReadoutPoint(room,floor);
         const entityId=room.temperature_entity || room.presence.find(id=>states[id]?.state==='on');
         const label=[temperature?`${room.name} temperature: ${temperature}`:room.name,presence.occupied?'Presence detected':''].filter(Boolean).join(' · ');
-        const marker=button(temperature,()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId},bubbles:true,composed:true})),{className:`marker temperature-marker temp-${temperatureTone(room.temperature_entity,states[room.temperature_entity])}${presence.occupied?' occupied':''}`,title:label,'aria-label':label});
+        const marker=button(temperature,()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId},bubbles:true,composed:true})),{className:`marker overlay-temperatures temperature-marker temp-${temperatureTone(room.temperature_entity,states[room.temperature_entity])}${presence.occupied?' occupied':''}`,title:label,'aria-label':label});
         if(presence.occupied)marker.prepend(icon('presence'));
-        markers.push({node:marker,x:centre[0],y:centre[1]});
+        markers.push({node:marker,x:centre[0],y:centre[1],floorId:floor.id});
       }
       for(const radiator of (floor.objects || []).filter(item=>item.type==='radiator' && item.heating_entity)) {
         const state=heatingState(states[radiator.heating_entity]);
-        const marker=button('♨',()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:radiator.heating_entity},bubbles:true,composed:true})),{className:`marker radiator-control ${state==='heating'?'heating':''}`,title:`Radiator: ${state}`,'aria-label':`Radiator: ${state}`});
-        markers.push({node:marker,x:radiator.x,y:radiator.y});
+        const marker=button('♨',()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:radiator.heating_entity},bubbles:true,composed:true})),{className:`marker overlay-heating radiator-control ${state==='heating'?'heating':''}`,title:`Radiator: ${state}`,'aria-label':`Radiator: ${state}`});
+        markers.push({node:marker,x:radiator.x,y:radiator.y,floorId:floor.id});
       }
-      const options={...this.config.appearance,mode,markers,building:!!this.building,allFloors:this.config.floors};
+      }
+      const options={...this.config.appearance,idleRotation:display.idle_rotation,labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays?[]:markers,daylight,building:!!this.building,allFloors:this.config.floors};
+      const cameraKey=`${floor.id}:${mode}:${!!this.building}`;this.viewStates ||= {};options.viewState=this.viewStates[cameraKey] ||= {};options.onViewChange=()=>this.saveView();
       const key=JSON.stringify([floor,this.config.appearance,mode,!!this.building,this.building?this.config.floors:null]);
       if(key!==this.planKey || !this.plan) {
         this.plan?.dispose?.();
-        this.plan=(mode==='3d'?render3D:renderPlan)(floor,states,options);this.planKey=key;
+        this.plan=(['3d','sims'].includes(mode)?render3D:renderPlan)(floor,states,options);this.planKey=key;
         this.planSlot.replaceChildren(this.plan);
         this.planObserver?.disconnect();this.planObserver=new MutationObserver(()=>this.fitPlan());this.planObserver.observe(this.plan,{attributes:true,attributeFilter:['style']});
       } else this.plan.update?.(states,options);
       this.fitPlan();
       this.planSlot.querySelector('.outdoor-temperature')?.remove();
       const outdoorId=this.config.outdoor_temperature_entity, outdoor=roomTemperature({temperature_entity:outdoorId},states);
-      if(outdoor){const readout=button(`Outside ${outdoor}`,()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:outdoorId},bubbles:true,composed:true})),{className:`outdoor-temperature temp-${temperatureTone(outdoorId,states[outdoorId])}`,'aria-label':`Outdoor temperature: ${outdoor}`});this.planSlot.append(readout);}
+      if(outdoor&&!this.hideOverlays){const readout=button(`Outside ${outdoor}`,()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:outdoorId},bubbles:true,composed:true})),{className:`outdoor-temperature temp-${temperatureTone(outdoorId,states[outdoorId])}`,'aria-label':`Outdoor temperature: ${outdoor}`});this.planSlot.append(readout);}
+    }
+    this.planSlot.querySelector('.stage-tools')?.remove();this.planSlot.append(stageTools);
+    const navigation=this.planSlot.querySelector('.plan-navigation,.three-toolbar');
+    if(navigation && !navigation.classList.contains('docked-navigation')) {
+      const three=navigation.classList.contains('three-toolbar'),buttons=[...navigation.children];
+      navigation.removeAttribute('style');navigation.classList.add('docked-navigation');
+      navigation.setAttribute('role','group');navigation.setAttribute('aria-label','Floorplan navigation');
+      const groups=three?[['Rotate',0,2],['Zoom',2,4],['View',4,6]]:[['Zoom',0,2],['Move',2,6],['View',6,7],['Rotate',7,9]];
+      navigation.replaceChildren(...groups.map(([name,start,end])=>{
+        const controls=buttons.slice(start,end);controls.forEach(control=>control.removeAttribute('style'));
+        return element('div',{className:'navigation-group',role:'group','aria-label':name},[element('span',{className:'navigation-caption',text:name}),element('div',{className:'navigation-buttons'},controls)]);
+      }));
+      if(three){buttons[4].textContent='Reset';buttons[5].textContent='Walls';}
+      this.planSlot.append(navigation);
     }
     const controls = element('section', { className: 'controls', 'aria-label': 'Light controls' });
     controls.append(element('div',{className:'inspector-heading'},[icon('bulb'),element('h3',{text:'Lighting'})]));
@@ -134,22 +182,30 @@ export class FloorplanCard extends HTMLElement {
     controls.append(selectionTools);
     const choices=element('div',{className:'light-choices'});
     const groups = element('div', { className: 'row light-groups' });
+    const collectionControls=(name,ids,state)=>{
+      const onlineIds=[...new Set(ids)].filter(id=>available(states[id])),anyOn=onlineIds.some(id=>states[id].state==='on'),action=anyOn?'off':'on';
+      const collection=element('div',{className:'collection-controls'});
+      const power=button('',()=>this.control(action,undefined,ids),{className:'room-button',disabled:this.busy||!onlineIds.length,title:`${name}: ${!onlineIds.length?'Unavailable':anyOn?'On':'Off'} · Turn ${action}`,'aria-label':`Turn ${name} ${action}`,'aria-description':`Toggle all available lights in ${name}`});
+      power.append(icon('power'),element('strong',{text:name}),element('small',{text:state?`${state.lightState}${state.presence?' · '+state.presence:''}`:!onlineIds.length?'Unavailable':anyOn?'On':'Off'}));
+      const adjust=iconButton('Adjust','settings',()=>this.toggle(ids),{className:'collection-adjust','aria-label':`Adjust ${name}`,'aria-description':'Select these lights for brightness and colour controls',disabled:!ids.length,'aria-pressed':String(!!ids.length&&ids.every(id=>this.selected.has(id)))});
+      collection.append(power,adjust);return collection;
+    };
     if(floor?.rooms.length) {
       choices.append(element('h4',{className:'choices-heading',text:floor.name?`Rooms · ${floor.name}`:'Rooms'}));
       const rooms = element('div', { className: 'room-status', 'aria-label': 'Rooms' });
+      rooms.style.gridTemplateColumns='1fr';
       for(const room of floor.rooms) {
         const state=roomState(room,states);
-        const row=button('',()=>this.toggle(room.lights),{className:'room-button',disabled:!room.lights.length,'aria-pressed':String(!!room.lights.length && room.lights.every(id=>this.selected.has(id)))});
-        row.append(icon(state.occupied?'presence':'bulb'),element('strong',{text:room.name}),element('small',{text:`${state.lightState}${state.presence?' · '+state.presence:''}`}));rooms.append(row);
+        rooms.append(collectionControls(room.name,room.lights,state));
       }
       choices.append(rooms);
     }
-    this.config.groups.forEach(group => groups.append(iconButton(group.name,'group', () => this.toggle(group.entities), { disabled: !group.entities.length, 'aria-pressed': String(!!group.entities.length && group.entities.every(id => this.selected.has(id))) })));
-    if (floor?.entities.some(e => e.entity.startsWith('light.'))) choices.append(button('Select floor', () => { this.selectionMode=true;floor.entities.filter(e => e.entity.startsWith('light.')).forEach(e => this.selected.add(e.entity)); this.render(); },{className:'select-floor'}));
+    this.config.groups.forEach(group => groups.append(collectionControls(group.name,group.entities)));
+    if (floor?.entities.some(e => e.entity.startsWith('light.'))) choices.append(button('Select floor', () => { this.selectionMode=true;this.inspectorOpen=true;floor.entities.filter(e => e.entity.startsWith('light.')).forEach(e => this.selected.add(e.entity)); this.render(); },{className:'select-floor'}));
     if(this.selected.size)selectionTools.append(button('Clear', () => { this.selected.clear(); this.render(); }));
-    if(this.config.groups.length){const groupSection=element('details',{className:'group-section',open:this.groupsOpen??this.config.groups.length<=4},[element('summary',{text:`Light groups · ${this.config.groups.length}`}),element('p',{className:'muted',text:'Select a group to adjust its lights together.'}),groups]);groupSection.addEventListener('toggle',()=>{this.groupsOpen=groupSection.open;});choices.append(groupSection);}
+    if(this.config.groups.length){const groupSection=element('details',{className:'group-section',open:this.groupsOpen??this.config.groups.length<=4},[element('summary',{text:`Light groups · ${this.config.groups.length}`}),element('p',{className:'muted',text:'Tap a group to switch its lights. Adjust selects them for dimming and colour.'}),groups]);groupSection.addEventListener('toggle',()=>{if(groupSection.isConnected)this.groupsOpen=groupSection.open;});choices.append(groupSection);}
     const selected = [...this.selected]; const unboundIds=new Set(this.config.floors.flatMap(f=>f.entities).filter(e=>e.unbound).map(e=>e.entity));const online = selected.filter(id => !unboundIds.has(id)&&available(states[id]));
-    if(floor?.entities.length)controls.append(element('p', { text: selected.length ? `${selected.length} selected · ${online.length} available across floors` : this.selectionMode?'Choose lights on the plan, a room or a group.':'Tap a light to toggle it. Select lights to dim or change colour.', role: 'status' }));
+    if(floor?.entities.length)controls.append(element('p', { text: selected.length ? `${selected.length} selected · ${online.length} available across floors` : this.selectionMode?'Choose lights on the plan, or use Adjust beside a room or group.':'Tap lights, rooms or groups to toggle power. Use Adjust or Select lights to dim or change colour.', role: 'status' }));
     if (selected.length) {
       controls.append(element('div', { className: 'row power-controls' }, [iconButton('Turn on','power', () => this.control('on'), { disabled: this.busy || !online.length }), iconButton('Turn off','power', () => this.control('off'), { disabled: this.busy || !online.length })]));
       const eligible = action => online.filter(id => capabilities(states[id])[action]);
@@ -173,6 +229,7 @@ export class FloorplanCard extends HTMLElement {
     if (this.error) controls.append(element('p', { className: 'error', text: this.error, role: 'alert' }));
     controls.append(choices);
     this.controlsSlot.replaceChildren(controls);
+    this.saveView();
     restoreFocus();
   }
 }

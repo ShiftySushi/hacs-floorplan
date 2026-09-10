@@ -3,8 +3,19 @@ export function roomLightSources(floor, room) {
   const centre=(room.points || []).reduce((p,q)=>[p[0]+q[0]/room.points.length,p[1]+q[1]/room.points.length],[0,0]);
   return [...new Set(room.lights || [])].map(id=>{
     const marker=(floor.entities || []).find(e=>e.entity===id);
-    return {id,x:marker?.x ?? centre[0],y:marker?.y ?? centre[1],radius:marker?.fixture==='spot'?2:3};
+    const object=(floor.objects || []).find(o=>o.light_entity===id);
+    const height=lightHeight(floor,id),accent=!!object;
+    const radius=accent?(object.type==='tv_lightstrip'?1.3:1.8):height*(marker?.fixture==='spot'?.65:.95);
+    return {id,x:marker?.x ?? object?.x ?? centre[0],y:marker?.y ?? object?.y ?? centre[1],height,radius,strength:accent?.6:Math.min(1,(2.4/Math.max(1,height))**2)};
   });
+}
+
+export function lightHeight(floor,id) {
+  const object=(floor.objects || []).find(o=>o.light_entity===id);
+  if(object)return (object.elevation_m || 0)+(object.height || .6)/2;
+  const marker=(floor.entities || []).find(e=>e.entity===id);
+  const ceiling=Math.max(2.4,...(floor.walls || []).map(w=>w.height || 2.4));
+  return marker?.height_m ?? Math.max(.5,ceiling-(marker?.fixture==='pendant'?.3:.05));
 }
 
 export function lightAppearance(state) {

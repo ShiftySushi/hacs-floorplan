@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { wallSections, storeyPlacement, selectSceneLights, wallJoins, illuminationUV } from '../src/plan3d.js';
 import { furniture3D } from '../src/furniture3d.js';
-import { CATALOGUE } from '../src/catalogue.js';
+import { CATALOGUE, panelArrangement } from '../src/catalogue.js';
+import { roomLightSources } from '../src/illumination.js';
+import { normaliseScene } from '../src/scene.js';
+import { blendAppearance, panelFrame } from '../src/light-animation.js';
+import { tvIsOn, drawTVFrame } from '../src/tv-animation.js';
 
 test('wall solids preserve lintels and sills while subtracting actual openings',()=>{
   const sections=wallSections(8,2.4,[{type:'door',offset:.25,width:1,height:2.1},{type:'window',offset:.75,width:2,height:1,sill:1}]);
@@ -59,4 +63,44 @@ test('radiators retain shallow depth and add fins as their width grows',()=>{
   const fins=wide.children.filter(mesh=>mesh.geometry.parameters.depth===.12);
   assert.ok(fins.length>30);assert.ok(fins.every(mesh=>mesh.geometry.parameters.width<.05));
   for(const group of [narrow,wide])group.traverse(node=>{node.geometry?.dispose();node.material?.dispose();});
+});
+test('hexagon layouts use one scale and preserve axial neighbours',()=>{
+  const {radius,centres}=panelArrangement({panel_layout:[[0,0],[1,0]]},2,.8);
+  assert.ok(Math.abs(centres[1][0]-centres[0][0]-Math.sqrt(3)*radius)<1e-9);
+  assert.equal(centres[0][1],centres[1][1]);
+  assert.equal(panelArrangement({},2,1).centres.length,21);
+});
+test('bound TV strip uses object position and a local light radius',()=>{
+  const floor={objects:[{type:'tv_lightstrip',light_entity:'light.tv',x:20,y:30}]},room={lights:['light.tv'],points:[[0,0],[100,0],[100,100],[0,100]]};
+  const [source]=roomLightSources(floor,room);assert.equal(source.x,20);assert.equal(source.y,30);assert.equal(source.radius,1.3);
+});
+test('plain desk and cube storage respect explicit colour and omit built-in contents',()=>{
+  for(const [type,variant] of [['desk','plain'],['bookshelf','cubes']]){const definition=CATALOGUE.find(item=>item.type===type),normal=furniture3D(definition),plain=furniture3D({...definition,variant,colour:'#303738'});assert.ok(plain.children.length<normal.children.length);assert.equal(plain.children[0].material.color.getHexString(),'303738');for(const group of [normal,plain])group.traverse(node=>{node.geometry?.dispose();node.material?.dispose();});}
+});
+test('scene validates raised reactive objects and panel arrangements',()=>{
+  const config={floors:[{objects:[{id:'panel',type:'nanoleaf_panels',x:50,y:50,elevation_m:1.2,light_entity:'light.panels',panel_layout:[[0,0],[1,0]]}]}]};
+  assert.equal(normaliseScene(config).floors[0].objects[0].elevation_m,1.2);
+  const invalid=structuredClone(config);invalid.floors[0].objects[0].panel_layout=[[0,0],[0,0]];assert.throws(()=>normaliseScene(invalid),/unique integer/);
+  invalid.floors[0].objects[0].panel_layout=[[0,0]];invalid.floors[0].objects[0].elevation_m=-1;assert.throws(()=>normaliseScene(invalid),/elevation/);
+});
+test('light transitions fade smoothly without whitening a coloured light',()=>{
+  const red={level:1,colour:[255,0,0]},off={level:0,colour:[255,255,255]};
+  assert.deepEqual(blendAppearance(red,off,.5),{level:.5,colour:[255,0,0]});
+  assert.equal(blendAppearance(red,off,1).level,0);
+  assert.deepEqual(blendAppearance(off,red,.5),{level:.5,colour:[255,0,0]});
+});
+test('panel effects vary across panels while preserving power and static colour',()=>{
+  const base={level:.6,colour:[20,180,230]};assert.deepEqual(panelFrame('static',3,21,1000,base),base);
+  assert.notEqual(panelFrame('wave',0,21,1000,base).level,panelFrame('wave',10,21,1000,base).level);
+  assert.equal(panelFrame('rainbow',5,21,1000,{...base,level:0}).level,0);
+});
+test('TV screen follows media activity rather than lighting or standby',()=>{
+  for(const state of ['on','playing','paused','idle','buffering'])assert.equal(tvIsOn({state}),true);
+  for(const state of ['off','standby','unknown','unavailable'])assert.equal(tvIsOn({state}),false);
+  assert.equal(tvIsOn(undefined),false);
+  const model=furniture3D(CATALOGUE.find(item=>item.type==='tv'));assert.equal(model.children.filter(mesh=>mesh.userData.tvScreen).length,1);model.traverse(node=>{node.geometry?.dispose();node.material?.dispose();});
+});
+test('local TV programmes change every eight seconds and animate between changes',()=>{
+  const capture=time=>{const calls=[],context={};for(const method of ['save','scale','fillRect','beginPath','arc','fill','moveTo','lineTo','closePath','restore'])context[method]=(...args)=>{assert.ok(args.every(Number.isFinite));calls.push([method,context.fillStyle,...args]);};drawTVFrame(context,160,90,time);assert.equal(calls.at(-1)[0],'restore');return calls;};
+  assert.notDeepEqual(capture(0),capture(1000));assert.notDeepEqual(capture(0),capture(8000));assert.notDeepEqual(capture(8000),capture(16000));
 });
