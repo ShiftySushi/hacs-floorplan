@@ -1,4 +1,17 @@
 import { test, expect } from '@playwright/test';
+test('mapped light can be rebound without moving it or breaking its group',async({page})=>{
+  await page.goto('/demo/');
+  const editor=page.locator('floorplan-card-editor');
+  await editor.getByRole('button',{name:'4. Entities',exact:true}).click();
+  await editor.locator('summary').filter({hasText:/^Diner$/}).click();
+  await editor.getByRole('combobox',{name:'Light fixture',exact:true}).selectOption('spot');
+  await editor.locator('summary').filter({hasText:/^Diner$/}).click();
+  await editor.getByRole('combobox',{name:'Assigned entity',exact:true}).selectOption('light.bedroom');
+  const config=JSON.parse(await page.locator('#config').textContent());
+  expect(config.floors[0].entities.find(e=>e.entity==='light.bedroom')).toMatchObject({x:25,y:25,fixture:'spot'});
+  expect(config.groups.find(g=>g.name==='All lights').entities).toContain('light.bedroom');
+  expect(config.floors[0].rooms[0].lights).not.toContain('light.diner');
+});
 
 test.beforeEach(async ({ page }) => { await page.goto('/demo/'); });
 const scene = async page => JSON.parse(await page.locator('#config').textContent());

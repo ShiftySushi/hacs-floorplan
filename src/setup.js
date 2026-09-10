@@ -1,7 +1,9 @@
 import { element, button, field } from './dom.js';
 import { renderPlan } from './plan.js';
+import { icon } from './icons.js';
 import { validPolygon } from './rooms.js';
 import { floorDimensions } from './scene.js';
+import { reassignEntity } from './bindings.js';
 export function entitySelect(host, domain, value, change) {
   const select=element('select',{onchange:e=>change(e.target.value)},[element('option',{value:'',text:'Choose an entity…'})]);
   const ids=Object.keys(host._hass?.states || {}).filter(id=>domain.test(id));
@@ -119,7 +121,7 @@ export function entitySetup(host,floor) {
     if(item)Object.assign(item,{x:point[0],y:point[1]});else floor.entities.push({entity:host.pendingEntity,x:point[0],y:point[1]});
     host.pendingEntity='';host.emit();
   };
-  const markers=floor.entities.map(item=>({x:item.x,y:item.y,node:button(item.name || host._hass?.states[item.entity]?.attributes.friendly_name || item.entity,e=>{e.stopPropagation();host.pendingEntity=item.entity;host.render();},{className:'marker','aria-label':`Move ${item.entity}`})}));
+  const markers=floor.entities.map(item=>{const name=item.name || host._hass?.states[item.entity]?.attributes.friendly_name || item.entity;const node=button('',e=>{e.stopPropagation();host.pendingEntity=item.entity;host.render();},{className:'marker',title:name,'aria-label':`Move ${item.entity}`});node.append(icon(item.entity.startsWith('light.')?(item.fixture || 'bulb'):'temperature'));return {x:item.x,y:item.y,node};});
   root.append(renderPlan(floor,host._hass?.states || {},{markers,edit:true,onPoint:place}));
   if(host.pendingEntity)root.append(element('p',{role:'status',text:`Place ${host.pendingEntity} on the plan.`}),button('Place in centre',()=>place([50,50])));
   const missing=[...new Set(floor.rooms.flatMap(r=>r.lights))].filter(id=>!floor.entities.some(e=>e.entity===id));
@@ -128,6 +130,18 @@ export function entitySetup(host,floor) {
   }));
   for(const item of floor.entities){
     const row=element('details',{},[element('summary',{text:item.name || host._hass?.states[item.entity]?.attributes.friendly_name || item.entity})]);
+    const domain=new RegExp(`^${item.entity.split('.')[0]}\\.`);
+    const assignment=entitySelect(host,domain,item.entity,id=>{
+      if(!id)return;
+      try{const oldId=item.entity;host.config=reassignEntity(host.config,oldId,id);if(host.pendingEntity===oldId)host.pendingEntity=id;host.emit();}
+      catch(error){host.error=error.message;host.render();}
+    });
+    row.append(entitySearch(assignment),field('Assigned entity',assignment),element('p',{className:'muted',text:'Changing the assigned entity keeps its position and updates matching room and group assignments across all floors.'}));
+    if(item.entity.startsWith('light.')){
+      const fixture=element('select',{onchange:e=>{item.fixture=e.target.value;host.emit();}});
+      for(const [value,text] of [['bulb','Generic light'],['pendant','Pendant'],['spot','Spotlight']])fixture.append(element('option',{value,text,selected:(item.fixture || 'bulb')===value}));
+      row.append(field('Light fixture',fixture));
+    }
     row.append(field('Display name',element('input',{value:item.name || '',onchange:e=>{item.name=e.target.value;host.emit();}})));
     for(const axis of ['x','y'])row.append(field(`${axis.toUpperCase()} position (%)`,element('input',{type:'number',min:0,max:100,step:.1,value:item[axis],onchange:e=>{item[axis]=Number(e.target.value);host.emit();}})));
     row.append(button('Remove marker',()=>{floor.entities=floor.entities.filter(e=>e!==item);host.emit();}));root.append(row);

@@ -75,7 +75,7 @@ export class FloorplanCard extends HTMLElement {
           if (light) this.toggle([item.entity]);
           else this.dispatchEvent(new CustomEvent('hass-more-info', { detail: { entityId: item.entity }, bubbles: true, composed: true }));
         }, { className: `marker ${light ? state?.state === 'on' ? 'on' : '' : 'sensor'}`, title: `${name}: ${text}`, 'aria-label': `${name}: ${text}`, ...(light ? { 'aria-pressed': String(this.selected.has(item.entity)) } : {}) });
-        marker.append(icon(light?'bulb':item.entity.startsWith('binary_sensor.')?'presence':'temperature'));
+        marker.append(icon(light?(item.fixture || 'bulb'):item.entity.startsWith('binary_sensor.')?'presence':'temperature'));
         if(!light)marker.append(element('small',{text}));
         if(this.config.appearance?.labels)marker.append(element('span',{className:'marker-label',text:name}));
         markers.push({ node: marker, x: item.x, y: item.y });

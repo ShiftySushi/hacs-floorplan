@@ -1,5 +1,6 @@
 import { svgElement, button } from './dom.js';
 const paths = {
+  pendant:'M12 2v7M7 9h10l4 8H3zM9 20h6', spot:'M3 5h18M7 8h10l-1 4H8zM8 15l-3 5m7-5v6m4-6 3 5',
   floor:'M3 10 12 3l9 7v11H3z M9 21v-7h6v7', bulb:'M9 18h6m-5 3h4M8 14a6 6 0 1 1 8 0l-1 3H9z',
   presence:'M16 21v-3a4 4 0 0 0-8 0v3M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
   temperature:'M9 14V5a3 3 0 0 1 6 0v9a5 5 0 1 1-6 0M12 8v10', power:'M12 2v10M6 5a9 9 0 1 0 12 0',

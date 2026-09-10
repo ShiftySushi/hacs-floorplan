@@ -18,6 +18,7 @@ export function normaliseScene(config) {
     if (floor.depth_m !== undefined) positive(floor.depth_m, 'Floor depth');
     for (const key of ['offset_x_m','offset_z_m','elevation_m']) if (floor[key] !== undefined && (!Number.isFinite(floor[key]) || Math.abs(floor[key]) > 1000)) throw new Error('Floor alignment must be a finite distance in metres');
     floor.objects ??= []; floor.walls ??= [];
+    for(const item of floor.entities || []) if(item.fixture !== undefined && !['bulb','pendant','spot'].includes(item.fixture)) throw new Error('Choose a generic light, pendant or spot');
     if (!Array.isArray(floor.objects) || !Array.isArray(floor.walls)) throw new Error('Furniture and walls must be lists');
     for (const room of floor.rooms || []) {
       if (room.material !== undefined && !['wood','tile','carpet'].includes(room.material)) throw new Error('Choose wood, tile or carpet for the room floor');
