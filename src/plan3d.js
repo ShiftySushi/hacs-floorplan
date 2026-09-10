@@ -191,7 +191,7 @@ export function render3D(floor, states, options = {}) {
       const progress=Math.min(1,(orbitTime-returnOrbit.start)/900),ease=progress*progress*(3-2*progress);
       idleOffset=returnOrbit.from*(1-ease);
       if(progress===1){idleOffset=0;returnOrbit=null;}
-    }else if(idleEnabled&&!hovering&&!pointer&&orbitTime-lastInteraction>8000)idleOffset+=Math.min(100,orbitTime-lastOrbit)*Math.PI*2/600000;
+    }else if(idleEnabled&&!hovering&&!pointer&&orbitTime-lastInteraction>8000)idleOffset+=(orbitTime-Math.max(lastOrbit,lastInteraction+8000))*Math.PI*2/600000;
     lastOrbit=orbitTime;plan.dataset.idleAngle=String(idleOffset);
     plan.dataset.idleState=!idleEnabled?'disabled':returnOrbit?'returning':!hovering&&!pointer&&orbitTime-lastInteraction>8000?'rotating':'waiting';
     plan.dataset.viewAzimuth=String(azimuth+idleOffset);
@@ -209,7 +209,7 @@ export function render3D(floor, states, options = {}) {
     plan.dataset.fittedBounds=JSON.stringify(corners.map(p=>p.clone().applyMatrix4(camera.projectionMatrix)).map(p=>[p.x,p.y]));
     // Foreground walls become low partitions; back walls retain room definition.
     let wallsAnimating=false;
-    const wallBlend=lastWallFrame?1-Math.exp(-Math.min(32,orbitTime-lastWallFrame)/140):1;lastWallFrame=orbitTime;
+    const wallBlend=lastWallFrame?1-Math.exp(-(orbitTime-lastWallFrame)/140):1;lastWallFrame=orbitTime;
     for(const mesh of wallMeshes){
       const point=mesh.getWorldPosition(new THREE.Vector3()),front=point.x*camera.position.x+point.z*camera.position.z>span*.7,target=cutaway&&front&&mesh.position.y>.35?.08:1;
       const next=mesh.material.opacity+(target-mesh.material.opacity)*wallBlend;
