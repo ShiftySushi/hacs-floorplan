@@ -1,6 +1,13 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+
+// Validate the approved MIT text at the checkout revision, independently of
+// GitHub's default-branch licence detection (which cannot see a new PR licence).
+assert.equal(createHash('sha256').update(readFileSync('LICENSE')).digest('hex'),
+  'e793de777a818ef2b9054a5dd363c05d69253983ea66ebe3bfc7b315b60d65ff',
+  'The approved MIT licence changed; review its full text before updating this digest');
 
 for (const dir of ['src', 'scripts', 'tests']) for (const file of readdirSync(dir)) {
   if (/\.(?:js|mjs)$/.test(file)) execFileSync(process.execPath, ['--check', `${dir}/${file}`], { stdio: 'pipe' });

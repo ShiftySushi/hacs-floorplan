@@ -10,6 +10,6 @@
 - Everything under `floorplans/` is private and ignored, including derived geometry, models, screenshots and the personal demo. Public fixtures must be fictional and independent of personal geometry.
 - `.forgejo/workflows/ci.yml` runs official self-hosted validation on `build-server`. `.github/workflows/ci.yml` validates the public HACS repository using hosted runners and the official HACS validator.
 - `CI / pr-gate (pull_request)` on Forgejo requires quality, browser and security success. GitHub also requires HACS repository validation.
-- The HACS job requires GitHub to identify the exact tested revision's licence as MIT. It replaces only the upstream default-branch licence metadata check; all other HACS checks remain enabled.
+- `npm run check` validates the full approved MIT licence by digest at the exact checkout revision. This replaces only the HACS validator's default-branch licence metadata check; all other HACS checks remain enabled. Review the complete licence before changing its expected digest.
 - Trivy is REPORT-ONLY. Scanner/download/report failures fail CI; findings do not. Raw secret reports stay in a temporary private directory and are deleted; only counts are logged or uploaded. The scanner uses a job-local cache; no shared runner configuration is required.
 - CI tests never contact live Home Assistant or use personal plans. No release, mirror push or deployment occurs in CI. Publish only the checked public commit explicitly to each remote.
