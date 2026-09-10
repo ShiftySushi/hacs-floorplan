@@ -22,7 +22,7 @@ export function furniture3D(object) {
     case 'sofa':
       box(w,h*.5,d,0,h*.3,0,palette.fabric);box(w,h*.45,d*.18,0,h*.76,-d*.41,palette.fabric);
       for(const x of [-w*.45,w*.45])box(w*.1,h*.62,d,x,h*.48,0,palette.fabric);
-      for(let i=0;i<3;i++)box(w*.25,.12,d*.65,(i-1)*w*.28,h*.6,d*.08,palette.pale);
+      {const seats=Math.max(1,Math.round(w/.7)),seatWidth=w*.82/seats;for(let i=0;i<seats;i++)box(seatWidth-.025,.12,d*.65,-w*.41+seatWidth*(i+.5),h*.6,d*.08,palette.pale);}
       if(object.variant==='corner'){box(w*.3,h*.55,d*.48,-w*.3,h*.3,d*.36,palette.fabric);box(w*.28,.12,d*.5,-w*.3,h*.61,d*.35,palette.pale);}break;
     case 'bed':
       box(w,h*.32,d);box(w*.98,h*.4,d*.94,0,h*.5,0,palette.pale);box(w,.8*h,.09,0,h*.55,-d*.48);
@@ -35,7 +35,9 @@ export function furniture3D(object) {
     case 'tv_bench':case 'display_cabinet':case 'bookshelf':
       box(w,.06,d,0,.03);box(w,.06,d,0,h-.03);for(const x of [-w/2+.03,w/2-.03])box(.06,h,d,x);
       box(w,h,.025,0,h/2,-d/2);
-      for(let row=1;row<=3;row++){const y=h*row/4;box(w,.035,d,0,y);if(object.type!=='tv_bench')for(let i=0;i<5;i++)box(w*.1,h*.16,d*.55,-w*.36+i*w*.15,y+h*.09,0,['#788e82','#b79877','#a2a8b6','#c8bba6','#819da7'][i]);}break;
+      {const bays=Math.max(1,Math.round(w/.7)),rows=Math.max(1,Math.round(h/.4));
+      for(let bay=1;bay<bays;bay++)box(.035,h,d,-w/2+w*bay/bays);
+      for(let row=1;row<rows;row++){const y=h*row/rows;box(w,.035,d,0,y);if(object.type!=='tv_bench'){const books=Math.max(1,Math.floor((w-.12)/.09));for(let i=0;i<books;i++)box(.055,Math.min(.25,h/rows*.75),Math.min(.2,d*.75),-w/2+.08+i*(w-.16)/books,y+Math.min(.25,h/rows*.75)/2,0,['#788e82','#b79877','#a2a8b6','#c8bba6','#819da7'][i%5]);}}}break;
     case 'piano':
       if(object.variant==='grand'){
         const shape=new THREE.Shape();shape.moveTo(-w*.5,-d*.5);shape.lineTo(w*.5,-d*.5);shape.lineTo(w*.45,0);shape.bezierCurveTo(w*.4,d*.6,-w*.5,d*.65,-w*.5,d*.1);shape.closePath();
@@ -46,11 +48,22 @@ export function furniture3D(object) {
     case 'sink':box(w,h*.78,d,0,h*.39,0,palette.wood);box(w,.07,d,0,h*.83,0,palette.white);ball(w*.32,0,h*.87,0,'#bacdd0',[1,.08,d/w*.65]);box(.025,.17,.025,0,h*.96,-d*.33,palette.dark);break;
     case 'bath':box(w,.1,d,0,.05,0,palette.white);for(const x of [-w*.46,w*.46])box(w*.08,h,d,x,h/2,0,palette.white);for(const z of [-d*.46,d*.46])box(w,h,d*.08,0,h/2,z,palette.white);box(w*.82,.015,d*.8,0,h*.4,0,'#b9d5d8');break;
     case 'shower':box(w,.08,d,0,.04,0,palette.white);for(const x of [-w*.48,w*.48])box(.03,h,.03,x,h/2,-d*.48,palette.dark);box(w,.035,.035,0,h,-d*.48,palette.dark);box(.03,h*.65,.03,0,h*.55,-d*.46,palette.dark);box(.15,.025,.16,0,h*.9,-d*.35,palette.dark);break;
-    case 'kitchen_unit':case 'island':case 'kitchen_island':box(w,h*.93,d,0,h*.465,0,palette.fabric);box(w*1.04,h*.07,d*1.04,0,h*.965,0,palette.pale);for(const x of [-w*.25,w*.25])box(.16,.02,.025,x,h*.78,d*.51,palette.dark);break;
+    case 'kitchen_unit':case 'island':case 'kitchen_island':
+      box(w,h*.93,d,0,h*.465,0,palette.fabric);box(w+.035,h*.07,d+.035,0,h*.965,0,palette.pale);
+      {const doors=Math.max(1,Math.round(w/.6)),doorWidth=w/doors;for(let i=0;i<doors;i++){const x=-w/2+doorWidth*(i+.5);box(Math.max(.02,doorWidth-.012),h*.76,.012,x,h*.47,d/2+.006,palette.fabric);box(Math.min(.16,doorWidth*.5),.02,.025,x,h*.78,d/2+.027,palette.dark);if(i)box(.009,h*.76,.015,-w/2+doorWidth*i,h*.47,d/2+.014,palette.dark);}}
+      break;
     case 'fridge':box(w,h,d,0,h/2,0,'#bec6c6');box(w*.94,.02,.02,0,h*.67,d*.51,palette.dark);box(.035,h*.18,.035,w*.35,h*.45,d*.53,palette.dark);break;
     case 'plant':box(w*.5,h*.28,d*.5,0,h*.14,0,'#b88868');box(.035,h*.6,.035,0,h*.5,0,palette.wood);for(let i=0;i<5;i++)ball(w*.34,Math.sin(i*2)*w*.22,h*.65+i*h*.035,Math.cos(i*2)*d*.2,palette.green,[1,1.3,1]);break;
     case 'stairs':for(let i=0;i<10;i++)box(w,h*(i+1)/10,d/10,0,h*(i+1)/20,-d/2+d*(i+.5)/10,palette.pale);break;
     case 'lamp':box(w*.55,.035,d*.55,0,.018,0,palette.dark);box(.025,h*.78,.025,0,h*.4,0,palette.dark);box(w,h*.25,d,0,h*.85,0,palette.pale);break;
+    case 'radiator':{
+      const body=object.colour || palette.white,fins=Math.max(3,Math.min(200,Math.round(w/.055))),pitch=w/fins;
+      box(w,h*.86,d*.55,0,h*.53,0,body);
+      for(let i=0;i<fins;i++)box(pitch*.68,h*.85,d,-w/2+pitch*(i+.5),h*.53,0,body);
+      for(const x of [-w*.44,w*.44])box(.025,h*.18,.025,x,h*.09,0,palette.dark);
+      for(const x of [-w*.49,w*.49])box(.035,.06,d*.75,x,h*.14,0,palette.dark);
+      break;
+    }
     default:box(w,h,d,0,h/2,0,palette.fabric);
   }
   group.rotation.y=-(object.rotation || 0)*Math.PI/180;

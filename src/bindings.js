@@ -9,12 +9,14 @@ export function reassignEntity(config, oldId, nextId) {
   const result = structuredClone(config);
   const replace = list => [...new Set(list.map(id => id === oldId ? nextId : id))];
   for (const floor of result.floors) {
-    for (const item of floor.entities) if (item.entity === oldId) item.entity = nextId;
+    for (const item of floor.entities) if (item.entity === oldId) {item.entity = nextId;if(oldId!==nextId)delete item.unbound;}
     for (const room of floor.rooms || []) {
       if (room.lights) room.lights = replace(room.lights);
       if (room.presence) room.presence = replace(room.presence);
+      if (room.temperature_entity===oldId)room.temperature_entity=nextId;
     }
   }
   for (const group of result.groups || []) group.entities = replace(group.entities);
+  if(result.outdoor_temperature_entity===oldId)result.outdoor_temperature_entity=nextId;
   return result;
 }

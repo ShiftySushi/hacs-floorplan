@@ -35,3 +35,16 @@ test('presence reassignment keeps occupancy bindings and marker position',()=>{
   assert.deepEqual(result.floors[0].entities[1],{entity:'binary_sensor.actual',x:30,y:30});
   assert.deepEqual(result.groups,original.groups);
 });
+
+test('connecting a draft element clears its draft state and preserves room and group references',()=>{
+  const config=fixture();config.floors[0].entities[0].unbound=true;
+  const result=reassignEntity(config,'light.placeholder','light.actual');
+  assert.equal(result.floors[0].entities[0].unbound,undefined);
+  assert.equal(config.floors[0].entities[0].unbound,true);
+  assert.deepEqual(result.groups[0].entities,['light.actual']);
+  const temperature={floors:[{entities:[{entity:'sensor.draft',unbound:true,x:10,y:20}],rooms:[{temperature_entity:'sensor.draft'}]}],groups:[],outdoor_temperature_entity:'sensor.draft'};
+  const connected=reassignEntity(temperature,'sensor.draft','sensor.actual');
+  assert.equal(connected.floors[0].rooms[0].temperature_entity,'sensor.actual');
+  assert.equal(connected.outdoor_temperature_entity,'sensor.actual');
+  assert.deepEqual(connected.floors[0].entities[0],{entity:'sensor.actual',x:10,y:20});
+});

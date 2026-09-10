@@ -5,4 +5,7 @@ playwright-report/
 ci-reports/
 # Personal source images, outlines and models are local assets, not plugin code.
 floorplans/
+# Portable card configurations contain personal layouts and entity IDs.
+floorplan-configuration*.json
+floorplan-scene*.json
 .codegraph/

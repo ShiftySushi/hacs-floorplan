@@ -13,6 +13,7 @@ export const CATALOGUE = [
   ['fridge','Fridge',.6,.65,1.8,'Kitchen'], ['rug','Rug',2,1.5,.02,'Decor'],
   ['plant','Plant',.5,.5,.9,'Decor'], ['stairs','Stairs',.9,2.5,2.4,'Structure'],
   ['lamp','Floor lamp',.4,.4,1.5,'Decor'],
+  ['radiator','Radiator',1,.12,.6,'Heating'],
 ].map(([type,name,width,depth,height,category])=>({type,name,width,depth,height,category}));
 
 // Original, procedural top-down artwork. All styles share the same object anchor.
@@ -25,13 +26,15 @@ export function objectGlyph(item, mode='clean') {
   const line=(x1,y1,x2,y2,stroke=edge,width=2)=>g.append(svgElement('line',{x1,y1,x2,y2,stroke,'stroke-width':width}));
   const ellipse=(cx,cy,rx,ry,fill=white)=>g.append(svgElement('ellipse',{cx,cy,rx,ry,fill}));
   const colour=item.colour || fabric;
-  if(item.type==='rug') {rect(2,2,96,96,wood);rect(10,10,80,80,colour);rect(20,20,60,60,wood);for(let i=8;i<96;i+=12){line(i,0,i,5);line(i,95,i,100);} }
+  if(item.type==='radiator') {rect(3,24,94,52,item.colour || white,3);for(let x=10;x<94;x+=8)line(x,29,x,71);rect(0,41,5,18,edge,1);rect(95,41,5,18,edge,1);}
+  else if(item.type==='rug') {rect(2,2,96,96,wood);rect(10,10,80,80,colour);rect(20,20,60,60,wood);for(let i=8;i<96;i+=12){line(i,0,i,5);line(i,95,i,100);} }
   else if(item.type==='sofa') {rect(3,5,94,90,colour,12);rect(12,28,76,57,white,7);line(50,30,50,83);rect(2,23,13,65,colour);rect(85,23,13,65,colour);rect(15,6,70,22,colour);}
   else if(item.type==='bed') {rect(4,3,92,94,wood);rect(10,11,80,81,white,8);rect(10,37,80,55,colour);rect(16,14,29,19,white);rect(55,14,29,19,white);line(12,48,88,48);}
   else if(item.type==='piano') {rect(3,2,94,94,wood);rect(9,9,82,41,edge);rect(9,56,82,32,white,0);for(let i=18;i<90;i+=10)line(i,56,i,87);for(let i=15;i<83;i+=20)rect(i,56,6,18,edge,0);}
   else if(item.type==='tv') {rect(3,10,94,65,edge);rect(10,16,80,48,'#6f919f');line(17,21,42,21,white);rect(44,77,12,12,edge);rect(26,89,48,7,edge);}
-  else if(['tv_bench','display_cabinet','bookshelf','kitchen_unit','fridge'].includes(item.type)) {
-    rect(3,3,94,94,item.type==='fridge'?white:wood);line(6,50,94,50);
+  else if(item.type==='kitchen_unit') {g.append(svgElement('rect',{x:0,y:0,width:100,height:100,fill:item.colour || wood,stroke:'none'}));}
+  else if(['tv_bench','display_cabinet','bookshelf','fridge'].includes(item.type)) {
+    rect(3,3,94,94,item.colour || (item.type==='fridge'?white:wood));line(6,50,94,50);
     if(item.type==='bookshelf')for(let row=0;row<2;row++)for(let i=0;i<6;i++)rect(10+i*14,10+row*47,10,31,[colour,white,'#b47361'][i%3],0);
     else if(item.type==='display_cabinet'){rect(10,10,80,33,'#adc4c5');rect(10,58,80,32,'#adc4c5');}
     else {line(50,5,50,95);line(41,26,41,40);line(59,26,59,40);}
@@ -47,7 +50,7 @@ export function objectGlyph(item, mode='clean') {
   if(item.type==='sofa' && item.variant==='corner')rect(4,53,31,44,colour,6);
   if(item.type==='piano' && item.variant==='grand'){g.replaceChildren();g.append(svgElement('path',{d:'M8 94V8H58Q94 8 94 42L70 94Z',fill:wood}));rect(12,65,55,25,white,0);for(let i=20;i<66;i+=8)line(i,65,i,90);}
   if(item.type==='bed' && item.variant==='single'){rect(12,12,76,23,white,6);}
-  if(pixel && !['plant','lamp','tv','shower','toilet','sink','bath','stairs'].includes(item.type)) {
+  if(pixel && !['plant','lamp','tv','shower','toilet','sink','bath','stairs','kitchen_unit'].includes(item.type)) {
     if(mode==='pokemon') {
       // Handheld style: stepped highlight corners and warm inset wood grain.
       g.append(svgElement('path',{d:'M7 22V10H22 M78 90H91V77',fill:'none',stroke:'#f4e6bc','stroke-width':3}));

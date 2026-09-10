@@ -52,6 +52,7 @@ export function normaliseConfig(config) {
     if (!Array.isArray(floor.entities)) throw new Error('Entities must be a list');
     const entities = new Set();
     for (const item of floor.entities) {
+      if(item.unbound!==undefined&&typeof item.unbound!=='boolean')throw new Error('Element connection state must be a boolean');
       if (!/^(light|sensor|binary_sensor)\.[\w]+$/.test(item.entity) || entities.has(item.entity)) throw new Error('Use unique light, sensor or binary_sensor entities on each floor');
       entities.add(item.entity);
       if (![item.x, item.y].every(n => Number.isFinite(n) && n >= 0 && n <= 100)) throw new Error('Positions must be numbers from 0 to 100');

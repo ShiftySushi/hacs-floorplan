@@ -4,6 +4,7 @@ const assets = new Map([
   ['/demo/', ['demo/index.html', 'text/html']],
   ['/demo/sample.svg', ['demo/sample.svg', 'image/svg+xml']],
   ['/dist/hacs-floorplan.js', ['dist/hacs-floorplan.js', 'text/javascript']],
+  ['/src/demo-workspace.js', ['src/demo-workspace.js', 'text/javascript']],
 ]);
 const server = createServer(async (request, response) => {
   const asset = assets.get(new URL(request.url, 'http://localhost').pathname);

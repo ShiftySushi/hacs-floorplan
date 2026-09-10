@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { wallSections, storeyPlacement, selectSceneLights } from '../src/plan3d.js';
+import { wallSections, storeyPlacement, selectSceneLights, wallJoins, illuminationUV } from '../src/plan3d.js';
 import { furniture3D } from '../src/furniture3d.js';
 import { CATALOGUE } from '../src/catalogue.js';
 
@@ -33,4 +33,30 @@ test('GPU light budget prioritises selected storey and includes unassigned marke
   const automatic=selectSceneLights(floors,'upper');assert.equal(automatic.length,3);
   assert.deepEqual(automatic[0],{floorId:'upper',id:'light.upper0',point:[0,40]});
   assert.ok(automatic.every(light=>light.floorId==='upper'));
+});
+test('wall joins close shared corners without bridging endpoint openings',()=>{
+  const walls=[{a:[0,0],b:[50,0],thickness:.2,height:2.4},{a:[50,0],b:[70,40],thickness:.2,height:2.4}];
+  assert.deepEqual(wallJoins(walls,10,10),[{x:0,z:-5,radius:.1,height:2.4}]);
+  walls[0].openings=[{type:'door',offset:.9,width:1,height:2.1}];
+  assert.deepEqual(wallJoins(walls,10,10),[]);
+});
+test('long cabinet runs repeat standard doors rather than stretching handles',()=>{
+  const small=furniture3D({type:'kitchen_unit',width:.6,depth:.6,height:.9}),long=furniture3D({type:'kitchen_unit',width:3,depth:.6,height:.9});
+  const handles=group=>group.children.filter(mesh=>mesh.geometry.parameters.height===.02);
+  assert.equal(handles(small).length,1);assert.equal(handles(long).length,5);
+  assert.ok(handles(long).every(mesh=>mesh.geometry.parameters.width===.16));
+  for(const group of [small,long])group.traverse(node=>{node.geometry?.dispose();node.material?.dispose();});
+});
+test('room illumination UVs preserve physical floor coordinates without tiling',()=>{
+  assert.deepEqual(illuminationUV(-5,10,10,20),[0,1]);
+  assert.deepEqual(illuminationUV(5,-10,10,20),[1,0]);
+  assert.deepEqual(illuminationUV(-2.5,5,10,20),[.25,.75]);
+});
+test('radiators retain shallow depth and add fins as their width grows',()=>{
+  const definition=CATALOGUE.find(item=>item.type==='radiator');assert.equal(definition.depth,.12);assert.equal(definition.height,.6);
+  const narrow=furniture3D(definition),wide=furniture3D({...definition,width:2});
+  assert.ok(wide.children.length>narrow.children.length);
+  const fins=wide.children.filter(mesh=>mesh.geometry.parameters.depth===.12);
+  assert.ok(fins.length>30);assert.ok(fins.every(mesh=>mesh.geometry.parameters.width<.05));
+  for(const group of [narrow,wide])group.traverse(node=>{node.geometry?.dispose();node.material?.dispose();});
 });

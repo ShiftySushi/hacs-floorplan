@@ -5,6 +5,7 @@ export function floorDimensions(floor) {
   return { width, depth: floor.depth_m || width / (floor.aspect_ratio || .6875) };
 }
 export function normaliseScene(config) {
+  if(config.outdoor_temperature_entity&&!/^(sensor|climate)\.[a-z0-9_]+$/.test(config.outdoor_temperature_entity))throw new Error('Choose an outdoor temperature sensor');
   if (config.scene_version !== undefined && config.scene_version !== 1) throw new Error('This scene version is not supported. Update the card before importing it.');
   config.scene_version = 1;
   config.appearance = { mode: 'clean', furniture_opacity: .55, labels: false, quality: 'auto', ...config.appearance };
@@ -21,6 +22,7 @@ export function normaliseScene(config) {
     for(const item of floor.entities || []) if(item.fixture !== undefined && !['bulb','pendant','spot'].includes(item.fixture)) throw new Error('Choose a generic light, pendant or spot');
     if (!Array.isArray(floor.objects) || !Array.isArray(floor.walls)) throw new Error('Furniture and walls must be lists');
     for (const room of floor.rooms || []) {
+      if(room.temperature_entity && !/^(sensor|climate)\.[a-z0-9_]+$/.test(room.temperature_entity))throw new Error('Choose a temperature sensor or thermostat for the room');
       if (room.material !== undefined && !['wood','tile','carpet'].includes(room.material)) throw new Error('Choose wood, tile or carpet for the room floor');
       if (room.colour !== undefined && !/^#[0-9a-f]{6}$/i.test(room.colour)) throw new Error('Use a six-digit room colour');
     }
@@ -28,6 +30,7 @@ export function normaliseScene(config) {
     const identify = item => { if (!item.id || typeof item.id !== 'string' || ids.has(item.id)) throw new Error('Furniture, walls and openings need unique ids on each floor'); ids.add(item.id); };
     for (const item of floor.objects) {
       identify(item);
+      if(item.heating_entity && !/^(climate|switch|binary_sensor)\.[a-z0-9_]+$/.test(item.heating_entity))throw new Error('Choose a thermostat, heating switch or activity sensor');
       const definition = CATALOGUE.find(d => d.type === item.type);
       if (!definition) throw new Error('Choose an object from the furniture catalogue');
       if (!coordinate([item.x,item.y])) throw new Error('Furniture must be placed within the floor');
@@ -39,6 +42,7 @@ export function normaliseScene(config) {
     }
     for (const wall of floor.walls) {
       identify(wall);
+      if(wall.solid!==undefined&&typeof wall.solid!=='boolean')throw new Error('Solid wall infill must be true or false');
       if (!coordinate(wall.a) || !coordinate(wall.b) || wall.a.every((n,i)=>n===wall.b[i])) throw new Error('Walls need two different points within the floor');
       wall.height ??= 2.4; wall.thickness ??= .15;
       positive(wall.height,'Wall height',100); positive(wall.thickness,'Wall thickness',10);

@@ -7,8 +7,10 @@ async function beginDelayedUpload(page) {
   await page.route('**/api/image/upload', async route => { await waitForRelease; await route.fulfill({json:{id:'upload-test'}}); });
   await page.route('**/api/image/serve/upload-test/original', route => route.fulfill({path:'demo/sample.svg',contentType:'image/svg+xml'}));
   await page.goto('/demo/');
+  await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   await page.evaluate(() => { const editor=document.querySelector('floorplan-card-editor'); editor.hass={...editor._hass,fetchWithAuth:(url,options)=>fetch(url,options)}; });
   const editor=page.locator('floorplan-card-editor');
+  await editor.getByRole('button',{name:'1. Floors',exact:true}).click();
   await editor.getByLabel('Choose floorplan image',{exact:true}).setInputFiles({name:'test.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z4hUAAAAASUVORK5CYII=','base64')});
   await expect(editor.getByText('Uploading image…',{exact:true})).toBeVisible();
   return {editor,release};

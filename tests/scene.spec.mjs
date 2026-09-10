@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 test('mapped light can be rebound without moving it or breaking its group',async({page})=>{
   await page.goto('/demo/');
+  await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');
   await editor.getByRole('button',{name:'4. Entities',exact:true}).click();
   await editor.locator('summary').filter({hasText:/^Diner$/}).click();
@@ -17,19 +18,21 @@ test.beforeEach(async ({ page }) => { await page.goto('/demo/'); });
 const scene = async page => JSON.parse(await page.locator('#config').textContent());
 
 test('furniture can be placed, resized, varied and restored with undo and redo', async ({ page }) => {
+  await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');
   const initial=(await scene(page)).floors[0].objects?.length || 0;
   await editor.getByRole('button',{name:'3. Furniture',exact:true}).click();
+  await editor.getByRole('button',{name:'Unlock editing',exact:true}).click();
   await editor.getByLabel('Find furniture').fill('piano');
   await editor.getByRole('button',{name:'Piano',exact:true}).click();
   await editor.getByRole('button',{name:'Place furniture in centre',exact:true}).click();
-  await expect(editor.getByLabel('Placed furniture').locator('option')).toHaveCount(initial+2);
-  await editor.getByLabel('Placed furniture').selectOption('');
+  await expect(editor.getByRole('combobox',{name:'Placed furniture',exact:true}).locator('option')).toHaveCount(initial+2);
+  await editor.getByRole('combobox',{name:'Placed furniture',exact:true}).selectOption('');
   await editor.getByRole('button',{name:'Zoom in',exact:true}).click();
   await editor.locator('[data-object-id]').last().click();
-  await expect(editor.getByLabel('Furniture variant')).toBeVisible();
+  await expect(editor.getByRole('combobox',{name:'Furniture variant',exact:true})).toBeVisible();
   await editor.getByRole('button',{name:'Fit floorplan',exact:true}).click();
-  await editor.getByLabel('Furniture variant').selectOption('grand');
+  await editor.getByRole('combobox',{name:'Furniture variant',exact:true}).selectOption('grand');
   await editor.getByLabel('Width (metres)',{exact:true}).fill('1.8');
   await editor.getByLabel('Width (metres)',{exact:true}).press('Tab');
   let item=(await scene(page)).floors[0].objects.at(-1);
@@ -86,14 +89,79 @@ test('3D canvas survives state updates and controls work after context loss', as
 });
 
 test('malformed and unsupported scene imports leave the existing scene intact', async ({ page }) => {
+  await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor'), before=await scene(page);
-  await editor.getByText('Import or export your private scene',{exact:true}).click();
-  const upload=editor.getByLabel('Import scene JSON');
+  await editor.getByRole('button',{name:'Import / export',exact:true}).click();
+  const upload=editor.getByLabel('Import configuration JSON');
   await upload.setInputFiles({name:'invalid.json',mimeType:'application/json',buffer:Buffer.from('{broken')});
-  await expect(editor.getByRole('alert')).toContainText('Scene was not imported');
+  await expect(editor.getByRole('alert')).toContainText('Configuration was not imported');
   expect(await scene(page)).toEqual(before);
-  await editor.getByText('Import or export your private scene',{exact:true}).click();
   await upload.setInputFiles({name:'future.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({...before,scene_version:999}))});
   await expect(editor.getByRole('alert')).toContainText('version is not supported');
   expect(await scene(page)).toEqual(before);
+});
+
+test('full configuration export embeds images and round-trips into another card',async({page})=>{
+  const editor=page.locator('floorplan-card-editor');
+  await page.getByRole('button',{name:'Edit layout',exact:true}).click();
+  await page.evaluate(()=>{
+    const editor=document.querySelector('floorplan-card-editor'),config=structuredClone(editor.config);
+    config.outdoor_temperature_entity='sensor.outdoor';
+    config.floors[0].rooms[0].temperature_entity='sensor.temperature';
+    config.floors[0].objects.push({id:'radiator-transfer',type:'radiator',x:10,y:30,width:1,depth:.12,height:.6,heating_entity:'climate.example'});
+    const upper=structuredClone(config.floors[0]);upper.id='upper';upper.name='Upper floor';upper.rotation=90;
+    upper.entities.push({entity:'light.draft',unbound:true,name:'Future pendant',fixture:'pendant',x:40,y:60});
+    upper.rooms[0].lights.push('light.draft');config.floors.push(upper);
+    config.groups.push({name:'Future lights',entities:['light.draft']});
+    editor.setConfig(config);editor.emit();
+  });
+  const original=await page.evaluate(()=>document.querySelector('floorplan-card-editor').config);
+  await editor.getByRole('button',{name:'Import / export',exact:true}).click();
+  const downloaded=page.waitForEvent('download');
+  await editor.getByRole('button',{name:'Export full configuration',exact:true}).click();
+  const download=await downloaded;
+  expect(download.suggestedFilename()).toBe('floorplan-configuration.json');
+  const stream=await download.createReadStream(),chunks=[];
+  for await(const chunk of stream)chunks.push(chunk);
+  const buffer=Buffer.concat(chunks),exported=JSON.parse(buffer.toString());
+  expect(exported.floors.length).toBe(original.floors.length);
+  for(const [i,floor] of exported.floors.entries()){
+    expect(floor.image).toMatch(/^data:image\//);
+    expect({...floor,image:original.floors[i].image}).toEqual(original.floors[i]);
+  }
+  expect({...exported,floors:original.floors}).toEqual(original);
+  await page.evaluate(()=>{const editor=document.querySelector('floorplan-card-editor');editor.setConfig({type:'custom:floorplan-card',title:'Destination card',floors:[],groups:[]});editor.emit();});
+  await editor.getByLabel('Import configuration JSON').setInputFiles({name:'transfer.json',mimeType:'application/json',buffer});
+  await expect(editor.locator('#configuration-transfer [role=status]')).toContainText('Imported');
+  expect(await scene(page)).toEqual(exported);
+  await editor.getByRole('button',{name:'Undo',exact:true}).click();
+  expect((await scene(page)).title).toBe('Destination card');
+  expect((await scene(page)).floors).toEqual([]);
+});
+
+test('unconnected elements can be arranged and assigned before binding to Home Assistant',async({page})=>{
+  await page.evaluate(()=>{const editor=document.querySelector('floorplan-card-editor');editor.hass={...editor._hass,states:{...editor._hass.states,'sensor.outdoor_temperature':{state:'12',attributes:{friendly_name:'Outdoor temperature'}}}};});
+  await page.getByRole('button',{name:'Edit layout',exact:true}).click();
+  const editor=page.locator('floorplan-card-editor');
+  await editor.getByRole('button',{name:'4. Entities',exact:true}).click();
+  await editor.getByRole('button',{name:'Temperature',exact:true}).click();
+  await editor.locator('.setup-canvas .plan').click({position:{x:40,y:40}});
+  const row=editor.locator('details[open]').filter({hasText:'Not connected'});
+  await expect(row).toHaveCount(1);
+  const draft=(await scene(page)).floors[0].entities.find(e=>e.unbound);
+  const markerNode=editor.getByRole('button',{name:`Move ${draft.entity}`,exact:true});
+  await markerNode.scrollIntoViewIfNeeded();const bounds=await markerNode.boundingBox();
+  await page.mouse.move(bounds.x+bounds.width/2,bounds.y+bounds.height/2);await page.mouse.down();await page.mouse.move(bounds.x+bounds.width/2+25,bounds.y+bounds.height/2+20,{steps:5});await page.mouse.up();
+  await expect.poll(async()=>(await scene(page)).floors[0].entities.find(e=>e.entity===draft.entity).x).not.toBe(draft.x);
+  await row.getByLabel('Display name',{exact:true}).fill('Study temperature');await row.getByLabel('Display name',{exact:true}).press('Tab');
+  await row.getByRole('combobox',{name:'Element room',exact:true}).selectOption({index:1});
+  const before=await scene(page),marker=before.floors[0].entities.find(e=>e.unbound);
+  expect(marker.name).toBe('Study temperature');
+  expect(before.floors[0].rooms[0].temperature_entity).toBe(marker.entity);
+  await row.getByRole('combobox',{name:'Assigned entity',exact:true}).selectOption('sensor.outdoor_temperature');
+  const after=await scene(page),bound=after.floors[0].entities.find(e=>e.entity==='sensor.outdoor_temperature');
+  expect(bound).toMatchObject({name:marker.name,x:marker.x,y:marker.y});expect(bound.unbound).toBeUndefined();
+  expect(after.floors[0].rooms[0].temperature_entity).toBe('sensor.outdoor_temperature');
+  await editor.getByRole('button',{name:'Undo',exact:true}).click();
+  expect((await scene(page)).floors[0].entities.find(e=>e.entity===marker.entity).unbound).toBe(true);
 });

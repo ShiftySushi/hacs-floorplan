@@ -3,6 +3,8 @@ import { furniture3D } from './furniture3d.js';
 import { renderPlan } from './plan.js';
 import { element, button } from './dom.js';
 import { floorDimensions } from './scene.js';
+import { roomLightSources, lightAppearance } from './illumination.js';
+import { heatingState } from './heating.js';
 
 /** Split a wall into solid rectangles; openings are real holes, not painted doors. */
 export function wallSections(length, height, openings = []) {
@@ -15,6 +17,19 @@ export function wallSections(length, height, openings = []) {
 
 export function storeyPlacement(floor,index,exploded=true) {
   return {x:floor.offset_x_m ?? 0,z:floor.offset_z_m ?? 0,y:(floor.elevation_m ?? index*3)+(exploded?index*3:0)};
+}
+
+/** Small shared endpoint caps close angled wall joins without extending any opening. */
+export function wallJoins(walls,width,depth) {
+  const nodes=[];
+  for(const wall of walls){const length=Math.hypot((wall.b[0]-wall.a[0])*width/100,(wall.b[1]-wall.a[1])*depth/100);
+    for(const [point,end] of [[wall.a,0],[wall.b,length]]){
+      const x=(point[0]/100-.5)*width,z=(point[1]/100-.5)*depth;
+      let node=nodes.find(n=>Math.hypot(n.x-x,n.z-z)<.025);if(!node){node={x,z,walls:[],blocked:false};nodes.push(node);}
+      node.walls.push(wall);node.blocked ||= (wall.openings || []).some(o=>Math.abs((o.offset ?? .5)*length-end)<=(o.width || .9)/2+.001);
+    }
+  }
+  return nodes.filter(n=>n.walls.length>1&&!n.blocked).map(n=>({x:n.x,z:n.z,radius:Math.max(...n.walls.map(w=>w.thickness || .15))/2,height:Math.min(...n.walls.map(w=>w.height || 2.4))}));
 }
 
 export function selectSceneLights(floors,selectedId,quality='auto') {
@@ -30,11 +45,23 @@ export function selectSceneLights(floors,selectedId,quality='auto') {
   return lights;
 }
 
-function lightColour(state) {
-  const attributes=state?.attributes || {};
-  if(attributes.rgb_color)return attributes.rgb_color;
-  const kelvin=attributes.color_temp_kelvin || (attributes.color_temp?1e6/attributes.color_temp:3000);
-  return kelvin<4000?[255,190+Math.max(0,kelvin-2000)*.02,115+Math.max(0,kelvin-2000)*.04]:[235,240,255];
+export function illuminationUV(x,y,width,depth) {return [x/width+.5,y/depth+.5];}
+
+function roomIllumination(floor,room,width,depth,quality) {
+  const canvas=document.createElement('canvas'),size=quality==='high'?512:256;
+  canvas.width=Math.max(64,Math.round(size*width/Math.max(width,depth)));canvas.height=Math.max(64,Math.round(size*depth/Math.max(width,depth)));
+  const context=canvas.getContext('2d'),texture=new THREE.CanvasTexture(canvas);texture.channel=1;texture.colorSpace=THREE.SRGBColorSpace;
+  const sources=roomLightSources(floor,room);let previous;
+  return {texture,update(states){
+    const lights=sources.map(source=>({...source,...lightAppearance(states[source.id])})),key=JSON.stringify(lights);
+    if(key===previous)return;previous=key;context.globalCompositeOperation='source-over';context.fillStyle='#000';context.fillRect(0,0,canvas.width,canvas.height);context.globalCompositeOperation='lighter';
+    for(const light of lights){if(!light.level)continue;const x=light.x/100*canvas.width,y=light.y/100*canvas.height,rx=light.radius/width*canvas.width,ry=light.radius/depth*canvas.height;
+      context.save();context.translate(x,y);context.scale(rx,ry);const gradient=context.createRadialGradient(0,0,0,0,0,1),rgb=light.colour.join(',');
+      gradient.addColorStop(0,`rgba(${rgb},${light.level*.9})`);gradient.addColorStop(.25,`rgba(${rgb},${light.level*.7})`);gradient.addColorStop(.65,`rgba(${rgb},${light.level*.22})`);gradient.addColorStop(1,`rgba(${rgb},0)`);
+      context.fillStyle=gradient;context.fillRect(-1,-1,2,2);context.restore();
+    }
+    texture.needsUpdate=true;
+  }};
 }
 
 export function render3D(floor, states, options = {}) {
@@ -59,7 +86,7 @@ export function render3D(floor, states, options = {}) {
   plan.append(renderer.domElement);
   const ambient=new THREE.HemisphereLight('#fff6e8','#6f8291',2);scene.add(ambient);
   const sun=new THREE.DirectionalLight('#fff3de',2.2);sun.position.set(-span,span*2,span);sun.castShadow=options.quality!=='low';sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-span,right:span,top:span,bottom:-span,far:span*5});sun.shadow.normalBias=.04;scene.add(sun);
-  const roomMeshes=[],lightMeshes=[],wallMeshes=[],storeyLabels=[];
+  const roomMeshes=[],lightMeshes=[],wallMeshes=[],storeyLabels=[],radiators=[];
   const boards=document.createElement('canvas');boards.width=128;boards.height=128;
   const ink=boards.getContext('2d');ink.fillStyle='#d4c3a8';ink.fillRect(0,0,128,128);
   for(let row=0;row<8;row++){ink.fillStyle=row%2?'#cbb898':'#d4c3a8';ink.fillRect(0,row*16,128,16);ink.fillStyle='#b5a081';ink.fillRect(0,row*16,128,1);ink.fillRect(row%2?64:0,row*16,1,16);}
@@ -72,6 +99,7 @@ export function render3D(floor, states, options = {}) {
     const texture=new THREE.CanvasTexture(canvas);texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.colorSpace=THREE.SRGBColorSpace;texture.repeat.set(type==='tile'?2:1,type==='tile'?2:1);return texture;
   }
   const textures={wood:woodTexture,tile:surfaceTexture('tile'),carpet:surfaceTexture('carpet')};
+  const heatCanvas=document.createElement('canvas');heatCanvas.width=heatCanvas.height=64;const heatInk=heatCanvas.getContext('2d'),heatGradient=heatInk.createRadialGradient(32,32,0,32,32,32);heatGradient.addColorStop(0,'rgba(255,64,30,.7)');heatGradient.addColorStop(.45,'rgba(255,50,20,.25)');heatGradient.addColorStop(1,'rgba(255,40,10,0)');heatInk.fillStyle=heatGradient;heatInk.fillRect(0,0,64,64);textures.heat=new THREE.CanvasTexture(heatCanvas);textures.heat.colorSpace=THREE.SRGBColorSpace;
   function material(colour) {return new THREE.MeshStandardMaterial({color:colour,roughness:.88});}
   function box(w,h,d,x,y,z,colour,parent=world) {const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material(colour));mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;parent.add(mesh);return mesh;}
   function buildStorey(floor,index) {
@@ -89,12 +117,16 @@ export function render3D(floor, states, options = {}) {
     const surface=room.material || 'wood',colour=room.colour || ({wood:'#cbb89a',tile:'#c8d2d1',carpet:'#c4ada2'}[surface] || '#cbb89a');
     const mesh=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:.1,bevelEnabled:false}),material(colour));mesh.rotation.x=-Math.PI/2;mesh.position.y=-.09;mesh.receiveShadow=true;localWorld.add(mesh);
     mesh.material.map=textures[surface] || woodTexture;mesh.material.roughness=surface==='tile'?.45:surface==='carpet'?1:.88;
+    const illumination=roomIllumination(floor,room,width,depth,options.quality),positions=mesh.geometry.attributes.position,uv=new Float32Array(positions.count*2);
+    for(let i=0;i<positions.count;i++)uv.set(illuminationUV(positions.getX(i),positions.getY(i),width,depth),i*2);
+    mesh.geometry.setAttribute('uv1',new THREE.BufferAttribute(uv,2));mesh.material.emissiveMap=illumination.texture;mesh.material.emissive.set('#ffffff');mesh.material.emissiveIntensity=.9;
     // Fine board seams add scale without downloading textures.
     const edges=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:'#9c8d79'}));mesh.add(edges);
-    roomMeshes.push({room,mesh,edges,base:new THREE.Color(colour)});
+    roomMeshes.push({room,mesh,edges,illumination,base:new THREE.Color(colour)});
   }
     for(const {id,point} of gpuLights.filter(light=>light.floorId===floor.id)) {
-      const glow=new THREE.SpotLight('#ffe5b0',0,5,Math.PI*.36,.75,2);glow.position.copy(position(point,2.2));glow.target.position.copy(position(point,.01));
+      const radius=(floor.entities || []).find(e=>e.entity===id)?.fixture==='spot'?2:3;
+      const glow=new THREE.SpotLight('#ffe5b0',0,Math.hypot(2.2,radius)+.3,Math.atan(radius/2.2),.75,2);glow.position.copy(position(point,2.2));glow.target.position.copy(position(point,.01));
       glow.castShadow=true;glow.shadow.mapSize.set(512,512);glow.shadow.normalBias=.03;
       localWorld.add(glow,glow.target);lightMeshes.push({id,glow});
     }
@@ -107,7 +139,14 @@ export function render3D(floor, states, options = {}) {
     // Low skirting defines the floor perimeter even when tall walls are cut away.
     for(const r of wallSections(length,.09,(wall.openings || []).filter(o=>o.type==='door')))box(r.width,r.height,(wall.thickness || .15)+.025,r.x,r.y,0,'#fdfbf2',group);
   }
-  for(const object of floor.objects || []) {const model=furniture3D(object);model.position.copy(position([object.x,object.y],.025));localWorld.add(model);}
+  for(const join of wallJoins(floor.walls || [],width,depth)){
+    const mesh=new THREE.Mesh(new THREE.CylinderGeometry(join.radius,join.radius,join.height,16),material('#ece8dc'));mesh.position.set(join.x,join.height/2,join.z);mesh.castShadow=true;mesh.receiveShadow=true;localWorld.add(mesh);wallMeshes.push(mesh);
+  }
+  for(const object of floor.objects || []) {const model=furniture3D(object);model.position.copy(position([object.x,object.y],.025));localWorld.add(model);
+    if(object.type==='radiator'){
+      const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:textures.heat,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));glow.position.set(0,(object.height || .6)/2,0);glow.scale.set((object.width || 1)*1.5,(object.height || .6)*2,1);model.add(glow);radiators.push({object,model,glow});
+    }
+  }
   }
   const selectedId=floor.id;floors.forEach(buildStorey);
   const toolbar=element('div',{className:'three-toolbar'});toolbar.style.cssText='position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:5px;padding:5px;border-radius:14px;background:var(--card-background-color,#fff);box-shadow:0 2px 12px #0002;z-index:5';
@@ -124,12 +163,11 @@ export function render3D(floor, states, options = {}) {
   }
   function schedule(){if(!frame&&!disposed&&visible&&!document.hidden)frame=requestAnimationFrame(draw);}
   function update(nextStates,nextOptions={}){states=nextStates;options={...options,...nextOptions};if(fallback){fallback.update?.(states,options);return;}for(const marker of markers)marker.node.remove();markers=options.markers || [];for(const marker of markers)plan.append(marker.node);
-    const assigned=assignedIds.map(id=>states[id]),allDark=assigned.length&&assigned.every(s=>s?.state==='off');ambient.intensity=allDark?.65:1.5;sun.intensity=allDark?.45:1.5;
-    for(const {room,mesh,edges,base} of roomMeshes){const lights=(room.lights || []).map(id=>states[id]),active=lights.filter(s=>s?.state==='on');const amount=active.length?Math.max(...active.map(s=>(s.attributes?.brightness ?? 255)/255)):0;const known=lights.length&&lights.every(s=>s&&['on','off'].includes(s.state));mesh.material.color.copy(base).multiplyScalar(active.length ? .72+amount*.28 : known ? .4 : .8);
-      // The room polygon itself provides bounded light for every entity, without light leaking across walls.
-      const rgb=[0,0,0];let weight=0;for(const state of active){const level=(state.attributes?.brightness ?? 255)/255,colour=lightColour(state);weight+=level;colour.forEach((value,i)=>rgb[i]+=value*level);}
-      mesh.material.emissive.setRGB(...rgb.map(value=>weight?value/weight/255:0),THREE.SRGBColorSpace);mesh.material.emissiveIntensity=amount*.45;edges.material.color.set((room.presence || []).some(id=>states[id]?.state==='on')?'#00b58b':'#9c8d79');}
-    for(const {id,glow} of lightMeshes){const s=states[id],level=s?.state==='on'?(s.attributes?.brightness ?? 255)/255:0,rgb=lightColour(s);glow.color.setRGB(rgb[0]/255,rgb[1]/255,rgb[2]/255,THREE.SRGBColorSpace);glow.intensity=level*30;}
+    for(const {object,model,glow} of radiators){const active=heatingState(states[object.heating_entity])==='heating';glow.visible=active;model.traverse(node=>{if(node.material?.emissive){node.material.emissive.set(active?'#f34b24':'#000000');node.material.emissiveIntensity=active?.7:0;}});}
+    ambient.intensity=assignedIds.length?.65:1.5;sun.intensity=assignedIds.length?.45:1.5;
+    for(const {room,mesh,edges,base,illumination} of roomMeshes){const lights=(room.lights || []).map(id=>states[id]),known=lights.length&&lights.every(s=>s&&['on','off'].includes(s.state));mesh.material.color.copy(base).multiplyScalar(known?.4:.8);
+      illumination.update(states);edges.material.color.set((room.presence || []).some(id=>states[id]?.state==='on')?'#00b58b':'#9c8d79');}
+    for(const {id,glow} of lightMeshes){const {level,colour}=lightAppearance(states[id]);glow.color.setRGB(colour[0]/255,colour[1]/255,colour[2]/255,THREE.SRGBColorSpace);glow.intensity=level*30;}
     schedule();}
   const down=e=>{if(e.button!==0)return;pointer={id:e.pointerId,x:e.clientX,y:e.clientY};renderer.domElement.setPointerCapture(e.pointerId);};
   const move=e=>{if(!pointer)return;azimuth-=(e.clientX-pointer.x)*.008;elevation=Math.min(1.45,Math.max(.3,elevation+(e.clientY-pointer.y)*.006));pointer.x=e.clientX;pointer.y=e.clientY;schedule();};
@@ -141,6 +179,6 @@ export function render3D(floor, states, options = {}) {
   const intersection=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;if(visible)schedule();});intersection.observe(plan);
   const visibility=()=>{if(document.hidden){cancelAnimationFrame(frame);frame=0;}else schedule();};document.addEventListener('visibilitychange',visibility);
   const contextLost=e=>{e.preventDefault();dispose();fallback=renderPlan(floor,states,{...options,mode:'clean'});plan.replaceChildren(element('p',{className:'hint',text:'3D graphics were interrupted. Showing 2D.'}),fallback);};renderer.domElement.addEventListener('webglcontextlost',contextLost);
-  function dispose(){fallback?.dispose?.();if(disposed)return;disposed=true;cancelAnimationFrame(frame);resize.disconnect();intersection.disconnect();document.removeEventListener('visibilitychange',visibility);const geometries=new Set(),materials=new Set();scene.traverse(node=>{node.shadow?.dispose();if(node.geometry)geometries.add(node.geometry);if(node.material)for(const m of Array.isArray(node.material)?node.material:[node.material])materials.add(m);});geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());Object.values(textures).forEach(texture=>texture.dispose());renderer.dispose();}
+  function dispose(){fallback?.dispose?.();if(disposed)return;disposed=true;cancelAnimationFrame(frame);resize.disconnect();intersection.disconnect();document.removeEventListener('visibilitychange',visibility);const geometries=new Set(),materials=new Set();scene.traverse(node=>{node.shadow?.dispose();if(node.geometry)geometries.add(node.geometry);if(node.material)for(const m of Array.isArray(node.material)?node.material:[node.material])materials.add(m);});geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());roomMeshes.forEach(({illumination})=>illumination.texture.dispose());Object.values(textures).forEach(texture=>texture.dispose());renderer.dispose();}
   plan.update=update;plan.dispose=dispose;update(states,options);return plan;
 }
