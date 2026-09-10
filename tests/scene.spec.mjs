@@ -49,6 +49,11 @@ test('furniture can be placed, resized, varied and restored with undo and redo',
 
 test('all render modes retain selected lights and compatible controls', async ({ page }) => {
   const card=page.locator('floorplan-card');
+  const marker=card.getByRole('button',{name:'Diner: On',exact:true});
+  const beforeZoom=await marker.boundingBox();
+  await card.getByRole('button',{name:'Zoom in',exact:true}).click();
+  expect((await marker.boundingBox()).width).toBeCloseTo(beforeZoom.width,0);
+  await card.getByRole('button',{name:'Fit floorplan',exact:true}).click();
   await card.getByRole('button',{name:'All lights',exact:true}).click();
   for(const name of ['Pokémon style','Zelda style','Furnished 3D','Clean 2D']) {
     await card.getByRole('button',{name,exact:true}).click();

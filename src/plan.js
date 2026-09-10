@@ -10,7 +10,7 @@ export function renderPlan(floor, states, options={}) {
   svg.append(group);content.append(svg);viewport.append(content);plan.append(viewport);plan.style.position='relative';
   const patternId=`floor-pattern-${++planSequence}`;
   let markers=options.markers || [],ratio=floor.aspect_ratio || .6875, transform, disposed=false, drag=null, moved=false,zoom=1,panX=0,panY=0;
-  const camera=()=>{content.style.transform=`translate(${panX}% ,${panY}%) scale(${zoom})`;};
+  const camera=()=>{content.style.transform=`translate(${panX}% ,${panY}%) scale(${zoom})`;for(const {node} of markers)node.style.transform=`translate(-50%,-50%) scale(${1/zoom})`;};
   const toolbar=element('div',{className:'plan-navigation','aria-label':'Floorplan navigation'});toolbar.style.cssText='position:absolute;bottom:8px;left:8px;right:8px;display:flex;gap:3px;justify-content:center;z-index:4;pointer-events:none';
   for(const [label,text,action] of [['Zoom in','+',()=>{zoom=Math.min(3,zoom+.25);}],['Zoom out','−',()=>{zoom=Math.max(.5,zoom-.25);}],['Pan left','←',()=>{panX=Math.min(75,panX+10);}],['Pan right','→',()=>{panX=Math.max(-75,panX-10);}],['Pan up','↑',()=>{panY=Math.min(75,panY+10);}],['Pan down','↓',()=>{panY=Math.max(-75,panY-10);}],['Fit floorplan','Fit',()=>{zoom=1;panX=0;panY=0;}]]) {const control=element('button',{type:'button',text,'aria-label':label,title:label,onclick:e=>{e.stopPropagation();action();camera();}});control.style.cssText='pointer-events:auto;min-width:32px;min-height:36px;padding:4px 7px';toolbar.append(control);}plan.append(toolbar);
   const pointAt=e=>{const r=content.getBoundingClientRect();return orientPoint([(e.clientX-r.left)/r.width*100,(e.clientY-r.top)/r.height*100],transform,true).map(n=>Math.round(Math.max(0,Math.min(100,n))*10)/10);};
@@ -69,6 +69,7 @@ export function renderPlan(floor, states, options={}) {
     overlays.forEach(node=>{node.style.pointerEvents='none';group.append(node);});
     group.append(svgElement('polyline',{points:points(options.draft || []),fill:'#007c91','fill-opacity':.2,stroke:'#007c91','stroke-width':3,'vector-effect':'non-scaling-stroke'}));
     for(const {node,x,y} of markers){const p=orientPoint([x,y],transform);node.style.left=`${p[0]}%`;node.style.top=`${p[1]}%`;}
+    camera();
   }
   svg.addEventListener('pointermove',e=>{if(!drag)return;const p=pointAt(e);if(Math.hypot(p[0]-drag.start[0],p[1]-drag.start[1])<.3&&!moved)return;moved=true;drag.position=[Math.max(0,Math.min(100,drag.x+p[0]-drag.start[0])),Math.max(0,Math.min(100,drag.y+p[1]-drag.start[1]))];drag.node.setAttribute('transform',`translate(${drag.position[0]/100*transform.w} ${drag.position[1]/100*transform.h}) rotate(${drag.rotation})`);});
   svg.addEventListener('pointerup',e=>{if(!drag)return;const saved=drag;drag=null;if(svg.hasPointerCapture(e.pointerId))svg.releasePointerCapture(e.pointerId);if(moved&&saved.position)options.onObjectMove(saved.id,saved.position);else {moved=true;options.onObject?.(saved.id);}});
