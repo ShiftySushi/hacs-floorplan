@@ -3,6 +3,8 @@ import assets from './assets/kenney-furniture.json' with {type:'json'};
 
 /*! Selected furniture models by Kenney (https://kenney.nl/assets/furniture-kit), CC0. */
 export function kenneyFurniture(object) {
+  // Product presets use procedural geometry that fills all three measured axes.
+  if(object.product_id || object.leg_colour || object.surface_finish || object.variant==='integrated')return null;
   if(object.variant&&['corner','cubes','grand'].includes(object.variant))return null;
   const name={chair:'chairCushion',office_chair:'chairDesk',sofa:'loungeSofa',bed:object.variant==='single'?'bedSingle':'bedDouble',dining_table:'table',side_table:'sideTable',plant:'pottedPlant',toilet:'toilet',sink:'bathroomSink',bath:'bathtub',bookshelf:'bookcaseOpen',tv_bench:'cabinetTelevision',fridge:'kitchenFridge'}[object.type];
   const asset=assets[name];if(!asset)return null;

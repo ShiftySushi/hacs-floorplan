@@ -83,7 +83,7 @@ export class FloorplanCard extends HTMLElement {
     const tabs = element('div', { className: 'row floor-tabs', role: 'group', 'aria-label': 'Floors' });
     this.config.floors.forEach(floor => tabs.append(iconButton(floor.name || floor.id,'floor', () => { this.floorId = floor.id; this.render(); }, { 'aria-pressed': String(floor.id === this.floorId) })));
     const mode=this.viewMode || this.config.appearance?.mode || 'clean';
-    const daylight=daylightLevel(states);this.planSlot.style.setProperty('--fp-stage-background',stageColour(mode,daylight));
+    const daylight=daylightLevel(states,new Date(),this._hass?.config);this.planSlot.style.setProperty('--fp-stage-background',stageColour(mode,daylight));
     const modes=element('div',{className:'row view-modes',role:'group','aria-label':'Render style'});
     for(const [id,label,glyph] of [['clean','2D','grid'],['3d','3D','cube']]) modes.append(iconButton(label,glyph,()=>{this.viewMode=id;this.render();},{'aria-pressed':String(mode===id)}));
     const customStyle=element('select',{'aria-label':'Custom style',onchange:e=>{this.viewMode=e.target.value;this.render();}},[element('option',{value:'',text:'Custom',disabled:true,selected:!['pokemon','zelda','sims'].includes(mode)})]);

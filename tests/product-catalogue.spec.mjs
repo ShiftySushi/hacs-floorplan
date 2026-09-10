@@ -1,0 +1,51 @@
+import {test,expect} from '@playwright/test';
+
+test('search and place a measured product, change finish, rotate and restore dimensions',async({page})=>{
+  await page.goto('/demo/');await page.getByRole('button',{name:'Edit layout',exact:true}).click();
+  const editor=page.locator('floorplan-card-editor');
+  await editor.getByRole('button',{name:'3. Furniture',exact:true}).click();
+  await editor.getByRole('button',{name:'Unlock editing',exact:true}).click();
+  await editor.getByLabel('Find furniture').fill('Kawai');
+  await editor.locator('.furniture-palette').getByRole('button',{name:/Kawai CA901/}).click();
+  await editor.getByRole('button',{name:'Place furniture in centre',exact:true}).click();
+  await expect(editor.getByLabel('Width (metres)',{exact:true})).toHaveValue('1.455');
+  await expect(editor.getByLabel('Depth (metres)',{exact:true})).toHaveValue('0.475');
+  await editor.getByRole('button',{name:'Premium satin white',exact:true}).click();
+  await expect(editor.getByLabel('Furniture colour',{exact:true})).toHaveValue('#ecebe5');
+  await editor.getByRole('button',{name:'Rotate furniture',exact:true}).click();
+  await expect(editor.getByLabel('Object rotation (degrees)',{exact:true})).toHaveValue('90');
+  const footprint=editor.locator('[data-product-footprint]');
+  const dimensions=await footprint.evaluate(e=>[Number(e.getAttribute('width')),Number(e.getAttribute('height'))]);
+  expect(dimensions[0]/dimensions[1]).toBeCloseTo(1.455/.475,5);
+  await editor.getByLabel('Width (metres)',{exact:true}).fill('1.6');
+  await editor.getByLabel('Width (metres)',{exact:true}).press('Tab');
+  await editor.getByRole('button',{name:'Restore product dimensions',exact:true}).click();
+  await expect(editor.getByLabel('Width (metres)',{exact:true})).toHaveValue('1.455');
+  await expect(editor.getByLabel('Furniture colour',{exact:true})).toHaveValue('#ecebe5');
+  const downloadPromise=page.waitForEvent('download');await editor.evaluate(e=>e.exportScene());
+  const download=await downloadPromise,stream=await download.createReadStream(),chunks=[];
+  for await(const chunk of stream)chunks.push(chunk);
+  const exported=JSON.parse(Buffer.concat(chunks).toString()),before=exported.floors[0].objects.find(o=>o.product_id==='kawai-ca901');
+  expect(before).toMatchObject({width:1.455,depth:.475,colour:'#ecebe5',rotation:90});
+  await editor.evaluate(async(e,config)=>{await e.importScene(new File([JSON.stringify(config)],'products.json'));},exported);
+  expect(await editor.evaluate(e=>e.config.floors[0].objects.find(o=>o.product_id==='kawai-ca901'))).toEqual(before);
+  await editor.getByRole('combobox',{name:'Placed furniture',exact:true}).selectOption(before.id);
+  await editor.getByRole('button',{name:'Restore product dimensions',exact:true}).scrollIntoViewIfNeeded();
+  await editor.getByLabel('Product preset',{exact:true}).selectOption('');
+  await expect(editor.getByLabel('Width (metres)',{exact:true})).toHaveValue('1.455');
+  await expect(editor.getByRole('button',{name:'Restore product dimensions',exact:true})).toHaveCount(0);
+});
+
+test('thin television preset remains valid and editable',async({page})=>{
+  await page.goto('/demo/');await page.getByRole('button',{name:'Edit layout',exact:true}).click();
+  const editor=page.locator('floorplan-card-editor');
+  await editor.getByRole('button',{name:'3. Furniture',exact:true}).click();
+  await editor.getByRole('button',{name:'Unlock editing',exact:true}).click();
+  await editor.getByLabel('Find furniture').fill('LG G4');
+  await editor.locator('.furniture-palette').getByRole('button',{name:/wall mount/}).click();
+  await editor.getByRole('button',{name:'Place furniture in centre',exact:true}).click();
+  const depth=editor.getByLabel('Depth (metres)',{exact:true});
+  await expect(depth).toHaveValue('0.0243');expect(await depth.evaluate(e=>e.checkValidity())).toBe(true);
+  await editor.getByLabel('Product preset',{exact:true}).selectOption('lg-g4-65-stand');
+  await expect(depth).toHaveValue('0.263');
+});

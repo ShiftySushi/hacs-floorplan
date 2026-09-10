@@ -1,6 +1,13 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {roomLightSources,lightAppearance,roomDarkness} from '../src/illumination.js';
+test('active temperature mode overrides stale RGB and changes continuously with Kelvin',()=>{
+  const sample=k=>lightAppearance({state:'on',attributes:{brightness:128,color_mode:'color_temp',color_temp_kelvin:k,rgb_color:[0,255,0]}});
+  assert.equal(sample(2700).level,128/255);
+  assert.ok(sample(2700).colour[0]>sample(2700).colour[2]);
+  assert.ok(sample(6000).colour[2]>sample(2700).colour[2]);
+  assert.notDeepEqual(sample(4000).colour,sample(6000).colour);
+});
 
 test('footprints follow placed fixtures and use a room fallback for unplaced lights',()=>{
   const room={points:[[0,0],[100,0],[100,100],[0,100]],lights:['light.corner','light.ceiling','light.corner']};

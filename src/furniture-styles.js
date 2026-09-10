@@ -17,6 +17,13 @@ export const furnitureStyles = `
 .furniture-panel .furniture-palette button{min-width:0;display:flex;flex-direction:column;gap:6px;align-items:center;padding:10px 4px;font-size:11px;line-height:1.25;overflow-wrap:anywhere;background:var(--fp-surface)}
 .furniture-panel .furniture-palette button[aria-pressed=true]{background:var(--fp-accent);color:#fff}
 .furniture-panel .furniture-palette svg{width:38px;height:38px}
+.furniture-panel .furniture-palette button:has(small){grid-column:1/-1;display:grid;grid-template-columns:38px 1fr;text-align:left;padding:10px;column-gap:10px}
+.furniture-panel .furniture-palette button:has(small) svg{grid-row:1/3}
+.furniture-panel .furniture-palette small{grid-column:2;font-size:10px;opacity:.8}
+.furniture-panel .object-inspector .product-field,.furniture-panel .object-inspector>a{grid-column:1/-1}
+.furniture-panel .object-inspector>a{color:var(--fp-accent);font-size:12px}
+.product-finishes button{display:flex;align-items:center;gap:6px;text-align:left}
+.product-finishes button span{flex-shrink:0}
 .furniture-actions{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 16px}
 .furniture-actions:empty{display:none}
 .furniture-actions button{flex:1;min-height:36px;padding:7px 8px;font-size:11px;flex-direction:column}

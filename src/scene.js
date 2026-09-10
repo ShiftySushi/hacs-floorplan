@@ -48,6 +48,7 @@ export function normaliseScene(config) {
       if (!Number.isFinite(item.rotation)) throw new Error('Invalid furniture rotation');
       item.rotation = ((item.rotation % 360) + 360) % 360;
       if (item.colour !== undefined && !/^#[0-9a-f]{6}$/i.test(item.colour)) throw new Error('Use a six-digit furniture colour');
+      for(const key of ['worktop_colour','handle_colour','leg_colour'])if(item[key]!==undefined&&!/^#[0-9a-f]{6}$/i.test(item[key]))throw new Error('Use a six-digit furniture finish colour');
     }
     for (const wall of floor.walls) {
       identify(wall);

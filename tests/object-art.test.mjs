@@ -23,6 +23,11 @@ test('kitchen runs have a full-bleed continuous worktop in the chosen colour',()
   assert.deepEqual(top.attrs,{x:'0',y:'0',width:'300',height:'60',fill:'#aabbcc',stroke:'none'});
   assert.equal(nodes.filter(n=>n.tag==='line').length,0);
 });
+test('a separate worktop finish overrides cabinet colour in the top-down view',()=>{
+  const nodes=flatten(artwork({type:'kitchen_unit',width:2,depth:.6,colour:'#eee9d8',worktop_colour:'#444544'},200,60));
+  assert.ok(nodes.some(n=>n.tag==='rect'&&n.attrs.fill==='#444544'&&n.attrs.width==='200'&&n.attrs.height==='60'));
+  assert.ok(!nodes.some(n=>n.attrs.fill==='#eee9d8'));
+});
 test('fixture artwork uses uniform scale and stays centred in a long footprint',()=>{
   const nodes=flatten(artwork({type:'lamp',width:3,depth:.4},300,40));
   const transform=nodes.find(n=>n.attrs.transform)?.attrs.transform;
