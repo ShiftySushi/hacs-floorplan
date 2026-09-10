@@ -66,7 +66,7 @@ export class FloorplanEditor extends HTMLElement {
   render() {
     if (!this.config) return;
     const root = element('div', { className: 'editor' });
-    const steps = ['Floors', 'Rooms', 'Furniture', 'Entities', 'Groups', 'Review'];
+    const steps = ['Floors', 'Rooms', 'Furniture', 'Lights & sensors', 'Groups', 'Review'];
     const stepIcons = ['floor','grid','sofa','bulb','group','check'];
     root.append(element('div',{className:'editor-heading'},[element('h2',{text:'Layout studio'}),element('p', { className: 'muted', text: `${steps[this.step]} · ${this.step + 1} / 6` }),button('Import / export',()=>{this.transferOpen=!this.transferOpen;this.render();},{'aria-expanded':String(!!this.transferOpen),'aria-controls':'configuration-transfer',className:'transfer-toggle'})]));
     const nav = element('nav', { className: 'row', 'aria-label': 'Setup steps' });
