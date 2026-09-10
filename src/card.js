@@ -9,6 +9,8 @@ import { render3D } from './plan3d.js';
 import { roomTemperature, roomReadoutPoint, heatingState, temperatureTone } from './heating.js';
 import { daylightLevel, stageColour } from './daylight.js';
 const collectionStyles='.collection-controls{display:grid;grid-template-columns:minmax(0,1fr) 70px;gap:4px;align-items:center;width:100%;padding:3px 0}.collection-controls .collection-adjust{display:inline-flex;align-items:center;justify-content:center;gap:4px;align-self:center;width:70px;min-width:0;min-height:44px;padding:3px;font-size:11px;line-height:1.2;border-color:transparent;background:transparent;color:var(--secondary-text-color,#63776e);box-shadow:none}.collection-controls .collection-adjust .icon{width:15px;height:15px}.collection-controls .collection-adjust:hover,.collection-controls .collection-adjust[aria-pressed=true]{background:var(--secondary-background-color,#eef4f0);color:var(--primary-text-color,#26343d)}.collection-controls .collection-adjust:focus-visible{outline:2px solid var(--primary-color,#007c91);outline-offset:1px}';
+import {sceneEntities,sceneState} from './ha-updates.js';
+
 export class FloorplanCard extends HTMLElement {
   constructor() {
     super(); this.attachShadow({ mode: 'open' });
@@ -34,6 +36,8 @@ export class FloorplanCard extends HTMLElement {
   setConfig(config) {
     if (config.appearance?.mode !== this.config?.appearance?.mode) this.viewMode=null;
     this.config = normaliseConfig(config);
+    this.watchedEntities=sceneEntities(this.config);
+    this.hassSceneState=undefined;
     const identity=JSON.stringify([location.pathname,this.config.title,this.config.floors.map(f=>f.id)]);
     let hash=2166136261;for(const char of identity)hash=Math.imul(hash^char.charCodeAt(0),16777619);
     const key=`floorplan-view-${hash>>>0}`;
@@ -42,7 +46,7 @@ export class FloorplanCard extends HTMLElement {
     const configured = new Set([...this.config.floors.flatMap(f => [...f.entities.map(e => e.entity), ...f.rooms.flatMap(r => r.lights), ...(f.objects || []).map(o=>o.light_entity).filter(Boolean)]), ...this.config.groups.flatMap(g => g.entities)]);
     this.selected = new Set([...this.selected].filter(id => configured.has(id))); this.render();
   }
-  set hass(hass) { this._hass = hass; if (!['INPUT', 'SELECT'].includes(this.shadowRoot.activeElement?.tagName)) this.render(); else this.deferredUpdate = true; }
+  set hass(hass) { const next=sceneState(hass,this.watchedEntities);this._hass = hass;if(next===this.hassSceneState)return;this.hassSceneState=next; if (!['INPUT', 'SELECT'].includes(this.shadowRoot.activeElement?.tagName)) this.render(); else this.deferredUpdate = true; }
   saveView(){try{localStorage.setItem(this.viewStorageKey,JSON.stringify({mode:this.viewMode || this.config.appearance.mode,floorId:this.floorId,building:!!this.building,hideOverlays:!!this.hideOverlays,inspectorOpen:!!this.inspectorOpen,display:this.displayPreferences,cameras:this.viewStates}));}catch{}}
   getCardSize() { return 12; }
   getGridOptions() { return { columns: 12, min_columns: 6 }; }
