@@ -11,7 +11,7 @@ test('lights fade through intermediate levels and panels animate only when enabl
   const glow=page.locator('[data-object-glow="panels"]'),panel=page.locator('[data-object-id="panels"] [data-panel-index]').first();
   const initial=await panel.getAttribute('fill');
   await expect.poll(()=>panel.getAttribute('fill')).not.toBe(initial);
-  const opacity=()=>glow.evaluate(el=>Number(el.ownerSVGElement.querySelector(el.getAttribute('fill').slice(4,-1)).firstElementChild.getAttribute('stop-opacity')));
+  const opacity=()=>glow.evaluate(el=>Number(el.ownerSVGElement?.querySelector(el.getAttribute('fill').slice(4,-1))?.firstElementChild.getAttribute('stop-opacity')));
   await page.evaluate(()=>{const c=document.querySelector('floorplan-card');c.hass={...c._hass,states:{'light.test':{state:'off',attributes:{}}}};});
   await expect.poll(async()=>{const level=await opacity();return level>0&&level<.44;},{intervals:[20]}).toBe(true);
   await expect(glow).toHaveCount(0);
