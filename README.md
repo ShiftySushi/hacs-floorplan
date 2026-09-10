@@ -53,9 +53,11 @@ The pre-commit hook checks indexed files, including files force-added past `.git
 
 ## Development and preview
 
-Requires Node.js 20+; there are no npm dependencies. Python 3 serves the local demo.
+Requires Node.js 22+. The card has no runtime dependencies; Playwright is a locked development dependency for browser validation. Python 3 serves the interactive local demo.
 
 ```sh
+npm ci --ignore-scripts
+npm run check
 npm test
 npm run build
 node scripts/models.mjs  # regenerate SVG outlines and OBJ models

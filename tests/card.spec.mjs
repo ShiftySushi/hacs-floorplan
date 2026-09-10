@@ -1,0 +1,50 @@
+import { test, expect } from '@playwright/test';
+
+test.beforeEach(async ({ page }) => { await page.goto('/demo/'); });
+test('built card exposes only compatible controls and surfaces failed commands', async ({ page }) => {
+  const card = page.locator('floorplan-card');
+  await card.getByRole('button', { name: 'Utility: Off', exact: true }).click();
+  await expect(card.getByRole('slider')).toHaveCount(0);
+  await expect(card.locator('input[type=color]')).toHaveCount(0);
+  await card.getByRole('button', { name: 'All lights', exact: true }).click();
+  await expect(card.getByLabel('Brightness · 3 of 4 lights')).toBeVisible();
+  await expect(card.getByLabel('Colour · 1 of 4 lights')).toBeVisible();
+  await card.getByLabel('Colour · 1 of 4 lights').fill('#ff0000');
+  await expect(page.locator('#events')).toContainText('"rgb_color"');
+  const latest = await page.locator('#events').textContent();
+  expect(latest).toContain('light.diner');
+  expect(latest).not.toContain('light.utility');
+  await page.getByRole('button', { name: 'Simulate service failure', exact: true }).click();
+  await card.getByRole('button', { name: 'Turn off', exact: true }).click();
+  await expect(card.getByRole('alert')).toContainText('Some lights could not be updated');
+});
+test('room illumination follows light state independently of presence', async ({ page }) => {
+  const card = page.locator('floorplan-card');
+  await card.getByRole('button', { name: 'Kitchen & diner Lit · Presence detected', exact: true }).click();
+  await card.getByRole('button', { name: 'Turn off', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Kitchen & diner Dark · Presence detected', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Toggle presence', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Kitchen & diner Dark · No presence', exact: true })).toBeVisible();
+  await card.getByRole('button', { name: 'Temperature: 21.4 °C', exact: true }).click();
+  await expect(page.locator('#events')).toContainText('Entity details requested: sensor.temperature');
+});
+test('guided setup uploads a public SVG and places group members without YAML', async ({ page }) => {
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  const editor = page.locator('floorplan-card-editor'), card = page.locator('floorplan-card');
+  await page.getByRole('button', { name: 'Start empty setup', exact: true }).click();
+  await editor.getByRole('button', { name: 'Add floor', exact: true }).click();
+  await editor.locator('input[type=file]').setInputFiles('demo/sample.svg');
+  await expect(card.locator('svg image')).toHaveAttribute('href', /^data:image\/svg\+xml;base64,/);
+  await editor.getByRole('button', { name: 'Rotate right', exact: true }).click();
+  await expect(editor.getByLabel('Rotation (degrees clockwise)')).toHaveValue('90');
+  await editor.getByRole('button', { name: '4. Groups', exact: true }).click();
+  await editor.getByRole('button', { name: 'Add group', exact: true }).click();
+  await editor.locator('fieldset select').selectOption('light.diner');
+  await editor.locator('fieldset select').selectOption('light.kitchen');
+  await card.getByRole('button', { name: 'Group 1', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Diner: On', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(card.getByRole('button', { name: 'Kitchen: On', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  const size = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: innerWidth }));
+  expect(size.width).toBeLessThanOrEqual(size.viewport);
+  expect(errors).toEqual([]);
+});
