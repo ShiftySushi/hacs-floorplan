@@ -17,6 +17,7 @@ test('entrance, progressive controls and optional idle orbit respect interaction
  await page.screenshot({path:`/tmp/ambient-controls-${info.project.name}.png`});
 });
 test('reduced motion suppresses decoration but honours explicit idle rotation',async({page})=>{
+ test.setTimeout(45000);
  await page.emulateMedia({reducedMotion:'reduce'});await page.goto('/demo/');const card=page.locator('floorplan-card');
  await card.getByRole('button',{name:'3D',exact:true}).click();
  await expect(card.locator('.plan')).toHaveCSS('animation-name','none');
@@ -25,6 +26,11 @@ test('reduced motion suppresses decoration but honours explicit idle rotation',a
  await card.locator('.display-settings summary').click();await page.mouse.move(0,0);
  await expect.poll(async()=>Number(await card.locator('.plan').getAttribute('data-idle-angle')),{timeout:12000}).toBeGreaterThan(.001);
  await page.reload();
+ // Navigation completes before the restored WebGL view has painted. Start the
+ // idle deadline after first paint and its visibility notification, especially
+ // with software rendering on hosted runners.
+ await expect(card.locator('canvas').first()).toBeVisible();
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
  await expect.poll(async()=>Number(await card.locator('.plan').getAttribute('data-idle-angle')),{timeout:12000}).toBeGreaterThan(.001);
  await card.locator('.display-settings summary').click();await card.getByLabel('Slow idle rotation (3D)',{exact:true}).uncheck();
  await expect(card.locator('.plan')).toHaveAttribute('data-idle-state','disabled');
