@@ -28,7 +28,7 @@ export function renderPlan(floor, states, options={}) {
       if(fade){
         const progress=reducedMotion()?1:Math.min(1,(time-fade.start)/600);
         states={...targetStates};
-        for(const id of lightIds){const a=blendAppearance(fade.from[id],lightAppearance(targetStates[id]),progress);states[id]={...targetStates[id],state:a.level?'on':'off',attributes:{...targetStates[id]?.attributes,brightness:a.level*255,rgb_color:a.colour}};}
+        for(const id of lightIds){const a=blendAppearance(fade.from[id],lightAppearance(targetStates[id]),progress);states[id]={...targetStates[id],state:a.level?'on':'off',attributes:{...targetStates[id]?.attributes,brightness:a.level*255,color_mode:'rgb',rgb_color:a.colour}};}
         if(progress===1){fade=null;states=targetStates;}
         layout();
       }
@@ -139,7 +139,7 @@ export function renderPlan(floor, states, options={}) {
       if(pixel&&item.style_images?.[mode]){const spriteHeight=['tv','bookshelf','display_cabinet','computer','ultrawide_monitor'].includes(item.type)?Math.max(oh,ow*.75):oh;art.append(svgElement('rect',{width:ow,height:oh,fill:'transparent'}),svgElement('image',{href:item.style_images[mode],x:0,y:(oh-spriteHeight)/2,width:ow,height:spriteHeight,preserveAspectRatio:'xMidYMid meet',style:'image-rendering:pixelated','data-private-sprite':item.id}));}
       else art.append(objectArtwork(item,mode,ow,oh));object.append(art);
       if(item.type==='tv'&&item.media_entity){object.append(svgElement('image',{x:-ow*.46,y:-oh*.37,width:ow*.92,height:oh*.22,preserveAspectRatio:'none','data-tv-screen':item.id,style:'image-rendering:pixelated','pointer-events':'none'}));}
-      const name=CATALOGUE.find(d=>d.type===item.type)?.name || item.type,title=svgElement('title');title.textContent=name;object.append(title);
+      const name=item.name || CATALOGUE.find(d=>d.type===item.type)?.name || item.type,title=svgElement('title');title.textContent=name;object.append(title);
       if(options.selectedObject===item.id)object.append(svgElement('rect',{x:-ow/2-5,y:-oh/2-5,width:ow+10,height:oh+10,fill:'none',stroke:'#007c91','stroke-width':3,'vector-effect':'non-scaling-stroke','stroke-dasharray':'5 3'}));
       if(options.selectedObject===item.id&&options.onObjectResize)for(const [corner,sx,sy] of [['nw',-1,-1],['ne',1,-1],['se',1,1],['sw',-1,1]]){
         const handle=svgElement('g',{transform:`translate(${sx*ow/2} ${sy*oh/2})`,role:'button',tabindex:'0','aria-label':`Resize ${name} ${corner}`,'data-resize-handle':corner});

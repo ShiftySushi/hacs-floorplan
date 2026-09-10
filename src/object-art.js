@@ -1,22 +1,26 @@
 import { svgElement } from './dom.js';
 import { objectGlyph, panelArrangement } from './catalogue.js';
 import { retroFurniture } from './retro-furniture.js';
+import { productPreset } from './product-catalogue.js';
 
 // Draw in the rendered footprint, using one scale for small details in both axes.
 // Length changes add cabinet doors, cushions or treads instead of stretching them.
 export function objectArtwork(item, mode, width, depth) {
-  const retro=retroFurniture(item,mode,width,depth);if(retro)return retro;
+  const product=productPreset(item),footprint=()=>svgElement('rect',{width,height:depth,fill:item.type==='tv'?'none':item.colour || '#ac8059',stroke:'none','data-product-footprint':''});
+  const retro=retroFurniture(item,mode,width,depth);if(retro){if(product)retro.prepend(footprint());return retro;}
   const pixel=['pokemon','zelda'].includes(mode), unit=Math.min(width,depth), inset=unit*.05;
   const [edge,wood,fabric,white]=mode==='pokemon'?['#805345','#ebca96','#4c8b91','#efe1af']:mode==='zelda'?['#544637','#b6975e','#69835e','#d1cc99']:['#586774','#bec8cf','#94aeb7','#e5e9e9'];
   const g=svgElement('g',{stroke:edge,'stroke-width':unit*(pixel?.025:.015),'stroke-linejoin':pixel?'miter':'round','shape-rendering':pixel?'crispEdges':'geometricPrecision'});
   g.append(svgElement('rect',{width,height:depth,fill:'transparent',stroke:'none','pointer-events':'all'}));
+  if(product)g.append(footprint());
   const rect=(x,y,w,h,fill=wood,r=inset)=>g.append(svgElement('rect',{x,y,width:Math.max(0,w),height:Math.max(0,h),rx:pixel?0:r,fill}));
   const line=(x1,y1,x2,y2,stroke=edge)=>g.append(svgElement('line',{x1,y1,x2,y2,stroke}));
   const circle=(cx,cy,r,fill)=>g.append(svgElement('circle',{cx,cy,r,fill}));
   const colour=item.colour || fabric;
   const panel=fill=>rect(inset,inset,width-2*inset,depth-2*inset,fill);
   const cabinet=['tv_bench','display_cabinet','bookshelf','fridge'].includes(item.type);
-  if(item.type==='nanoleaf_panels') {
+  if(item.type==='wall_light'){panel(item.colour || '#262727');rect(width*.15,depth*.35,width*.7,depth*.45,'#eee9dc');
+  } else if(item.type==='nanoleaf_panels') {
     const faceHeight=Math.max(depth,width*.35),{radius,centres}=panelArrangement(item,width,faceHeight);
     for(const [index,[x,y]] of centres.entries())g.append(svgElement('polygon',{'data-panel-index':index,points:Array.from({length:6},(_,i)=>{const angle=(30+i*60)*Math.PI/180;return `${width/2+x+Math.cos(angle)*radius*.96},${depth/2+y+Math.sin(angle)*radius*.96}`;}).join(' '),fill:item.colour || white,'stroke-width':Math.max(.5,radius*.08)}));
   } else if(item.type==='tv_lightstrip') {
@@ -32,7 +36,8 @@ export function objectArtwork(item, mode, width, depth) {
     rect(0,depth*.32,inset*2,depth*.36,edge,0);rect(width-inset*2,depth*.32,inset*2,depth*.36,edge,0);
   } else if(item.type==='kitchen_unit') {
     // Adjacent cabinet runs share one continuous top; doors are below the surface.
-    g.append(svgElement('rect',{x:0,y:0,width,height:depth,fill:item.colour || wood,stroke:'none'}));
+    if(item.variant==='wall')g.append(svgElement('rect',{x:0,y:0,width,height:depth,fill:item.colour || wood,'fill-opacity':.3,stroke:edge,'stroke-dasharray':`${inset} ${inset}`}));
+    else g.append(svgElement('rect',{x:0,y:0,width,height:depth,fill:item.worktop_colour || item.colour || wood,stroke:'none'}));
   } else if(cabinet) {
     panel(item.colour || (item.type==='fridge'?white:wood));
     const count=Math.max(1,Math.min(100,Math.round(item.width/.55))), bay=(width-2*inset)/count;
@@ -48,7 +53,7 @@ export function objectArtwork(item, mode, width, depth) {
   } else if(item.type==='sofa') {
     panel(colour);
     const arm=unit*.13,back=unit*.22,seats=Math.max(1,Math.min(30,Math.round(item.width/.7))), seat=(width-2*arm)/seats;
-    for(let i=0;i<seats;i++)rect(arm+i*seat+inset/2,back,seat-inset,depth-back-inset*2,white,unit*.08);
+    for(let i=0;i<seats;i++)rect(arm+i*seat+inset/2,back,seat-inset,depth-back-inset*2,product?colour:white,unit*.08);
     rect(inset,back,arm-inset,depth-back-inset,colour);rect(width-arm,back,arm-inset,depth-back-inset,colour);
     if(item.variant==='corner')rect(arm,depth*.55,Math.min(unit*.7,width-2*arm),depth*.4,colour,unit*.08);
   } else if(item.type==='stairs') {
@@ -58,6 +63,7 @@ export function objectArtwork(item, mode, width, depth) {
     line(width/2,depth-inset*3,width/2,inset*3);line(width/2,inset*3,width/2-unit*.12,inset*5);line(width/2,inset*3,width/2+unit*.12,inset*5);
   } else if(['side_table','dining_table','island','desk','rug','bed','bath','sink','shower'].includes(item.type)) {
     panel(item.colour || (['bath','sink','shower'].includes(item.type)?white:wood));
+    if(item.type==='dining_table'&&item.surface_finish==='speckled')for(let i=0;i<180;i++)circle(inset*2+(i*73%181)/181*(width-inset*4),inset*2+(i*137%191)/191*(depth-inset*4),unit*.0025,'#55585a');
     if(item.type==='bed') {
       rect(inset*2,inset*2,width-inset*4,depth-inset*4,white,unit*.08);
       const pillowWidth=Math.min(unit*.36,width*.38), pillows=item.variant==='single'?1:2;
@@ -77,11 +83,18 @@ export function objectArtwork(item, mode, width, depth) {
     } else {line(inset*3,inset*3,width-inset*3,inset*3,white);line(inset*3,depth-inset*3,width-inset*3,depth-inset*3);}
   } else if(item.type==='tv') {
     // A TV is seen from above: retain its full width and shallow physical depth.
-    rect(inset,inset,width-inset*2,depth*.55,edge,unit*.03);
-    line(inset*3,depth*.15,width-inset*3,depth*.15,'#94b8bd');
-    rect(width/2-unit*.1,depth*.6,unit*.2,depth*.25,edge);
+    if(product){
+      const stand=item.variant!=='wall',panelDepth=stand?depth*.0243/.263:depth;
+      if(stand)rect(width*.3317,0,width*.3366,depth,item.colour || edge,0);
+      rect(0,(depth-panelDepth)/2,width,panelDepth,edge,0);
+      line(0,(depth+panelDepth)/2,width,(depth+panelDepth)/2,'#94b8bd');
+    }else{
+      rect(inset,inset,width-inset*2,depth*.55,edge,unit*.03);
+      line(inset*3,depth*.15,width-inset*3,depth*.15,'#94b8bd');
+      rect(width/2-unit*.1,depth*.6,unit*.2,depth*.25,edge);
+    }
   } else if(item.type==='piano' && item.variant!=='grand') {
-    panel(wood);rect(inset*2,inset*2,width-inset*4,depth*.45,edge);rect(inset*2,depth*.58,width-inset*4,depth*.3,white,0);
+    panel(item.colour || wood);rect(inset*2,inset*2,width-inset*4,depth*.45,edge);rect(inset*2,depth*.58,width-inset*4,depth*.3,white,0);
     const keys=Math.max(8,Math.min(60,Math.round(item.width/.07))), key=(width-inset*4)/keys;
     for(let i=1;i<keys;i++)line(inset*2+i*key,depth*.58,inset*2+i*key,depth*.88);
     for(let i=1;i<keys;i+=2)rect(inset*2+i*key-key*.2,depth*.58,key*.45,depth*.16,edge,0);
