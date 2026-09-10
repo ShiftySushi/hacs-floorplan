@@ -181,7 +181,7 @@ test('missing artwork prevents a partial export without changing the configurati
   await page.route('**/demo/sample.svg',route=>route.fulfill({status:404,body:'Missing artwork'}));
   await editor.getByRole('button',{name:'Import / export',exact:true}).click();
   await editor.getByRole('button',{name:'Export full configuration',exact:true}).click();
-  await expect(editor.getByRole('alert')).toContainText('Could not include a floor image');
+  await expect(editor.getByRole('alert').filter({hasText:'Could not include a floor image'})).toBeVisible();
   expect(downloads).toHaveLength(0);
   expect(await scene(page)).toEqual(original);
 });
