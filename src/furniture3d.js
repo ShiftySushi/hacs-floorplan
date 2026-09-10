@@ -1,10 +1,11 @@
 import * as THREE from 'three';
+import { panelArrangement } from './catalogue.js';
 
 /** Original, procedural furniture: dimensions in metres, front faces positive Z. */
 export function furniture3D(object) {
   const group = new THREE.Group();
   const w = object.width || 1, d = object.depth || .6, h = object.height || .8;
-  const palette = { wood: '#ac8059', dark: '#334148', fabric: object.colour || '#8cabb0', pale: '#eee9dc', white: '#f4f3ed', green: '#5c936c' };
+  const palette = { wood: object.colour || '#ac8059', dark: '#334148', fabric: object.colour || '#8cabb0', pale: '#eee9dc', white: '#f4f3ed', green: '#5c936c' };
   const materials = new Map();
   const mat = colour => { if (!materials.has(colour)) materials.set(colour, new THREE.MeshStandardMaterial({ color: colour, roughness: .78 })); return materials.get(colour); };
   function box(width, height, depth, x = 0, y = height / 2, z = 0, colour = palette.wood) {
@@ -28,16 +29,30 @@ export function furniture3D(object) {
       box(w,h*.32,d);box(w*.98,h*.4,d*.94,0,h*.5,0,palette.pale);box(w,.8*h,.09,0,h*.55,-d*.48);
       box(w*.99,.08,d*.58,0,h*.75,d*.19,palette.fabric);
       for(const x of object.variant==='single'?[0]:[-w*.24,w*.24])box(w*(object.variant==='single'?.72:.4),.12,d*.17,x,h*.76,-d*.32,palette.white);break;
-    case 'dining_table': case 'side_table': case 'desk':table();if(object.type==='desk'){box(w*.35,h*.6,d*.8,-w*.28,h*.4);box(w*.32,h*.32,.05,w*.15,h*1.2,-d*.25,palette.dark);box(w*.2,.02,d*.13,w*.15,h+.025,d*.08,palette.dark);}break;
+    case 'dining_table': case 'side_table': case 'desk':table();if(object.type==='desk'&&object.variant!=='plain'){box(w*.35,h*.6,d*.8,-w*.28,h*.4);box(w*.32,h*.32,.05,w*.15,h*1.2,-d*.25,palette.dark);box(w*.2,.02,d*.13,w*.15,h+.025,d*.08,palette.dark);}break;
     case 'chair':chair();break;
     case 'office_chair':chair(true);break;
-    case 'tv':box(w,h,.06,0,h/2,0,palette.dark);box(w*.91,h*.86,.012,0,h/2,.036,'#162b3e');box(w*.35,.04,.25,0,.02);break;
+    case 'tv':box(w,h,.06,0,h/2,0,palette.dark);box(w*.97,h*.97,.012,0,h/2,.036,'#162b3e').userData.tvScreen=true;box(w*.35,.04,.25,0,.02);break;
+    case 'tv_lightstrip':{
+      const colour=object.colour || '#eee6fc',thickness=.025;
+      box(w,thickness,.025,0,h-thickness/2,0,colour);box(w,thickness,.025,0,thickness/2,0,colour);
+      for(const x of [-w/2+thickness/2,w/2-thickness/2])box(thickness,h,.025,x,h/2,0,colour);break;
+    }
+    case 'nanoleaf_panels':{
+      const {radius,centres}=panelArrangement(object,w,h);
+      for(const [panelIndex,[x,y]] of centres.entries()){const shape=new THREE.Shape();for(let i=0;i<6;i++){const angle=(30+i*60)*Math.PI/180,px=Math.cos(angle)*radius*.97,py=Math.sin(angle)*radius*.97;if(i)shape.lineTo(px,py);else shape.moveTo(px,py);}shape.closePath();
+        const panelMaterial=new THREE.MeshStandardMaterial({color:object.colour || '#f2e8fc',roughness:.78});panelMaterial.userData.panelIndex=panelIndex;
+        const mesh=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:.022,bevelEnabled:false}),panelMaterial);mesh.userData.panelIndex=panelIndex;mesh.position.set(x,h/2-y,0);mesh.castShadow=true;group.add(mesh);
+      }break;
+    }
+    case 'computer':box(w,h,d,0,h/2,0,palette.dark);box(w*.82,h*.86,.012,0,h/2,d/2+.008,'#597785');for(const y of [h*.3,h*.7])ball(w*.26,0,y,d/2+.025,object.colour || '#91c4d3',[1,1,.1]);break;
+    case 'ultrawide_monitor':box(w,h*.8,.04,0,h*.58,0,palette.dark);box(w*.95,h*.72,.01,0,h*.58,.026,'#548295');box(.035,h*.23,.035,0,h*.12,0,palette.dark);box(w*.4,.025,d,0,.015,0,palette.dark);break;
     case 'tv_bench':case 'display_cabinet':case 'bookshelf':
       box(w,.06,d,0,.03);box(w,.06,d,0,h-.03);for(const x of [-w/2+.03,w/2-.03])box(.06,h,d,x);
       box(w,h,.025,0,h/2,-d/2);
-      {const bays=Math.max(1,Math.round(w/.7)),rows=Math.max(1,Math.round(h/.4));
+      {const bays=Math.max(1,Math.round(w/(object.variant==='cubes'?.38:.7))),rows=Math.max(1,Math.round(h/.4));
       for(let bay=1;bay<bays;bay++)box(.035,h,d,-w/2+w*bay/bays);
-      for(let row=1;row<rows;row++){const y=h*row/rows;box(w,.035,d,0,y);if(object.type!=='tv_bench'){const books=Math.max(1,Math.floor((w-.12)/.09));for(let i=0;i<books;i++)box(.055,Math.min(.25,h/rows*.75),Math.min(.2,d*.75),-w/2+.08+i*(w-.16)/books,y+Math.min(.25,h/rows*.75)/2,0,['#788e82','#b79877','#a2a8b6','#c8bba6','#819da7'][i%5]);}}}break;
+      for(let row=1;row<rows;row++){const y=h*row/rows;box(w,.035,d,0,y);if(object.type!=='tv_bench'&&object.variant!=='cubes'){const books=Math.max(1,Math.floor((w-.12)/.09));for(let i=0;i<books;i++)box(.055,Math.min(.25,h/rows*.75),Math.min(.2,d*.75),-w/2+.08+i*(w-.16)/books,y+Math.min(.25,h/rows*.75)/2,0,['#788e82','#b79877','#a2a8b6','#c8bba6','#819da7'][i%5]);}}}break;
     case 'piano':
       if(object.variant==='grand'){
         const shape=new THREE.Shape();shape.moveTo(-w*.5,-d*.5);shape.lineTo(w*.5,-d*.5);shape.lineTo(w*.45,0);shape.bezierCurveTo(w*.4,d*.6,-w*.5,d*.65,-w*.5,d*.1);shape.closePath();

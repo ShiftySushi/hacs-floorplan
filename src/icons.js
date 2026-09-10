@@ -1,5 +1,8 @@
 import { svgElement, button } from './dom.js';
 const paths = {
+  sliders:'M4 6h4m4 0h8M4 12h10m4 0h2M4 18h2m4 0h10M8 3v6m6 0v6M6 15v6',
+  logo:'M3 3h18v18H3zM3 12h7m4 0h7M12 3v5m0 8v5M7 7h1m9 10h1',
+  eye:'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6',
   pendant:'M12 2v7M7 9h10l4 8H3zM9 20h6', spot:'M3 5h18M7 8h10l-1 4H8zM8 15l-3 5m7-5v6m4-6 3 5',
   floor:'M3 10 12 3l9 7v11H3z M9 21v-7h6v7', bulb:'M9 18h6m-5 3h4M8 14a6 6 0 1 1 8 0l-1 3H9z',
   presence:'M16 21v-3a4 4 0 0 0-8 0v3M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8',

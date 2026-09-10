@@ -9,13 +9,15 @@ const fixture = () => ({floors:[
 ],groups:[{name:'Selected lights',entities:['light.placeholder','light.actual']}]});
 
 test('reassignment preserves placement and updates all references as one undoable change',()=>{
-  const original=fixture(),snapshot=structuredClone(original),history=new EditorHistory(original);
+  const original=fixture();original.floors[0].objects=[{id:'strip',light_entity:'light.placeholder'}];
+  const snapshot=structuredClone(original),history=new EditorHistory(original);
   const result=reassignEntity(original,'light.placeholder','light.actual');history.commit(result);
   assert.deepEqual(original,snapshot);
   assert.deepEqual(result.floors[0].entities[0],{entity:'light.actual',x:20,y:40,name:'Ceiling',fixture:'pendant'});
   assert.deepEqual(result.floors[1].entities[0],{entity:'light.actual',x:80,y:60});
   assert.deepEqual(result.floors.map(f=>f.rooms[0].lights),[['light.actual'],['light.actual']]);
   assert.deepEqual(result.groups[0].entities,['light.actual']);
+  assert.equal(result.floors[0].objects[0].light_entity,'light.actual');
   assert.deepEqual(history.undo(),snapshot);assert.deepEqual(history.redo(),result);
 });
 

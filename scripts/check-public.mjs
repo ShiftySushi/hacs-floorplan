@@ -23,7 +23,8 @@ if (history) {
   }
 } else files = git('ls-files', '-z').split('\0').filter(Boolean).map(path => ({ path, object: `:${path}` }));
 for (const { path, object } of files) {
-  if (!allowed.test(path)) { failures.add(`Not approved for publication: ${path}`); continue; }
+  const licensedAsset = ['src/assets/kenney-furniture.json', 'src/assets/kenney-furniture-LICENSE.txt'].includes(path);
+  if (!allowed.test(path) && !licensedAsset) { failures.add(`Not approved for publication: ${path}`); continue; }
   const content = git('show', object);
   if (/data:image\/[\w+.-]+;base64,[A-Za-z0-9+/=]{32,}/.test(content)) failures.add(`Embedded image data: ${path}`);
   if (/floorplans\/(?:originals|outlines|models)\//.test(content) && (path.startsWith('demo/') || path.startsWith('dist/'))) failures.add(`Private asset reference: ${path}`);

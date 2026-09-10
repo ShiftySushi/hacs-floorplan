@@ -3,11 +3,13 @@ import { test, expect } from '@playwright/test';
 test.beforeEach(async ({ page }) => { await page.goto('/demo/'); });
 test('built card exposes only compatible controls and surfaces failed commands', async ({ page }) => {
   const card = page.locator('floorplan-card');
+  { const panel=page.locator('floorplan-card'); if(await panel.getByRole('button',{name:'Lighting',exact:true}).count()) await panel.getByRole('button',{name:'Lighting',exact:true}).click(); }
   await card.getByRole('button',{name:'Select lights',exact:true}).click();
   await card.getByRole('button', { name: 'Utility: Off', exact: true }).click();
   await expect(card.getByRole('slider')).toHaveCount(0);
   await expect(card.locator('input[type=color]')).toHaveCount(0);
-  await card.getByRole('button', { name: 'All lights', exact: true }).click();
+  { const panel=page.locator('floorplan-card'); if(await panel.getByRole('button',{name:'Lighting',exact:true}).count()) await panel.getByRole('button',{name:'Lighting',exact:true}).click(); }
+  await card.getByRole('button', { name: 'Adjust All lights', exact: true }).click();
   await expect(card.getByLabel('Brightness · 3 of 4 lights')).toBeVisible();
   await expect(card.getByLabel('Colour · 1 of 4 lights')).toBeVisible();
   await card.getByLabel('Colour · 1 of 4 lights').fill('#ff0000');
@@ -17,6 +19,7 @@ test('built card exposes only compatible controls and surfaces failed commands',
   expect(latest).not.toContain('light.utility');
   await page.getByText('Demo tools',{exact:true}).click();
   await page.getByRole('button', { name: 'Simulate service failure', exact: true }).click();
+  await page.getByText('Demo tools',{exact:true}).click();
   await card.getByRole('button', { name: 'Turn off', exact: true }).click();
   await expect(card.getByRole('alert')).toContainText('Some lights could not be updated');
 });
@@ -29,24 +32,44 @@ test('light clicks toggle power directly and explicit selection supports single-
   await card.getByRole('button',{name:'Diner: Off',exact:true}).press('Enter');
   await expect(card.getByRole('button',{name:'Diner: On',exact:true})).toBeVisible();
   const calls=await page.locator('#events').textContent();
+  { const panel=page.locator('floorplan-card'); if(await panel.getByRole('button',{name:'Lighting',exact:true}).count()) await panel.getByRole('button',{name:'Lighting',exact:true}).click(); }
   await card.getByRole('button',{name:'Select lights',exact:true}).click();
   await card.getByRole('button',{name:'Diner: On',exact:true}).click();
   await expect(card.getByLabel('Colour · 1 of 1 lights')).toBeVisible();
   await expect(card.getByRole('button',{name:'Diner: On',exact:true})).toHaveAttribute('aria-pressed','true');
   expect(await page.locator('#events').textContent()).toEqual(calls);
+  { const panel=page.locator('floorplan-card'); if(await panel.getByRole('button',{name:'Lighting',exact:true}).count()) await panel.getByRole('button',{name:'Lighting',exact:true}).click(); }
   await card.getByRole('button',{name:'Select lights',exact:true}).click();
   await expect(card.locator('.marker[aria-pressed=true]')).toHaveCount(0);
   await expect(card.getByLabel('Colour · 1 of 1 lights')).toHaveCount(0);
   await card.getByRole('button',{name:'Diner: On',exact:true}).click();
   await expect(card.getByRole('button',{name:'Diner: Off',exact:true})).toBeVisible();
 });
+test('groups toggle mixed lights directly, exclude unbound markers and select separately for adjustments',async({page})=>{
+  await page.evaluate(()=>{const card=document.querySelector('floorplan-card'),config=structuredClone(card.config);config.floors[0].entities.find(item=>item.entity==='light.diner').unbound=true;card.setConfig(config);});
+  const card=page.locator('floorplan-card');
+  { const panel=page.locator('floorplan-card'); if(await panel.getByRole('button',{name:'Lighting',exact:true}).count()) await panel.getByRole('button',{name:'Lighting',exact:true}).click(); }
+  await card.getByRole('button',{name:'Turn All lights off',exact:true}).click();
+  await expect(card.getByRole('button',{name:'Kitchen: Off',exact:true})).toBeVisible();
+  await expect(card.getByRole('button',{name:'Turn on',exact:true})).toHaveCount(0);
+  let calls=await page.locator('#events').textContent();expect(calls).toContain('turn_off');expect(calls).toContain('light.kitchen');expect(calls).toContain('light.utility');expect(calls).not.toContain('light.diner');
+  { const panel=page.locator('floorplan-card'); if(await panel.getByRole('button',{name:'Lighting',exact:true}).count()) await panel.getByRole('button',{name:'Lighting',exact:true}).click(); }
+  await card.getByRole('button',{name:'Turn All lights on',exact:true}).click();
+  await expect(card.getByRole('button',{name:'Utility: On',exact:true})).toBeVisible();
+  await expect(card.getByRole('button',{name:'light.diner: Not connected',exact:true})).toBeDisabled();
+  calls=await page.locator('#events').textContent();
+  { const panel=page.locator('floorplan-card'); if(await panel.getByRole('button',{name:'Lighting',exact:true}).count()) await panel.getByRole('button',{name:'Lighting',exact:true}).click(); }
+  await card.getByRole('button',{name:'Adjust All lights',exact:true}).click();
+  await expect(card.getByLabel('Brightness · 2 of 4 lights')).toBeVisible();
+  expect(await page.locator('#events').textContent()).toEqual(calls);
+});
 test('room illumination follows light state independently of presence', async ({ page }) => {
   const card = page.locator('floorplan-card');
-  await card.getByRole('button', { name: 'Kitchen & diner Lit · Presence detected', exact: true }).click();
-  await card.getByRole('button', { name: 'Turn off', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Kitchen & diner Dark · Presence detected', exact: true })).toBeVisible();
+  { const panel=page.locator('floorplan-card'); if(await panel.getByRole('button',{name:'Lighting',exact:true}).count()) await panel.getByRole('button',{name:'Lighting',exact:true}).click(); }
+  await card.locator('.room-status').getByRole('button', { name: 'Turn Kitchen & diner off', exact: true }).click();
+  await expect(card.locator('.room-status').getByRole('button', { name: 'Turn Kitchen & diner on', exact: true })).toContainText('Dark · Presence detected');
   await page.getByRole('button', { name: 'Toggle presence', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Kitchen & diner Dark · No presence', exact: true })).toBeVisible();
+  await expect(card.locator('.room-status').getByRole('button', { name: 'Turn Kitchen & diner on', exact: true })).toContainText('Dark · No presence');
   await card.getByRole('button', { name: 'Temperature: 21.4 °C', exact: true }).click();
   await expect(page.locator('#events')).toContainText('Entity details requested: sensor.temperature');
 });
@@ -65,7 +88,8 @@ test('guided setup uploads a public SVG and places group members without YAML', 
   await editor.locator('fieldset select').selectOption('light.diner');
   await editor.locator('fieldset select').selectOption('light.kitchen');
   await page.getByRole('button',{name:'Live view',exact:true}).click();
-  await card.getByRole('button', { name: 'Group 1', exact: true }).click();
+  { const panel=page.locator('floorplan-card'); if(await panel.getByRole('button',{name:'Lighting',exact:true}).count()) await panel.getByRole('button',{name:'Lighting',exact:true}).click(); }
+  await card.getByRole('button', { name: 'Adjust Group 1', exact: true }).click();
   await expect(card.getByRole('button', { name: 'Diner: On', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(card.getByRole('button', { name: 'Kitchen: On', exact: true })).toHaveAttribute('aria-pressed', 'true');
   const size = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: innerWidth }));
@@ -78,8 +102,10 @@ test('large group lists are collapsed and selection controls stay separate',asyn
   await page.evaluate(()=>{const card=document.querySelector('floorplan-card');const config=structuredClone(card.config);config.groups=Array.from({length:12},(_,i)=>({name:`Test group ${i+1}`,entities:['light.diner']}));card.groupsOpen=undefined;card.setConfig(config);});
   const card=page.locator('floorplan-card'),groups=card.locator('.group-section');
   await expect(groups).not.toHaveAttribute('open','');
+  { const panel=page.locator('floorplan-card'); if(await panel.getByRole('button',{name:'Lighting',exact:true}).count()) await panel.getByRole('button',{name:'Lighting',exact:true}).click(); }
   await groups.locator('summary').click();
-  await card.getByRole('button',{name:'Test group 12',exact:true}).click();
+  { const panel=page.locator('floorplan-card'); if(await panel.getByRole('button',{name:'Lighting',exact:true}).count()) await panel.getByRole('button',{name:'Lighting',exact:true}).click(); }
+  await card.getByRole('button',{name:'Adjust Test group 12',exact:true}).click();
   await expect(card.getByRole('button',{name:'Turn off',exact:true})).toBeVisible();
   await expect(groups).toHaveAttribute('open','');
   if(!isMobile){

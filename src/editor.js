@@ -1,3 +1,4 @@
+import { displayFields } from './display-settings.js';
 import { styles } from './styles.js';
 import { normaliseConfig } from './lights.js';
 import { element, button, field } from './dom.js';
@@ -21,19 +22,30 @@ export class FloorplanEditor extends HTMLElement {
     this.render();
   }
   restore(direction) { const config = this.history[direction](); if (!config) return; this.config = config; this.floorIndex = Math.min(this.floorIndex, Math.max(0,config.floors.length-1)); this.draft = []; this.drawing = false; this.emit(false); }
+  async uploadStyleImage(floorId,mode,file,objectId=null) {
+    if(!file)return;this.uploadingStyle=true;this.error='';this.render();
+    try {
+      if(!['image/png','image/jpeg','image/webp','image/svg+xml'].includes(file.type)||file.size>8*1024*1024)throw Error('Choose a PNG, JPEG, WebP or SVG smaller than 8 MB.');
+      let url;
+      if(file.type!=='image/svg+xml'&&this._hass?.fetchWithAuth){const body=new FormData();body.append('file',file);const response=await this._hass.fetchWithAuth('/api/image/upload',{method:'POST',body});if(!response.ok)throw Error('Home Assistant could not upload this image.');url=`/api/image/serve/${encodeURIComponent((await response.json()).id)}/original`;}
+      else {if(file.size>2*1024*1024)throw Error('Embedded artwork must be smaller than 2 MB.');url=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Artwork could not be read.'));reader.readAsDataURL(file);});}
+      await new Promise((resolve,reject)=>{const image=new Image();image.onload=resolve;image.onerror=()=>reject(Error('This artwork could not be displayed.'));image.src=url;});
+      const floor=this.config.floors.find(f=>f.id===floorId);if(!floor)throw Error('This floor was removed during upload.');const target=objectId?floor.objects.find(item=>item.id===objectId):floor;if(!target)throw Error('This furniture was removed during upload.');target.style_images ??= {};target.style_images[mode]=url;this.uploadingStyle=false;this.emit();
+    }catch(error){this.uploadingStyle=false;this.error=error.message;this.render();}
+  }
   async exportScene() {
     this.error = ''; this.exporting = true; this.render();
     try {
-      const config = structuredClone(this.config);
-      for (const floor of config.floors) {
-        if (!floor.image || floor.image.startsWith('data:')) continue;
-        const response = this._hass?.fetchWithAuth && floor.image.startsWith('/api/') ? await this._hass.fetchWithAuth(floor.image) : await fetch(floor.image);
+      const config = normaliseConfig(this.config);
+      for (const floor of config.floors) for(const [container,key] of [[floor,'image'],...[floor,...floor.objects].flatMap(item=>Object.keys(item.style_images || {}).map(key=>[item.style_images,key]))]) {
+        const imageUrl=container[key];if (!imageUrl || imageUrl.startsWith('data:')) continue;
+        const response = this._hass?.fetchWithAuth && imageUrl.startsWith('/api/') ? await this._hass.fetchWithAuth(imageUrl) : await fetch(imageUrl);
         if (!response.ok) throw Error('Could not include a floor image. Check that its URL is accessible before exporting.');
         const blob = await response.blob(); if (blob.size > 8 * 1024 * 1024 || !/^image\/(png|jpeg|webp|svg\+xml)$/.test(blob.type)) throw Error('Export images must be PNG, JPEG, WebP or SVG and smaller than 8 MB.');
-        floor.image = await new Promise((resolve,reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(Error('Could not read an image for export.')); reader.readAsDataURL(blob); });
+        container[key] = await new Promise((resolve,reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(Error('Could not read an image for export.')); reader.readAsDataURL(blob); });
       }
-      const json = JSON.stringify(config,null,2); if (json.length > 32 * 1024 * 1024) throw Error('This scene exceeds the 32 MB portable export limit. Use smaller images.');
-      const url = URL.createObjectURL(new Blob([json],{type:'application/json'})); const link = element('a',{href:url,download:'floorplan-configuration.json'}); link.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+      const blob = new Blob([JSON.stringify(config,null,2)],{type:'application/json'}); if (blob.size > 32 * 1024 * 1024) throw Error('This scene exceeds the 32 MB portable export limit. Use smaller images.');
+      const url = URL.createObjectURL(blob); const link = element('a',{href:url,download:'floorplan-configuration.json'}); link.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
     } catch(error) { this.error = error.message; }
     this.exporting = false; this.render();
   }
@@ -62,17 +74,21 @@ export class FloorplanEditor extends HTMLElement {
     if(this.step===4) root.append(groupSetup(this));
     if(this.step===5) {
       const mode = element('select',{onchange:e=>{this.config.appearance.mode=e.target.value;this.emit();}});
-      for(const [value,text] of [['clean','Clean 2D'],['pokemon','Pokémon-inspired'],['zelda','Zelda-inspired'],['3d','Furnished 3D']]) mode.append(element('option',{value,text,selected:this.config.appearance?.mode===value}));
+      for(const [value,text] of [['clean','2D'],['pokemon','Pokémon'],['zelda','Zelda'],['3d','3D'],['sims','Sims-like']]) mode.append(element('option',{value,text,selected:this.config.appearance?.mode===value}));
+      root.append(element('fieldset',{},[element('legend',{text:'Display defaults'}),...displayFields(this.config.appearance.display,next=>{this.config.appearance.display=next;this.emit();})]));
       root.append(field('Render style',mode),field('Show room labels',element('input',{type:'checkbox',checked:!!this.config.appearance?.labels,onchange:e=>{this.config.appearance.labels=e.target.checked;this.emit();}})),field('Furniture visibility',element('input',{type:'range',min:.1,max:1,step:.05,value:this.config.appearance?.furniture_opacity ?? .55,onchange:e=>{this.config.appearance.furniture_opacity=Number(e.target.value);this.emit();}})));
       const quality=element('select',{onchange:e=>{this.config.appearance.quality=e.target.value;this.emit();}}); for(const value of ['auto','low','high'])quality.append(element('option',{value,text:value==='auto'?'Automatic':value==='low'?'Low — less detail':'High — more detail',selected:this.config.appearance.quality===value}));root.append(field('3D quality',quality));
       root.append(element('h3',{text:'Ready to save'}),element('p',{text:'Review each floor below, then use Home Assistant’s Save button to keep your setup. You can return to any step later.'}));
+      const artwork=element('details',{open:!!this.styleArtworkOpen},[element('summary',{text:'Use your own Pokémon or Zelda artwork'}),element('p',{text:'Upload a finished floor background for each style, aligned to the same image bounds as the original floor. Room lighting, presence and editable furniture stay interactive. Keep game assets private; exports include these images.'})]);
+      artwork.addEventListener('toggle',()=>{this.styleArtworkOpen=artwork.open;});
+      for(const f of this.config.floors){const section=element('fieldset',{},[element('legend',{text:f.name || f.id})]);for(const [key,name] of [['pokemon','Pokémon'],['zelda','Zelda']]){section.append(field(`${name} background`,element('input',{type:'file',accept:'image/png,image/jpeg,image/webp,image/svg+xml',disabled:!!this.uploadingStyle,onchange:e=>this.uploadStyleImage(f.id,key,e.target.files?.[0])})));if(f.style_images?.[key])section.append(button(`Remove ${name} background`,()=>{delete f.style_images[key];this.emit();}));}artwork.append(section);}root.append(artwork);
       for(const f of this.config.floors) {
         const preview=element('section',{className:'review-floor'},[element('h3',{text:f.name || f.id}),element('p',{text:`${f.entities.length} entities · ${f.rooms.length} rooms · ${f.objects?.length || 0} objects · ${f.walls?.length || 0} walls · ${f.rotation}° rotation`})]);
-        preview.append((this.config.appearance.mode==='3d'?render3D:renderPlan)(f,this._hass?.states || {},this.config.appearance));root.append(preview);
+        preview.append((['3d','sims'].includes(this.config.appearance.mode)?render3D:renderPlan)(f,this._hass?.states || {},this.config.appearance));root.append(preview);
       }
       if(!this.config.floors.length) root.append(element('p',{text:'Start by adding a floor in step 1.'}));
       for(const f of this.config.floors) for(const r of f.rooms) if(!r.lights.length || !r.presence.length) root.append(element('p',{className:'muted',text:`${r.name}: ${!r.lights.length?'assign lights to show lit/dark state. ':''}${!r.presence.length?'Presence is optional and has not been assigned.':''}`}));
-      root.append(element('p',{text:'Tap light markers to build a selection. Room and group buttons select their lights. Power applies to all available selected lights; brightness and colour only affect compatible lights.'}));
+      root.append(element('p',{text:'Tap a light, room or group to toggle power. Use Adjust or Select lights for brightness and colour; controls only affect compatible, available lights.'}));
     }
     const transfer=element('section',{id:'configuration-transfer',className:'configuration-transfer',hidden:!this.transferOpen,'aria-label':'Full configuration transfer'},[element('h3',{text:'Move your configuration between environments'}),element('p',{text:'One JSON file contains all floors and embedded images, rooms, walls, furniture, light and sensor assignments, heating controls, groups and appearance settings. Keep it private; nothing needs to be committed to Git.'})]);
     const exportPanel=element('div',{},[element('h4',{text:'Export from dev'}),element('p',{text:'Download the complete configuration for this card. Live entity states and Home Assistant credentials are not included.'}),button(this.exporting?'Preparing export…':'Export full configuration',()=>this.exportScene(),{disabled:!!this.exporting})]);
