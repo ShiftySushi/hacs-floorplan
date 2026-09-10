@@ -53,9 +53,11 @@ test('furniture can be placed, resized, varied and restored with undo and redo',
 test('all render modes retain selected lights and compatible controls', async ({ page }) => {
   const card=page.locator('floorplan-card');
   const marker=card.getByRole('button',{name:'Diner: On',exact:true});
+  await expect(marker).toBeVisible();
+  await card.locator('.plan').evaluate(async el=>{await Promise.all(el.getAnimations().map(animation=>animation.finished));});
   const beforeZoom=await marker.boundingBox();
   await card.getByRole('button',{name:'Zoom in',exact:true}).click();
-  expect((await marker.boundingBox()).width).toBeCloseTo(beforeZoom.width,0);
+  await expect.poll(async()=>(await marker.boundingBox())?.width).toBeCloseTo(beforeZoom.width,0);
   await card.getByRole('button',{name:'Fit floorplan',exact:true}).click();
   { const panel=page.locator('floorplan-card'); if(await panel.getByRole('button',{name:'Lighting',exact:true}).count()) await panel.getByRole('button',{name:'Lighting',exact:true}).click(); }
   await card.getByRole('button',{name:'Adjust All lights',exact:true}).click();
@@ -181,7 +183,7 @@ test('missing artwork prevents a partial export without changing the configurati
   await page.route('**/demo/sample.svg',route=>route.fulfill({status:404,body:'Missing artwork'}));
   await editor.getByRole('button',{name:'Import / export',exact:true}).click();
   await editor.getByRole('button',{name:'Export full configuration',exact:true}).click();
-  await expect(editor.getByRole('alert')).toContainText('Could not include a floor image');
+  await expect(editor.getByRole('alert').filter({hasText:'Could not include a floor image'})).toBeVisible();
   expect(downloads).toHaveLength(0);
   expect(await scene(page)).toEqual(original);
 });

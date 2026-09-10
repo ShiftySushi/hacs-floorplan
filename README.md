@@ -56,7 +56,7 @@ Select a TV in the furniture editor and choose its **TV media player** entity to
 
 TVs and light strips offer matching 43–85 inch size presets, with 65 inch as the default. Wall panels offer Static, Breathe, Wave and Rainbow effects. Lights fade between states over 600 ms; animations respect reduced-motion settings. In 3D, fixtures sit at ceiling height by default, with an optional mounting height in the light editor. Height also controls the spread and strength of their floor illumination.
 
-Enable **Slow idle rotation (3D)** in Display settings to rotate after eight seconds without interaction, at one revolution every ten minutes. This explicit choice also works with reduced motion enabled; decorative animations remain reduced. Switch it off to stop automatic rotation.
+Enable **Slow idle rotation (3D)** in Display settings to rotate after eight seconds without interaction, at one revolution every ten minutes. Hover over the plan to smoothly return to your last manually chosen view; rotation stays paused until you leave. Dragging or using the camera controls establishes a new view to return to. This explicit choice also works with reduced motion enabled; decorative animations remain reduced. Switch it off to stop automatic rotation.
 
 The full floorplan background follows the selected style and daylight. Ambient room brightness uses `sun.sun` elevation, with cloud cover from an available weather entity when supplied. Without the Sun integration, the preview estimates daylight from local time. This is an ambient approximation, not a window-by-window sunlight simulation. For seamless custom artwork, use a transparent exterior background.
 
@@ -69,6 +69,8 @@ Furniture editing snaps placements and moves to a 10 cm grid by default. Drag an
 Power works for all available selected lights. Brightness, RGB colour and white temperature appear only for compatible selections, with an eligible count shown. Colour is available for RGB, RGBW, RGBWW, HS and XY colour-capable lights, not plain dimmers or tunable-white-only lights. Temperature is clamped to each light's supported range. Mixed selections apply each setting only to compatible lights. Initial control values represent the first compatible light, not a group average.
 
 ## Floorplan assets
+
+When importing a portable configuration into Home Assistant, wait for the import to finish before pressing **Save**. Embedded floor images and custom artwork are uploaded to Home Assistant’s image storage, and the dashboard stores their URLs instead of large base64 payloads. SVG and WebP artwork is converted to PNG for HA compatibility. Duplicate images are uploaded once per import. Failed uploads leave the previous card configuration unchanged. Exports still include the stored images so the configuration remains portable.
 
 Keep personal images, outlines, traced geometry, models and exported dashboard configurations under `floorplans/`. This entire directory is ignored by Git and excluded from exports. These assets are not bundled in `dist/` and are not required to build or install the card.
 

@@ -89,7 +89,18 @@ export function render3D(floor, states, options = {}) {
   const camera=new THREE.OrthographicCamera(-span,span,span,-span,.1,span*10);
   let {azimuth,elevation,zoom}={...home,...options.viewState};let frame=0,disposed=false,visible=true,markers=[],pointer,fallback;
   const transitions=new Map(),reducedMotion=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;let lastPaint=0,lastInteraction=performance.now(),lastOrbit=performance.now(),idleOffset=0;
-  plan.pauseIdle=()=>{lastInteraction=performance.now();if(idleOffset){azimuth+=idleOffset;idleOffset=0;schedule();}};
+  let hovering=false,returnOrbit=null;
+  plan.pauseIdle=()=>{
+    lastInteraction=performance.now();
+    if(idleOffset&&!returnOrbit){
+      // Return by the shortest arc without changing the saved manual camera.
+      idleOffset=Math.atan2(Math.sin(idleOffset),Math.cos(idleOffset));
+      returnOrbit={from:idleOffset,start:lastInteraction};schedule();
+    }
+  };
+  const manualOrbit=()=>{azimuth+=idleOffset;idleOffset=0;returnOrbit=null;lastInteraction=performance.now();};
+  plan.addEventListener('pointerenter',e=>{if(e.pointerType==='touch')return;hovering=true;plan.pauseIdle();});
+  plan.addEventListener('pointerleave',()=>{hovering=false;lastInteraction=performance.now();schedule();});
   renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1,options.quality==='high'?2:1.5));
   renderer.shadowMap.enabled=options.quality!=='low';renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;
   renderer.domElement.style.cssText='width:100%;height:100%;display:block;touch-action:none';renderer.domElement.tabIndex=0;renderer.domElement.setAttribute('aria-label','3D floorplan. Arrow keys orbit; plus and minus zoom; Home resets.');
@@ -176,15 +187,20 @@ export function render3D(floor, states, options = {}) {
   }
   floors.forEach(buildStorey);
   const toolbar=element('div',{className:'three-toolbar'});toolbar.style.cssText='position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:5px;padding:5px;border-radius:14px;background:var(--card-background-color,#fff);box-shadow:0 2px 12px #0002;z-index:5';
-  function control(text,label,action) {return button(text,action,{'aria-label':label,title:label});}
+  function control(text,label,action) {return button(text,()=>{manualOrbit();action();},{'aria-label':label,title:label});}
   let cutaway=options.viewState?.cutaway ?? true;
   toolbar.append(control('↶','Orbit left',()=>{azimuth-=.25;schedule();}),control('↷','Orbit right',()=>{azimuth+=.25;schedule();}),control('−','Zoom out',()=>{zoom=Math.max(.5,zoom/1.2);schedule();}),control('+','Zoom in',()=>{zoom=Math.min(3,zoom*1.2);schedule();}),control('⌂','Reset 3D view',()=>{({azimuth,elevation,zoom}=home);schedule();}),control('▱','Toggle cutaway walls',()=>{cutaway=!cutaway;schedule();}));plan.append(toolbar);
   // Rotation is disabled by default and explicitly opted into via Display settings.
   // Honour that choice even when decorative animations are reduced by the OS.
   function draw(){frame=0;const orbitTime=performance.now(),idleEnabled=options.idleRotation===true;
-    if(idleEnabled&&orbitTime-lastInteraction>8000)idleOffset+=Math.min(100,orbitTime-lastOrbit)*Math.PI*2/600000;
+    if(returnOrbit){
+      const progress=Math.min(1,(orbitTime-returnOrbit.start)/900),ease=progress*progress*(3-2*progress);
+      idleOffset=returnOrbit.from*(1-ease);
+      if(progress===1){idleOffset=0;returnOrbit=null;}
+    }else if(idleEnabled&&!hovering&&!pointer&&orbitTime-lastInteraction>8000)idleOffset+=Math.min(100,orbitTime-lastOrbit)*Math.PI*2/600000;
     lastOrbit=orbitTime;plan.dataset.idleAngle=String(idleOffset);
-    plan.dataset.idleState=!idleEnabled?'disabled':orbitTime-lastInteraction>8000?'rotating':'waiting';
+    plan.dataset.idleState=!idleEnabled?'disabled':returnOrbit?'returning':!hovering&&!pointer&&orbitTime-lastInteraction>8000?'rotating':'waiting';
+    plan.dataset.viewAzimuth=String(azimuth+idleOffset);
     const viewAzimuth=azimuth+idleOffset;if(disposed||!visible||document.hidden||!plan.isConnected)return;const rect=plan.getBoundingClientRect();if(!rect.width||!rect.height)return;renderer.setSize(rect.width,rect.height,false);camera.position.set(Math.sin(viewAzimuth)*Math.cos(elevation)*span*2,Math.sin(elevation)*span*2+centreY,Math.cos(viewAzimuth)*Math.cos(elevation)*span*2);camera.lookAt(0,centreY+.3,0);camera.updateMatrixWorld();
     world.updateMatrixWorld(true);
     // Fit the projected building bounds to the actual canvas, at any orbit angle.
@@ -202,7 +218,7 @@ export function render3D(floor, states, options = {}) {
     for(const marker of markers){const space=markerSpaces.get(marker.floorId || floor.id);if(!space)continue;const height=marker.height ?? (marker.entity?.startsWith('light.')?sourceFor(space.floor,marker.entity)?.height ?? 2.1:.35);const p=space.position([marker.x,marker.y],height).applyMatrix4(space.group.matrixWorld).project(camera);marker.node.style.left=`${(p.x*.5+.5)*100}%`;marker.node.style.top=`${(-p.y*.5+.5)*100}%`;}
     for(const label of storeyLabels){label.node.hidden=!!options.hideOverlays;const p=label.point.clone().applyMatrix4(label.group.matrixWorld).project(camera);label.node.style.left=`${(p.x*.5+.5)*100}%`;label.node.style.top=`${(-p.y*.5+.5)*100}%`;}
     const now=performance.now();if(now-lastPaint<30){schedule();return;}lastPaint=now;
-    const animate=present(now);renderer.render(scene,camera);if(animate||idleEnabled)schedule();
+    const animate=present(now);renderer.render(scene,camera);if(animate||idleEnabled||returnOrbit)schedule();
   }
   function schedule(){if(options.viewState){const next={azimuth,elevation,zoom,cutaway};if(JSON.stringify(options.viewState)!==JSON.stringify(next)){Object.assign(options.viewState,next);options.onViewChange?.();}}if(!frame&&!disposed&&visible&&!document.hidden)frame=requestAnimationFrame(draw);}
   function sample(id,now){const entry=transitions.get(id);if(!entry)return lightAppearance(states[id]);return blendAppearance(entry.from,entry.to,reducedMotion?1:(now-entry.start)/600);}
@@ -227,11 +243,11 @@ export function render3D(floor, states, options = {}) {
   }
   function update(nextStates,nextOptions={}){const now=performance.now();for(const id of assignedIds){const to=lightAppearance(nextStates[id]),entry=transitions.get(id);if(!entry)transitions.set(id,{from:to,to,start:now-600});else if(JSON.stringify(entry.to)!==JSON.stringify(to))transitions.set(id,{from:sample(id,now),to,start:now});}states=nextStates;options={...options,...nextOptions};if(fallback){fallback.update?.(states,options);return;}for(const marker of markers)marker.node.remove();markers=options.markers || [];for(const marker of markers)plan.append(marker.node);
     schedule();}
-  const down=e=>{if(e.button!==0)return;pointer={id:e.pointerId,x:e.clientX,y:e.clientY};renderer.domElement.setPointerCapture(e.pointerId);};
+  const down=e=>{if(e.button!==0)return;manualOrbit();pointer={id:e.pointerId,x:e.clientX,y:e.clientY};renderer.domElement.setPointerCapture(e.pointerId);};
   const move=e=>{if(!pointer)return;azimuth-=(e.clientX-pointer.x)*.008;elevation=Math.min(1.45,Math.max(.3,elevation+(e.clientY-pointer.y)*.006));pointer.x=e.clientX;pointer.y=e.clientY;schedule();};
   const up=()=>{pointer=null;};
-  const wheel=e=>{e.preventDefault();zoom=Math.max(.5,Math.min(3,zoom*Math.exp(-e.deltaY*.001)));schedule();};
-  const key=e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','=','-','Home'].includes(e.key))return;e.preventDefault();if(e.key==='ArrowLeft')azimuth-=.15;if(e.key==='ArrowRight')azimuth+=.15;if(e.key==='ArrowUp')elevation=Math.min(1.45,elevation+.1);if(e.key==='ArrowDown')elevation=Math.max(.3,elevation-.1);if(['+','='].includes(e.key))zoom=Math.min(3,zoom*1.15);if(e.key==='-')zoom=Math.max(.5,zoom/1.15);if(e.key==='Home')({azimuth,elevation,zoom}=home);schedule();};
+  const wheel=e=>{e.preventDefault();manualOrbit();zoom=Math.max(.5,Math.min(3,zoom*Math.exp(-e.deltaY*.001)));schedule();};
+  const key=e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','=','-','Home'].includes(e.key))return;e.preventDefault();manualOrbit();if(e.key==='ArrowLeft')azimuth-=.15;if(e.key==='ArrowRight')azimuth+=.15;if(e.key==='ArrowUp')elevation=Math.min(1.45,elevation+.1);if(e.key==='ArrowDown')elevation=Math.max(.3,elevation-.1);if(['+','='].includes(e.key))zoom=Math.min(3,zoom*1.15);if(e.key==='-')zoom=Math.max(.5,zoom/1.15);if(e.key==='Home')({azimuth,elevation,zoom}=home);schedule();};
   renderer.domElement.addEventListener('pointerdown',down);renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('pointerup',up);renderer.domElement.addEventListener('pointercancel',up);renderer.domElement.addEventListener('wheel',wheel,{passive:false});renderer.domElement.addEventListener('keydown',key);
   const resize=new ResizeObserver(schedule);resize.observe(plan);
   const intersection=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;if(visible){lastOrbit=performance.now();lastInteraction=lastOrbit;schedule();}});intersection.observe(plan);
