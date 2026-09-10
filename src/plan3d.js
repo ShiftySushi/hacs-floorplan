@@ -178,7 +178,7 @@ export function render3D(floor, states, options = {}) {
     });
   }
   function inside(x,y,points=[]){let hit=false;for(let i=0,j=points.length-1;i<points.length;j=i++){const a=points[i],b=points[j];if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])hit=!hit;}return hit;}
-  const disposeWallOcclusion=wallOcclusion(scene,wallMeshes,camera);
+  const disposeWallOcclusion=wallOcclusion(scene,wallMeshes,camera,ambient);
   const toolbar=element('div',{className:'three-toolbar'});toolbar.style.cssText='position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:5px;padding:5px;border-radius:14px;background:var(--card-background-color,#fff);box-shadow:0 2px 12px #0002;z-index:5';
   function control(text,label,action) {return button(text,()=>{manualOrbit();action();},{'aria-label':label,title:label});}
   let cutaway=options.viewState?.cutaway ?? true;
