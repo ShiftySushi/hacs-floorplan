@@ -11,7 +11,7 @@ curl --fail --silent --show-error --location --retry 3 \
   --output "$scan_tmp/trivy.tar.gz"
 printf '%s  %s\n' "$trivy_sha256" "$scan_tmp/trivy.tar.gz" | sha256sum --check --status
 tar -xzf "$scan_tmp/trivy.tar.gz" -C "$scan_tmp" trivy
-"$scan_tmp/trivy" fs --scanners vuln,secret --format json --exit-code 0 \
+"$scan_tmp/trivy" fs --scanners vuln,secret --include-dev-deps --format json --exit-code 0 \
   --cache-dir "$scan_tmp/cache" --cache-backend memory \
   --skip-dirs .git --skip-dirs node_modules --skip-dirs floorplans \
   --skip-dirs ci-reports --skip-dirs test-results --skip-dirs playwright-report \

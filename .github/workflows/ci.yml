@@ -88,6 +88,7 @@ jobs:
         env:
           INPUT_CATEGORY: plugin
           INPUT_REPOSITORY: ${{ github.repository }}
+          REPOSITORY_REF: ${{ github.event.pull_request.head.sha || github.sha }}
           INPUT_COMMENT: 'false'
           INPUT_GITHUB_TOKEN: ${{ github.token }}
 

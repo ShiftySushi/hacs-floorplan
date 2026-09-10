@@ -2,6 +2,10 @@
 
 A Home Assistant dashboard card for placing lights and sensors on your floorplan, selecting lights individually or as a group, and seeing room lighting and presence at a glance.
 
+![Fictional floorplan used by the interactive demo](demo/sample.svg)
+
+The example above is fictional. Personal floorplans remain in your own Home Assistant configuration.
+
 ## Install locally
 
 1. Copy `dist/hacs-floorplan.js` to Home Assistant's `/config/www/hacs-floorplan.js`.
@@ -11,7 +15,7 @@ A Home Assistant dashboard card for placing lights and sensors on your floorplan
 
 ## Install through HACS
 
-Once published to the GitHub default branch, add `https://github.com/ShiftySushi/hacs-floorplan` to HACS **Custom repositories** with type **Dashboard**. Install **Floorplan Card** and reload the browser. If HACS does not register the resource automatically, add `/hacsfiles/hacs-floorplan/hacs-floorplan.js` as a JavaScript module in Dashboard Resources.
+Add `https://github.com/ShiftySushi/hacs-floorplan` to HACS **Custom repositories** with type **Dashboard**. Install **Floorplan Card** and reload the browser. If HACS does not register the resource automatically, add `/hacsfiles/hacs-floorplan/hacs-floorplan.js` as a JavaScript module in Dashboard Resources.
 
 The distribution filename matches the repository name. [HACS supports installation from the default branch without a versioned release](https://www.hacs.xyz/docs/publish/plugin/). The GitHub distribution contains only plugin code and the fictional demo; personal floorplans are supplied locally through the editor.
 
