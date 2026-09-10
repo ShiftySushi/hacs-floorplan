@@ -3,7 +3,7 @@ test('mapped light can be rebound without moving it or breaking its group',async
   await page.goto('/demo/');
   await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');
-  await editor.getByRole('button',{name:'4. Entities',exact:true}).click();
+  await editor.getByRole('button',{name:'4. Lights & sensors',exact:true}).click();
   await editor.locator('summary').filter({hasText:/^Diner$/}).click();
   await editor.getByRole('combobox',{name:'Light fixture',exact:true}).selectOption('spot');
   await editor.locator('summary').filter({hasText:/^Diner$/}).click();
@@ -192,7 +192,7 @@ test('unconnected elements can be arranged and assigned before binding to Home A
   await page.evaluate(()=>{const editor=document.querySelector('floorplan-card-editor');editor.hass={...editor._hass,states:{...editor._hass.states,'sensor.outdoor_temperature':{state:'12',attributes:{friendly_name:'Outdoor temperature'}}}};});
   await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');
-  await editor.getByRole('button',{name:'4. Entities',exact:true}).click();
+  await editor.getByRole('button',{name:'4. Lights & sensors',exact:true}).click();
   await editor.getByRole('button',{name:'Temperature',exact:true}).click();
   await editor.locator('.setup-canvas .plan').click({position:{x:40,y:40}});
   const row=editor.locator('details[open]').filter({hasText:'Not connected'});

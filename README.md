@@ -1,10 +1,14 @@
 # Floorplan Card
 
-A Home Assistant dashboard card for furnishing your floorplan, placing lights and sensors, selecting lights individually or as a group, and seeing room lighting and presence at a glance. The same editable layout supports clean 2D, two pixel-art styles and furnished 3D.
+A visual floorplan for your Home Assistant dashboard. Arrange rooms, furniture and controls in the editor, then connect your entities when you’re ready.
 
-![Fictional floorplan used by the interactive demo](demo/sample.svg)
+![Furnished 3D floorplan with live lighting, temperature and presence, alongside room and light-group controls](demo/preview.png)
 
-The example above is fictional. Personal floorplans remain in your own Home Assistant configuration.
+*Actual card rendering with a fictional home and simulated entities. Your own floorplan stays in your Home Assistant instance.*
+
+- **Control your home:** toggle individual lights, rooms or groups; see temperature, heating and presence updates.
+- **Choose your view:** zoom and rotate in 2D or 3D, or select Pokémon, Zelda and Sims-like styles. Keep controls visible or reveal them on hover.
+- **Set up visually:** place elements before linking entities, then export the complete layout and artwork to another installation. No YAML required.
 
 ## Install locally
 

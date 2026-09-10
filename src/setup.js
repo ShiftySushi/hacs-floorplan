@@ -119,6 +119,7 @@ export function roomSetup(host,floor) {
     root.append(field('Room name',element('input',{value:room.name,onchange:e=>{room.name=e.target.value;host.emit();}})));
     root.append(field('Room temperature entity',entitySelect(host,/^(sensor|climate)\./,room.temperature_entity || '',id=>{room.temperature_entity=id;host.emit();})),element('p',{className:'muted',text:'Choose a temperature sensor or thermostat. Its current reading appears subtly on the plan; unavailable readings are hidden.'}));
     const material=element('select',{onchange:e=>{room.material=e.target.value;host.emit();}});for(const [value,text] of [['wood','Wood'],['tile','Tile'],['carpet','Carpet']])material.append(element('option',{value,text,selected:(room.material || 'wood')===value}));root.append(field('Floor material',material),field('Floor colour',element('input',{type:'color',value:room.colour || '#cbb89a',onchange:e=>{room.colour=e.target.value;host.emit();}})));
+    root.append(button('Place lights in this room',()=>{host.step=3;host.placementRoom=room.id;host.pendingElement='spot';host.pendingEntity='';host.render();}));
     root.append(memberPicker(host,'Room lights',room.lights,/^light\./,ids=>{room.lights=ids;host.emit();}));
     root.append(memberPicker(host,'Presence sensors',room.presence,/^binary_sensor\./,ids=>{room.presence=ids;host.emit();}),element('p',{className:'muted',text:'Choose motion, occupancy or presence binary sensors. Any sensor reporting on means occupied; unavailable sensors are shown as unknown.'}));
     root.append(button('Redraw room',()=>{host.drawing=true;host.redraw=true;host.draft=[];host.render();}),button('Remove room',()=>{floor.rooms=floor.rooms.filter(r=>r!==room);host.roomId='';host.emit();}));
@@ -132,6 +133,9 @@ export function entitySetup(host,floor) {
     const tile=button(name,()=>{host.pendingElement=kind;host.pendingEntity='';host.render();},{'aria-pressed':String(host.pendingElement===kind)});tile.prepend(icon(glyph));palette.append(tile);
   }
   root.append(element('h3',{text:'Add element'}),palette);
+  const placementRoom=element('select',{onchange:e=>{host.placementRoom=e.target.value;}},[element('option',{value:'',text:'Assign a room later'})]);
+  for(const room of floor.rooms)placementRoom.append(element('option',{value:room.id,text:room.name,selected:host.placementRoom===room.id}));
+  root.append(field('Room for new lights',placementRoom));
   const picker=entitySelect(host,/^(light|sensor|binary_sensor)\./,host.pendingEntity,id=>{host.pendingEntity=id;host.pendingElement='';host.render();});root.append(entitySearch(picker),field('Entity to place',picker));
   const snap=point=>{const dims=floorDimensions(floor);return point.map((n,i)=>Math.max(0,Math.min(100,Math.round(n/100*(i?dims.depth:dims.width)/.1)*.1/(i?dims.depth:dims.width)*100)));};
   const place=point=>{
@@ -141,23 +145,27 @@ export function entitySetup(host,floor) {
       const names={temperature:'Temperature',presence:'Presence',pendant:'Pendant light',spot:'Spotlight',bulb:'Light'};
       const entity=`${domain}.floorplan_${crypto.randomUUID().replaceAll('-','')}`;
       floor.entities.push({entity,unbound:true,name:`${names[kind]} ${floor.entities.filter(e=>e.unbound).length+1}`,x:point[0],y:point[1],...(domain==='light'?{fixture:kind}:{})});
+      const room=floor.rooms.find(r=>r.id===host.placementRoom);if(domain==='light'&&room)room.lights.push(entity);
       host.pendingElement='';host.pendingEntity=entity;host.emit();return;
     }
     if(!host.pendingEntity)return;
     const item=floor.entities.find(e=>e.entity===host.pendingEntity);
-    if(item)Object.assign(item,{x:point[0],y:point[1]});else floor.entities.push({entity:host.pendingEntity,x:point[0],y:point[1]});
+    if(item)Object.assign(item,{x:point[0],y:point[1]});else {
+      floor.entities.push({entity:host.pendingEntity,x:point[0],y:point[1]});
+      const room=floor.rooms.find(r=>r.id===host.placementRoom);if(host.pendingEntity.startsWith('light.')&&room&&!room.lights.includes(host.pendingEntity))room.lights.push(host.pendingEntity);
+    }
     host.pendingEntity='';host.emit();
   };
   let dragged=false;
-  const markers=floor.entities.map(item=>{const name=item.name || host._hass?.states[item.entity]?.attributes.friendly_name || item.entity;const node=button('',e=>{e.stopPropagation();if(dragged){dragged=false;return;}host.pendingElement='';host.pendingEntity=item.entity;host.render();},{className:'marker',title:name,'aria-label':`Move ${item.entity}`});node.append(icon(item.entity.startsWith('light.')?(item.fixture || 'bulb'):item.entity.startsWith('binary_sensor.')?'presence':'temperature'));
+  const markers=floor.entities.map(item=>{const name=item.name || host._hass?.states[item.entity]?.attributes.friendly_name || item.entity;const node=button('',e=>{e.stopPropagation();if(host.pendingElement){const point=plan.pointFromClient(e.clientX,e.clientY);if(point)place(point);return;}if(dragged){dragged=false;return;}host.pendingElement='';host.pendingEntity=item.entity;host.render();},{className:'marker',title:name,'aria-label':`Move ${item.entity}`});node.append(icon(item.entity.startsWith('light.')?(item.fixture || 'bulb'):item.entity.startsWith('binary_sensor.')?'presence':'temperature'));
     node.style.touchAction='none';let start;
-    node.addEventListener('pointerdown',e=>{if(e.button!==0)return;start=[e.clientX,e.clientY];dragged=false;node.setPointerCapture(e.pointerId);});
+    node.addEventListener('pointerdown',e=>{if(e.button!==0||host.pendingElement)return;start=[e.clientX,e.clientY];dragged=false;node.setPointerCapture(e.pointerId);});
     node.addEventListener('pointermove',e=>{if(start&&Math.hypot(e.clientX-start[0],e.clientY-start[1])>5){dragged=true;node.style.transform=`translate(calc(-50% + ${e.clientX-start[0]}px),calc(-50% + ${e.clientY-start[1]}px))`;}});
     node.addEventListener('pointerup',e=>{if(!start)return;start=null;node.style.transform='';if(node.hasPointerCapture(e.pointerId))node.releasePointerCapture(e.pointerId);if(!dragged)return;const point=plan.pointFromClient(e.clientX,e.clientY);if(point){[item.x,item.y]=snap(point);host.pendingEntity=item.entity;host.pendingElement='';host.emit();}});
     node.addEventListener('pointercancel',()=>{start=null;dragged=false;node.style.transform='';});
     return {x:item.x,y:item.y,node};});
   const plan=renderPlan(floor,host._hass?.states || {},{markers,edit:true,onPoint:place});root.append(plan);
-  if(host.pendingElement)root.append(element('p',{role:'status',text:'Tap the plan to place your element. No Home Assistant connection is needed.'}),button('Cancel placement',()=>{host.pendingElement='';host.render();}));
+  if(host.pendingElement)root.append(element('p',{role:'status',text:'Tap anywhere on the plan, including furniture, to place your element. Connect Home Assistant later.'}),button('Place in centre',()=>place([50,50])),button('Cancel placement',()=>{host.pendingElement='';host.render();}));
   if(host.pendingEntity)root.append(element('p',{role:'status',text:`Move ${floor.entities.find(e=>e.entity===host.pendingEntity)?.name || host.pendingEntity}: tap a new position or drag its marker.`}),button('Place in centre',()=>place([50,50])));
   const missing=[...new Set(floor.rooms.flatMap(r=>r.lights))].filter(id=>!floor.entities.some(e=>e.entity===id));
   if(missing.length)root.append(element('p',{text:`${missing.length} room lights still need markers.`}),button('Place room lights automatically',()=>{
@@ -196,7 +204,7 @@ export function groupSetup(host) {
   if(host.config.floors.length){
     const floors=element('select',{onchange:e=>{host.floorIndex=Number(e.target.value);host.render();}});
     host.config.floors.forEach((f,i)=>floors.append(element('option',{value:i,text:f.name || f.id,selected:i===host.floorIndex})));
-    root.append(field('Place new group lights on',floors),element('p',{className:'muted',text:'Unpositioned members get individual markers on this floor. Fine-tune their positions in Entities.'}));
+    root.append(field('Place new group lights on',floors),element('p',{className:'muted',text:'Unpositioned members get individual markers on this floor. Fine-tune their positions in Lights & sensors.'}));
   }else root.append(element('p',{text:'Add a floor first so group members can have individual markers.'}));
   host.config.groups.forEach(group=>{
     const box=element('fieldset',{},[field('Group name',element('input',{value:group.name,onchange:e=>{group.name=e.target.value;host.emit();}}))]);

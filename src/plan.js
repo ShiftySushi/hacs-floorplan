@@ -179,7 +179,7 @@ export function renderPlan(floor, states, options={}) {
   markers.forEach(({node})=>content.append(node));layout();
   const probe=new Image();probe.onload=()=>{if(!disposed&&!floor.aspect_ratio){ratio=probe.naturalWidth/probe.naturalHeight;layout();}};
   probe.onerror=()=>{if(!disposed)plan.append(element('p',{className:'error hint',role:'alert',text:'Image could not be loaded. Check the floor image in setup.'}));};if(floor.image)probe.src=floor.image;
-  plan.addEventListener('click',e=>{if(moved){moved=false;return;}if(options.onPoint&&!e.target.closest('[data-object-id],button'))options.onPoint(pointAt(e));});
+  plan.addEventListener('click',e=>{if(moved){moved=false;return;}if(options.onPoint&&!e.target.closest('button')&&(!options.onObject||!e.target.closest('[data-object-id]')))options.onPoint(pointAt(e));});
   plan.pointFromClient=(clientX,clientY)=>{const bounds=viewport.getBoundingClientRect();return disposed||clientX<bounds.left||clientX>bounds.right||clientY<bounds.top||clientY>bounds.bottom?null:pointAt({clientX,clientY});};
   plan.update=(nextStates,nextOptions={})=>{
     const changed=lightIds.some(id=>JSON.stringify(lightAppearance(targetStates[id]))!==JSON.stringify(lightAppearance(nextStates[id])));

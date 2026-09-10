@@ -189,6 +189,7 @@ export function render3D(floor, states, options = {}) {
   const toolbar=element('div',{className:'three-toolbar'});toolbar.style.cssText='position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:5px;padding:5px;border-radius:14px;background:var(--card-background-color,#fff);box-shadow:0 2px 12px #0002;z-index:5';
   function control(text,label,action) {return button(text,()=>{manualOrbit();action();},{'aria-label':label,title:label});}
   let cutaway=options.viewState?.cutaway ?? true;
+  let lastWallFrame=0;
   toolbar.append(control('↶','Orbit left',()=>{azimuth-=.25;schedule();}),control('↷','Orbit right',()=>{azimuth+=.25;schedule();}),control('−','Zoom out',()=>{zoom=Math.max(.5,zoom/1.2);schedule();}),control('+','Zoom in',()=>{zoom=Math.min(3,zoom*1.2);schedule();}),control('⌂','Reset 3D view',()=>{({azimuth,elevation,zoom}=home);schedule();}),control('▱','Toggle cutaway walls',()=>{cutaway=!cutaway;schedule();}));plan.append(toolbar);
   // Rotation is disabled by default and explicitly opted into via Display settings.
   // Honour that choice even when decorative animations are reduced by the OS.
@@ -214,11 +215,20 @@ export function render3D(floor, states, options = {}) {
     camera.left=cx-extent*aspect;camera.right=cx+extent*aspect;camera.top=cy+extent;camera.bottom=cy-extent;camera.updateProjectionMatrix();
     plan.dataset.fittedBounds=JSON.stringify(corners.map(p=>p.clone().applyMatrix4(camera.projectionMatrix)).map(p=>[p.x,p.y]));
     // Foreground walls become low partitions; back walls retain room definition.
-    for(const mesh of wallMeshes){const point=mesh.getWorldPosition(new THREE.Vector3());const front=point.x*camera.position.x+point.z*camera.position.z>span*.7;mesh.material.transparent=cutaway&&front&&mesh.position.y>.35;mesh.material.opacity=mesh.material.transparent?.08:1;mesh.material.depthWrite=!mesh.material.transparent;}
+    let wallsAnimating=false;
+    const wallBlend=lastWallFrame?1-Math.exp(-Math.min(32,orbitTime-lastWallFrame)/140):1;lastWallFrame=orbitTime;
+    for(const mesh of wallMeshes){
+      const point=mesh.getWorldPosition(new THREE.Vector3()),front=point.x*camera.position.x+point.z*camera.position.z>span*.7,target=cutaway&&front&&mesh.position.y>.35?.08:1;
+      const next=mesh.material.opacity+(target-mesh.material.opacity)*wallBlend;
+      mesh.material.opacity=Math.abs(next-target)<.002?target:next;
+      if(mesh.material.opacity!==target)wallsAnimating=true;
+      const transparent=mesh.material.opacity<1;if(mesh.material.transparent!==transparent){mesh.material.transparent=transparent;mesh.material.needsUpdate=true;}mesh.material.depthWrite=!transparent;
+    }
+    plan.dataset.wallOpacities=JSON.stringify(wallMeshes.map(mesh=>mesh.material.opacity));
     for(const marker of markers){const space=markerSpaces.get(marker.floorId || floor.id);if(!space)continue;const height=marker.height ?? (marker.entity?.startsWith('light.')?sourceFor(space.floor,marker.entity)?.height ?? 2.1:.35);const p=space.position([marker.x,marker.y],height).applyMatrix4(space.group.matrixWorld).project(camera);marker.node.style.left=`${(p.x*.5+.5)*100}%`;marker.node.style.top=`${(-p.y*.5+.5)*100}%`;}
     for(const label of storeyLabels){label.node.hidden=!!options.hideOverlays;const p=label.point.clone().applyMatrix4(label.group.matrixWorld).project(camera);label.node.style.left=`${(p.x*.5+.5)*100}%`;label.node.style.top=`${(-p.y*.5+.5)*100}%`;}
     const now=performance.now();if(now-lastPaint<30){schedule();return;}lastPaint=now;
-    const animate=present(now);renderer.render(scene,camera);if(animate||idleEnabled||returnOrbit)schedule();
+    const animate=present(now);renderer.render(scene,camera);if(animate||idleEnabled||returnOrbit||wallsAnimating)schedule();
   }
   function schedule(){if(options.viewState){const next={azimuth,elevation,zoom,cutaway};if(JSON.stringify(options.viewState)!==JSON.stringify(next)){Object.assign(options.viewState,next);options.onViewChange?.();}}if(!frame&&!disposed&&visible&&!document.hidden)frame=requestAnimationFrame(draw);}
   function sample(id,now){const entry=transitions.get(id);if(!entry)return lightAppearance(states[id]);return blendAppearance(entry.from,entry.to,reducedMotion?1:(now-entry.start)/600);}

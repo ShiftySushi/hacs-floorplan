@@ -16,6 +16,7 @@ export function furnitureSetup(host, floor) {
   root.append(element('style',{text:furnitureStyles}),element('div',{className:'furniture-header'},[element('p',{text:unlocked?'Select furniture to move or resize it. Add objects from the catalogue.':'Explore your layout. Unlock editing to add, move or resize furniture.'}),iconButton(unlocked?'Lock editing':'Unlock editing','edit',()=>{host.furnitureUnlocked=!unlocked;host.pendingObject='';host.render();},{'aria-pressed':String(unlocked)})]));
   const workspace=element('div',{className:'furniture-workspace'}),canvas=element('div',{className:'furniture-canvas'}),panel=element('div',{className:'furniture-panel'}),actions=element('div',{className:'furniture-actions','aria-label':'Selected furniture actions'});
   workspace.append(canvas,panel);root.append(workspace);
+  panel.append(button('Add furniture',()=>{host.furnitureUnlocked=true;host.selectedObject='';host.pendingObject='';host.render();}),button('Add lights & sensors',()=>{host.step=3;host.pendingElement='spot';host.pendingEntity='';host.render();}));
   const palette = element('div', { className: 'furniture-palette row', 'aria-label': 'Furniture catalogue' });
   const startPaletteDrag=(event,item,tile)=>{
     if(!unlocked||event.pointerType==='mouse'||event.button!==0)return;
