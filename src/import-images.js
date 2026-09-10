@@ -1,9 +1,10 @@
+import {imageReferences} from './image-references.js';
 // Portable files carry their artwork; HA dashboard messages should carry only URLs.
 export async function prepareImportedConfig(config, hass) {
   const result=structuredClone(config);
   if(!hass?.fetchWithAuth)return result;
   const cache=new Map();
-  for(const floor of result.floors)for(const [container,key] of [[floor,'image'],...[floor,...(floor.objects || [])].flatMap(item=>Object.keys(item.style_images || {}).map(key=>[item.style_images,key]))]){
+  for(const [container,key] of imageReferences(result)){
     const url=container[key];if(!url?.startsWith('data:image/'))continue;
     if(!cache.has(url)){
       let blob=await (await fetch(url)).blob();
