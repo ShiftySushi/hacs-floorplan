@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Floorplan Card · Local demo</title>
+<style>body{font:16px system-ui;margin:0;background:#eef2f4;color:#26343d}main{max-width:1080px;margin:auto;padding:20px}h1{font-size:24px}section.layout{display:grid;grid-template-columns:minmax(0,540px) minmax(0,1fr);gap:24px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}summary,button{cursor:pointer;padding:12px}aside{min-width:0}#events{max-height:240px;overflow:auto}@media(max-width:720px){section.layout{grid-template-columns:1fr}main{padding:12px}}body.dark{--primary-text-color:#e1e9ed;--secondary-text-color:#aebec8;--card-background-color:#202b32;--secondary-background-color:#293740;--divider-color:#43515a;background:#142028;color:#e1e9ed}</style>
+<main><h1>Floorplan Card</h1><p>Fictional example · simulated entities and service calls</p><button id="theme">Toggle theme</button> <button id="failure">Simulate service failure</button> <button id="presence">Toggle presence</button> <button id="restart">Start empty setup</button><section class="layout"><floorplan-card></floorplan-card><aside><details open><summary>Edit floorplans and assignments</summary><floorplan-card-editor></floorplan-card-editor></details><h2>Service calls</h2><pre id="events">Select a light to begin.</pre><details><summary>Demo configuration</summary><pre id="config"></pre></details></aside></section></main>
+<script type="module">
+import '../dist/hacs-floorplan.js';
+const entity=(name,modes,state='on',extra={})=>({state,attributes:{friendly_name:name,supported_color_modes:modes,brightness:180,rgb_color:[255,186,90],...extra}});
+const states={'light.diner':entity('Diner',['rgb']), 'light.kitchen':entity('Kitchen',['brightness']), 'light.lounge':entity('Lounge',['color_temp'],'off',{min_color_temp_kelvin:2200,max_color_temp_kelvin:5000,color_temp_kelvin:3000}), 'light.utility':entity('Utility',['onoff'],'off'), 'light.bedroom':entity('Bedroom',['rgb'],'unavailable'), 'sensor.temperature':{state:'21.4',attributes:{friendly_name:'Temperature',unit_of_measurement:'°C'}}};
+states['binary_sensor.motion']={state:'on',attributes:{friendly_name:'Kitchen presence',device_class:'occupancy'}};
+let fail=false;
+const card=document.querySelector('floorplan-card'), editor=document.querySelector('floorplan-card-editor');
+let config={type:'custom:floorplan-card',title:'Example home',floors:[{id:'example',name:'Example floor',image:'/demo/sample.svg',entities:[{entity:'light.diner',x:25,y:25},{entity:'light.kitchen',x:70,y:25},{entity:'light.utility',x:75,y:75},{entity:'light.lounge',x:25,y:65},{entity:'sensor.temperature',x:25,y:85}]}],groups:[{name:'All lights',entities:['light.diner','light.kitchen','light.lounge','light.utility']},{name:'Kitchen & diner',entities:['light.diner','light.kitchen']}]};
+config.floors[0].rooms=[{id:'kitchen',name:'Kitchen & diner',points:[[5,5],[95,5],[95,45],[5,45]],lights:['light.kitchen','light.diner'],presence:['binary_sensor.motion']},{id:'lounge',name:'Lounge',points:[[5,45],[50,45],[50,95],[5,95]],lights:['light.lounge'],presence:[]}];
+const hass={states,async callService(domain,service,data){
+  document.querySelector('#events').textContent=JSON.stringify({domain,service,data},null,2)+'\n'+document.querySelector('#events').textContent;
+  if(fail){fail=false;throw Error('Demo failure');}
+  for(const id of data.entity_id){
+    states[id]={...states[id],state:service==='turn_off'?'off':'on',attributes:{
+      ...states[id].attributes,
+      ...(data.brightness_pct?{brightness:Math.round(data.brightness_pct*2.55)}:{}),
+      ...(data.rgb_color?{rgb_color:data.rgb_color}:{}),
+      ...(data.color_temp_kelvin?{color_temp_kelvin:data.color_temp_kelvin}:{})
+    }};
+  }
+  card.hass={...hass};
+}};
+function update(){card.setConfig(config);card.hass=hass;document.querySelector('#config').textContent=JSON.stringify(config,null,2);}
+editor.setConfig(config);editor.hass=hass;editor.addEventListener('config-changed',e=>{config=e.detail.config;update();});
+card.addEventListener('hass-more-info',e=>document.querySelector('#events').textContent=`Entity details requested: ${e.detail.entityId}`);
+document.querySelector('#theme').onclick=()=>document.body.classList.toggle('dark');document.querySelector('#failure').onclick=()=>{fail=true;document.querySelector('#events').textContent='Next service call will fail.';};update();
+document.querySelector('#presence').onclick=()=>{states['binary_sensor.motion'].state=states['binary_sensor.motion'].state==='on'?'off':'on';card.hass={...hass};};
+document.querySelector('#restart').onclick=()=>{config={type:'custom:floorplan-card',title:'Home',floors:[],groups:[]};editor.step=0;editor.setConfig(config);update();};
+</script></html>

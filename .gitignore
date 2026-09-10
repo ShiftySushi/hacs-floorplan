@@ -1,0 +1,4 @@
+.DS_Store
+node_modules/
+# Personal source images, outlines and models are local assets, not plugin code.
+floorplans/
