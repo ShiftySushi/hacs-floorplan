@@ -22,7 +22,7 @@ export const CATALOGUE = [
   ['lamp','Floor lamp',.4,.4,1.5,'Decor'], ['wall_light','Outdoor wall light',.14,.07,.26,'Lighting'],
   ['radiator','Radiator',1,.12,.6,'Heating'],
   ['tv_lightstrip','TV light strip',defaultTV.width,.05,defaultTV.height,'Lighting'], ['nanoleaf_panels','Nanoleaf hexagon panels',1.8,.05,.8,'Lighting'],
-  ['speaker','Speaker',.4,.16,.39,'Living'], ['computer','Computer tower',.22,.45,.45,'Office'], ['ultrawide_monitor','Ultrawide monitor',.95,.22,.42,'Office'],
+  ['picture','Framed art',.734,.0355,.4724,'Living'], ['speaker','Speaker',.4,.16,.39,'Living'], ['computer','Computer tower',.22,.45,.45,'Office'], ['ultrawide_monitor','Ultrawide monitor',.95,.22,.42,'Office'],
 ].map(([type,name,width,depth,height,category])=>({type,name,width,depth,height,category}));
 
 export function panelArrangement(item,width,height) {

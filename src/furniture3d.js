@@ -49,6 +49,7 @@ export function furniture3D(object) {
       if(object.type==='desk'&&object.variant!=='plain'){box(w*.35,h*.6,d*.8,-w*.28,h*.4);box(w*.32,h*.32,.05,w*.15,h*1.2,-d*.25,palette.dark);box(w*.2,.02,d*.13,w*.15,h+.025,d*.08,palette.dark);}break;
     case 'chair':chair();break;
     case 'office_chair':chair(true);break;
+    case 'picture':box(w,h,d);box(w*.94,h*.91,.01,0,h/2,d/2,'#f3efe3');box(w*.81,h*.71,.01,0,h/2,d/2+.006,'#73948b');box(w*.32,h*.5,.01,-w*.16,h*.43,d/2+.012,'#be9270');break;
     case 'tv':{
       const wall=product&&object.variant==='wall',panelDepth=product?Math.min(d,.0243):.06,panelHeight=product&&!wall?h*.9077:h;
       box(w,panelHeight,panelDepth,0,h-panelHeight/2,0,palette.dark);
@@ -128,7 +129,7 @@ export function furniture3D(object) {
     }
     default:box(w,h,d,0,h/2,0,palette.fabric);
   }
-  if(product){
+  if(product || object.type==='picture'){
     // Decorative details must not enlarge or shrink a measured product's footprint.
     const bounds=new THREE.Box3().setFromObject(group),size=bounds.getSize(new THREE.Vector3()),centre=bounds.getCenter(new THREE.Vector3());
     for(const child of group.children)child.position.sub(new THREE.Vector3(centre.x,bounds.min.y,centre.z));

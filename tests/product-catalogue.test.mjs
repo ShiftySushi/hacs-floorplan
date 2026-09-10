@@ -67,3 +67,13 @@ test('cabinet fronts retain the product drawer and door arrangements',()=>{
     }
   }
 });
+
+test('framed artwork keeps measured bounds and portable mounting height',()=>{
+  const item={id:'art',type:'picture',name:'Framed display',width:.734,depth:.0355,height:.4724,elevation_m:1.3138,x:50,y:50,rotation:90,colour:'#c4a27a'};
+  const scene=normaliseScene({floors:[{id:'gallery',objects:[item]}]});
+  assert.deepEqual(normaliseScene(JSON.parse(JSON.stringify(scene))).floors[0].objects[0],item);
+  const model=furniture3D(item),size=new Box3().setFromObject(model).getSize(new Vector3());
+  size.toArray().forEach((value,i)=>assert.ok(Math.abs(value-[item.depth,item.height,item.width][i])<1e-6));
+  assert.equal(model.children[0].material.color.getHexString(),'c4a27a');
+  model.traverse(node=>{node.geometry?.dispose();node.material?.dispose();});
+});
