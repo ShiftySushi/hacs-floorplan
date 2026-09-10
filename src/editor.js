@@ -1,5 +1,6 @@
 import { displayFields } from './display-settings.js';
 import { prepareImportedConfig } from './import-images.js';
+import { imageReferences } from './image-references.js';
 import { styles } from './styles.js';
 import { normaliseConfig } from './lights.js';
 import { element, button, field } from './dom.js';
@@ -51,7 +52,7 @@ export class FloorplanEditor extends HTMLElement {
     this.error = ''; this.exporting = true; this.render();
     try {
       const config = normaliseConfig(this.config);
-      for (const floor of config.floors) for(const [container,key] of [[floor,'image'],...[floor,...floor.objects].flatMap(item=>Object.keys(item.style_images || {}).map(key=>[item.style_images,key]))]) {
+      for (const [container,key] of imageReferences(config)) {
         const imageUrl=container[key];if (!imageUrl || imageUrl.startsWith('data:')) continue;
         const response = this._hass?.fetchWithAuth && imageUrl.startsWith('/api/') ? await this._hass.fetchWithAuth(imageUrl) : await fetch(imageUrl);
         if (!response.ok) throw Error('Could not include a floor image. Check that its URL is accessible before exporting.');
