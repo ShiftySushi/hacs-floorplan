@@ -14,6 +14,7 @@ test('built card exposes only compatible controls and surfaces failed commands',
   const latest = await page.locator('#events').textContent();
   expect(latest).toContain('light.diner');
   expect(latest).not.toContain('light.utility');
+  await page.getByText('Demo tools',{exact:true}).click();
   await page.getByRole('button', { name: 'Simulate service failure', exact: true }).click();
   await card.getByRole('button', { name: 'Turn off', exact: true }).click();
   await expect(card.getByRole('alert')).toContainText('Some lights could not be updated');
@@ -31,13 +32,14 @@ test('room illumination follows light state independently of presence', async ({
 test('guided setup uploads a public SVG and places group members without YAML', async ({ page }) => {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   const editor = page.locator('floorplan-card-editor'), card = page.locator('floorplan-card');
+  await page.getByText('Demo tools',{exact:true}).click();
   await page.getByRole('button', { name: 'Start empty setup', exact: true }).click();
   await editor.getByRole('button', { name: 'Add floor', exact: true }).click();
-  await editor.locator('input[type=file]').setInputFiles('demo/sample.svg');
+  await editor.getByLabel('Choose floorplan image',{exact:true}).setInputFiles('demo/sample.svg');
   await expect(card.locator('svg image')).toHaveAttribute('href', /^data:image\/svg\+xml;base64,/);
   await editor.getByRole('button', { name: 'Rotate right', exact: true }).click();
   await expect(editor.getByLabel('Rotation (degrees clockwise)')).toHaveValue('90');
-  await editor.getByRole('button', { name: '4. Groups', exact: true }).click();
+  await editor.getByRole('button', { name: '5. Groups', exact: true }).click();
   await editor.getByRole('button', { name: 'Add group', exact: true }).click();
   await editor.locator('fieldset select').selectOption('light.diner');
   await editor.locator('fieldset select').selectOption('light.kitchen');

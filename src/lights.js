@@ -1,4 +1,5 @@
 import { validPolygon } from './rooms.js';
+import { normaliseScene } from './scene.js';
 export const available = state => !!state && !['unavailable', 'unknown'].includes(state.state);
 export function capabilities(state) {
   const modes = state?.attributes?.supported_color_modes || [];
@@ -57,5 +58,5 @@ export function normaliseConfig(config) {
     }
   }
   for (const group of result.groups) if (!group.name || !Array.isArray(group.entities) || group.entities.some(id => typeof id !== 'string' || !/^light\.[\w]+$/.test(id))) throw new Error('Groups need a name and a list of light entities');
-  return result;
+  return normaliseScene(result);
 }

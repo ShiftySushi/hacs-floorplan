@@ -5,3 +5,4 @@ playwright-report/
 ci-reports/
 # Personal source images, outlines and models are local assets, not plugin code.
 floorplans/
+.codegraph/

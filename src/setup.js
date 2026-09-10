@@ -1,6 +1,7 @@
 import { element, button, field } from './dom.js';
 import { renderPlan } from './plan.js';
 import { validPolygon } from './rooms.js';
+import { floorDimensions } from './scene.js';
 export function entitySelect(host, domain, value, change) {
   const select=element('select',{onchange:e=>change(e.target.value)},[element('option',{value:'',text:'Choose an entity…'})]);
   const ids=Object.keys(host._hass?.states || {}).filter(id=>domain.test(id));
@@ -8,10 +9,17 @@ export function entitySelect(host, domain, value, change) {
   ids.sort().forEach(id=>select.append(element('option',{value:id,text:`${host._hass?.states[id]?.attributes.friendly_name || id} (${id})`,selected:value===id})));
   return select;
 }
+export function entitySearch(select) {
+  const options=Array.from(select.options).map(option=>option.cloneNode(true));
+  return field('Search entities',element('input',{type:'search',placeholder:'Search by name or entity ID',oninput:e=>{
+    const query=e.target.value.trim().toLowerCase(),value=select.value;
+    select.replaceChildren(...options.filter(option=>!option.value || option.value===value || option.textContent.toLowerCase().includes(query)).map(option=>option.cloneNode(true)));select.value=value;
+  }}));
+}
 export function memberPicker(host, title, members, domain, change) {
   const box=element('fieldset',{},[element('legend',{text:title})]);
   const select=entitySelect(host,domain,'',id=>{if(id && !members.includes(id))change([...members,id]);});
-  box.append(field('Add entity',select));
+  box.append(entitySearch(select),field('Add entity',select));
   members.forEach(id=>box.append(element('div',{className:'row member'},[element('span',{text:host._hass?.states[id]?.attributes.friendly_name || id}),button('Remove',()=>change(members.filter(v=>v!==id)),{'aria-label':`Remove ${id} from ${title}`})])));
   if(!members.length)box.append(element('p',{className:'muted',text:'No entities assigned yet.'}));
   return box;
@@ -24,6 +32,7 @@ export function floorSetup(host,floor) {
   root.append(field('Floor name',element('input',{value:floor.name || floor.id,onchange:e=>{floor.name=e.target.value;host.emit();}})));
   root.append(field('Choose floorplan image',element('input',{type:'file',accept:'image/png,image/jpeg,image/webp,image/svg+xml',disabled:!!host.uploading,onchange:async e=>{
     const file=e.target.files?.[0];if(!file)return;
+    const uploadingFloorId=floor.id;
     host.uploading=true;host.error='';host.render();
     try {
       if(!['image/png','image/jpeg','image/webp','image/svg+xml'].includes(file.type))throw Error('Choose a PNG, JPEG, WebP or SVG image.');
@@ -39,7 +48,9 @@ export function floorSetup(host,floor) {
         url=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Image could not be read.'));reader.readAsDataURL(file);});
       }
       const ratio=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image.naturalWidth/image.naturalHeight);image.onerror=()=>reject(Error('This file could not be displayed as an image.'));image.src=url;});
-      floor.image=url;floor.aspect_ratio=ratio;host.uploading=false;host.emit();
+      const currentFloor=host.config.floors.find(item=>item.id===uploadingFloorId);
+      if(!currentFloor)throw Error('The floor was removed while its image was uploading. Add a floor and choose the image again.');
+      currentFloor.image=url;currentFloor.aspect_ratio=ratio;host.uploading=false;host.emit();
     }catch(error){host.uploading=false;host.error=error.message;host.render();}
   }})));
   root.append(element('p',{className:'muted',text:host.uploading?'Uploading image…':'PNG, JPEG and WebP upload to Home Assistant. Small SVGs are saved inside the dashboard. No YAML needed.'}));
@@ -47,7 +58,25 @@ export function floorSetup(host,floor) {
   advanced.append(field('Image URL',element('input',{value:floor.image.startsWith('data:')?'':floor.image,placeholder:'/local/floorplans/ground-floor.svg',onchange:e=>{floor.image=e.target.value.trim();delete floor.aspect_ratio;host.emit();}})));root.append(advanced);
   root.append(field('Rotation (degrees clockwise)',element('input',{type:'number',min:0,max:359,step:1,value:floor.rotation,onchange:e=>{floor.rotation=((Number(e.target.value)%360)+360)%360;host.emit();}})));
   root.append(element('div',{className:'row'},[button('Rotate left',()=>{floor.rotation=(floor.rotation+270)%360;host.emit();}),button('Rotate right',()=>{floor.rotation=(floor.rotation+90)%360;host.emit();})]));
-  if(floor.image)root.append(renderPlan(floor,host._hass?.states || {},{edit:true}));
+  const scale = element('fieldset',{},[element('legend',{text:'Floor scale'}),element('p',{className:'muted',text:'Use the full image width and depth, including its margins. Alternatively mark a known distance from your dimensioned floorplan.'})]);
+  const dimensions = floorDimensions(floor);
+  for(const [key,label,fallback] of [['width_m','Full plan width (metres)',dimensions.width],['depth_m','Full plan depth (metres)',dimensions.depth]])scale.append(field(label,element('input',{type:'number',min:.5,max:200,step:.01,value:floor[key] ?? Number(fallback.toFixed(3)),onchange:e=>{floor[key]=Number(e.target.value);host.emit();}})));
+  scale.append(button('Calibrate from a known distance',()=>{host.calibrating=true;host.calibrationPoints=[];host.render();}));
+  if(host.calibrating) {
+    scale.append(element('p',{role:'status',text:`Tap the two ends of a measured distance on the plan. ${(host.calibrationPoints || []).length} of 2 points placed.`}));
+    const known=element('input',{type:'number',min:.01,step:.01,value:host.calibrationMetres || 1,onchange:e=>{host.calibrationMetres=Number(e.target.value);}});
+    scale.append(field('Known distance (metres)',known),button('Apply scale',()=>{
+      const [a,b]=host.calibrationPoints || [],distance=Number(known.value);if(!a||!b||!Number.isFinite(distance)||distance<=0)return;
+      const ratio=floor.aspect_ratio || dimensions.width/dimensions.depth;
+      const relative=Math.hypot((b[0]-a[0])/100,(b[1]-a[1])/100/ratio);if(relative<.001){host.error='Choose two different points.';host.render();return;}
+      floor.width_m=Number((distance/relative).toFixed(3));floor.depth_m=Number((floor.width_m/ratio).toFixed(3));host.calibrating=false;host.calibrationPoints=[];host.emit();
+    },{disabled:host.calibrationPoints?.length!==2}),button('Cancel calibration',()=>{host.calibrating=false;host.calibrationPoints=[];host.render();}));
+  }
+  root.append(scale);
+  const alignment=element('details',{},[element('summary',{text:'Align storeys in 3D'}),element('p',{className:'muted',text:'Match the same building corner or stairwell across floors. Elevation is the floor level above the building origin; All storeys adds a viewing gap between levels.'})]);
+  for(const [key,label,fallback,min,max] of [['elevation_m','Floor elevation (metres)',host.floorIndex*3,-20,100],['offset_x_m','Horizontal X offset (metres)',0,-100,100],['offset_z_m','Horizontal depth offset (metres)',0,-100,100]])alignment.append(field(label,element('input',{type:'number',min,max,step:.05,value:floor[key] ?? fallback,onchange:e=>{const value=Number(e.target.value);if(!Number.isFinite(value)||value<min||value>max){host.error=`${label} must be between ${min} and ${max}.`;host.render();return;}floor[key]=value;host.emit();}})));
+  root.append(alignment);
+  root.append(renderPlan(floor,host._hass?.states || {},{edit:true,draft:host.calibrating?host.calibrationPoints:[],onPoint:point=>{if(host.calibrating){host.calibrationPoints??=[];if(host.calibrationPoints.length===2)host.calibrationPoints=[];host.calibrationPoints.push(point);host.render();}}}));
   root.append(button('Remove floor',()=>{host.removingFloor=!host.removingFloor;host.render();}));
   if(host.removingFloor)root.append(element('p',{text:'Remove this floor and its room and marker assignments?'}),button('Remove this floor and assignments',()=>{host.config.floors.splice(host.floorIndex,1);host.floorIndex=0;host.removingFloor=false;host.emit();}));
   return root;
@@ -74,6 +103,7 @@ export function roomSetup(host,floor) {
   }
   if(room && !host.drawing){
     root.append(field('Room name',element('input',{value:room.name,onchange:e=>{room.name=e.target.value;host.emit();}})));
+    const material=element('select',{onchange:e=>{room.material=e.target.value;host.emit();}});for(const [value,text] of [['wood','Wood'],['tile','Tile'],['carpet','Carpet']])material.append(element('option',{value,text,selected:(room.material || 'wood')===value}));root.append(field('Floor material',material),field('Floor colour',element('input',{type:'color',value:room.colour || '#cbb89a',onchange:e=>{room.colour=e.target.value;host.emit();}})));
     root.append(memberPicker(host,'Room lights',room.lights,/^light\./,ids=>{room.lights=ids;host.emit();}));
     root.append(memberPicker(host,'Presence sensors',room.presence,/^binary_sensor\./,ids=>{room.presence=ids;host.emit();}),element('p',{className:'muted',text:'Choose motion, occupancy or presence binary sensors. Any sensor reporting on means occupied; unavailable sensors are shown as unknown.'}));
     root.append(button('Redraw room',()=>{host.drawing=true;host.redraw=true;host.draft=[];host.render();}),button('Remove room',()=>{floor.rooms=floor.rooms.filter(r=>r!==room);host.roomId='';host.emit();}));
@@ -82,7 +112,7 @@ export function roomSetup(host,floor) {
 }
 export function entitySetup(host,floor) {
   const root=element('div',{},[element('p',{text:'Choose a light or sensor, then tap its location. Tap an existing marker to move it. Each light remains individually selectable, including room and group members.'})]);
-  root.append(field('Entity to place',entitySelect(host,/^(light|sensor|binary_sensor)\./,host.pendingEntity,id=>{host.pendingEntity=id;host.render();})));
+  const picker=entitySelect(host,/^(light|sensor|binary_sensor)\./,host.pendingEntity,id=>{host.pendingEntity=id;host.render();});root.append(entitySearch(picker),field('Entity to place',picker));
   const place=point=>{
     if(!host.pendingEntity)return;
     const item=floor.entities.find(e=>e.entity===host.pendingEntity);
@@ -109,7 +139,7 @@ export function groupSetup(host) {
   if(host.config.floors.length){
     const floors=element('select',{onchange:e=>{host.floorIndex=Number(e.target.value);host.render();}});
     host.config.floors.forEach((f,i)=>floors.append(element('option',{value:i,text:f.name || f.id,selected:i===host.floorIndex})));
-    root.append(field('Place new group lights on',floors),element('p',{className:'muted',text:'Unpositioned members get individual markers on this floor. Fine-tune their positions in step 3.'}));
+    root.append(field('Place new group lights on',floors),element('p',{className:'muted',text:'Unpositioned members get individual markers on this floor. Fine-tune their positions in Entities.'}));
   }else root.append(element('p',{text:'Add a floor first so group members can have individual markers.'}));
   host.config.groups.forEach(group=>{
     const box=element('fieldset',{},[field('Group name',element('input',{value:group.name,onchange:e=>{group.name=e.target.value;host.emit();}}))]);

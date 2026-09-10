@@ -26,6 +26,6 @@ execFileSync(process.execPath, ['scripts/build.mjs']);
 assert.deepEqual(readFileSync(path), committed, 'Distribution is stale: run npm run build and commit the result');
 execFileSync(process.execPath, ['--check', path]);
 assert(!/^import /m.test(committed.toString()), 'Distribution must be self-contained');
-assert(committed.length < 250000, 'Unexpectedly large distribution; check for embedded assets');
+assert(committed.length < 900000, 'Distribution exceeds the bundled 3D renderer budget; review new code/assets');
 assert.deepEqual(readdirSync('dist'), [manifest.filename], 'Only the distributable JS belongs in dist');
 console.log('Syntax, public demo, HACS package contract and reproducible distribution passed.');

@@ -1,6 +1,5 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
-const files = ['lights.js', 'rooms.js', 'styles.js', 'dom.js', 'plan.js', 'setup.js', 'editor.js', 'card.js'];
-await mkdir('dist', { recursive: true });
-const parts = await Promise.all(files.map(f => readFile(`src/${f}`, 'utf8')));
+import { readFile } from 'node:fs/promises';
+import { build } from 'esbuild';
 const licence = await readFile('LICENSE', 'utf8');
-await writeFile('dist/hacs-floorplan.js', `/*!\n${licence}*/\n` + parts.map(s => s.replace(/^import .*;\n/gm, '').replace(/^export /gm, '')).join('\n'));
+const threeLicence = await readFile('node_modules/three/LICENSE', 'utf8');
+await build({entryPoints:['src/index.js'],outfile:'dist/hacs-floorplan.js',bundle:true,format:'iife',target:'es2022',supported:{'template-literal':false},minify:true,legalComments:'inline',banner:{js:`/*!\n${licence}\nBundled Three.js:\n${threeLicence}*/`}});
