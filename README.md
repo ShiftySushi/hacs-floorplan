@@ -56,7 +56,7 @@ Select a TV in the furniture editor and choose its **TV media player** entity to
 
 TVs and light strips offer matching 43–85 inch size presets, with 65 inch as the default. Wall panels offer Static, Breathe, Wave and Rainbow effects. Lights fade between states over 600 ms; animations respect reduced-motion settings. In 3D, fixtures sit at ceiling height by default, with an optional mounting height in the light editor. Height also controls the spread and strength of their floor illumination.
 
-Enable **Slow idle rotation (3D)** in Display settings to rotate after eight seconds without interaction, at one revolution every ten minutes. This explicit choice also works with reduced motion enabled; decorative animations remain reduced. Switch it off to stop automatic rotation.
+Enable **Slow idle rotation (3D)** in Display settings to rotate after eight seconds without interaction, at one revolution every ten minutes. Hover over the plan to smoothly return to your last manually chosen view; rotation stays paused until you leave. Dragging or using the camera controls establishes a new view to return to. This explicit choice also works with reduced motion enabled; decorative animations remain reduced. Switch it off to stop automatic rotation.
 
 The full floorplan background follows the selected style and daylight. Ambient room brightness uses `sun.sun` elevation, with cloud cover from an available weather entity when supplied. Without the Sun integration, the preview estimates daylight from local time. This is an ambient approximation, not a window-by-window sunlight simulation. For seamless custom artwork, use a transparent exterior background.
 
