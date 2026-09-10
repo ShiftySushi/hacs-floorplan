@@ -1,5 +1,23 @@
 export function tvIsOn(state) {return ['on','playing','paused','idle','buffering'].includes(state?.state);}
 
+export const tvSceneIndex=(time,count)=>count?Math.floor(Math.max(0,time)/300000)%count:0;
+
+/** Portable stills, loaded once per TV; letterboxing preserves the composition. */
+export function tvSlideshow(scenes,changed){
+  let disposed=false;
+  const images=(scenes || []).filter(s=>typeof s.image==='string'&&/^(\/(?!\/)|https?:\/\/|data:image\/(png|jpeg|webp);base64,)/.test(s.image)).map(s=>{
+    const image=new Image();image.crossOrigin='anonymous';
+    image.onload=()=>{if(!disposed)changed();};image.src=s.image;return image;
+  });
+  return {count:images.length,draw(context,width,height,time){
+    const image=images[tvSceneIndex(time,images.length)];
+    context.fillStyle='#080e14';context.fillRect(0,0,width,height);
+    if(!image?.naturalWidth)return;
+    const scale=Math.min(width/image.naturalWidth,height/image.naturalHeight),w=image.naturalWidth*scale,h=image.naturalHeight*scale;
+    context.drawImage(image,(width-w)/2,(height-h)/2,w,h);
+  },dispose(){disposed=true;for(const image of images)image.onload=null;}};
+}
+
 /** Original local mini-programmes; time is milliseconds, no external media. */
 export function drawTVFrame(context,width,height,time=0) {
   const t=Math.max(0,time)/1000,programme=Math.floor(t/8)%3;

@@ -1,6 +1,6 @@
 // Cabinet fronts face positive Z. Dividers and fronts are separate from the
 // carcass so openings remain genuinely open when viewed from an angle.
-export function productStorage3D(o,box){
+export function productStorage3D(o,box,ball){
   const id=o.product_id;
   if(!['lyla-display','lyla-tv-bench','dunelm-fulton-extra-wide-pine'].includes(id))return false;
   const w=o.width,d=o.depth,h=o.height,wood=o.colour || '#ae784b',metal='#343638',t=.025;
@@ -9,7 +9,8 @@ export function productStorage3D(o,box){
   const shelf=(width,y,x=0)=>part('shelf',width,t,d,x,y,0,wood);
   const front=(kind,x,y,width,height)=>{
     const face=part(kind,width,height,t,x,y,d/2-t/2,wood);
-    part('handle',Math.min(.1,width*.25),.015,.02,x,y,d/2+.01,metal);return face;
+    if(fulton)part('handle',Math.min(.1,width*.25),.015,.02,x,y,d/2+.01,metal);
+    else ball(.012,x,y,d/2+.008,metal);return face;
   };
   shelf(w,base+t/2);shelf(w,h-t/2);
   for(const x of [-w/2+t/2,w/2-t/2])box(t,h-base,d,x,(h+base)/2,0,wood);
@@ -21,7 +22,7 @@ export function productStorage3D(o,box){
     const glass=part('glass',w-4*t,h-drawerTop-2*t,.01,0,(h+drawerTop)/2,d/2,'#b9d0d3');
     glass.material=glass.material.clone();glass.material.transparent=true;glass.material.opacity=.22;
     for(const x of [-w/2+t,w/2-t])box(t,h-drawerTop,t,x,(h+drawerTop)/2,d/2,wood);
-    part('handle',.015,.09,.02,w*.36,h*.6,d/2+.01,metal);
+    ball(.012,w*.36,h*.6,d/2+.008,metal);
   }else{
     const centreWidth=w*(fulton?.52:.4),body=h-base;
     for(const sign of [-1,1]){

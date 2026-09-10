@@ -68,6 +68,30 @@ test('cabinet fronts retain the product drawer and door arrangements',()=>{
   }
 });
 
+test('Noah wood has rounded front corners and small round knobs',()=>{
+  for(const [id,knobs] of [['lyla-display',4],['lyla-tv-bench',2],['lyla-sideboard',5],['lyla-bookcase',0]]){
+    const preset=PRODUCT_PRESETS.find(p=>p.id===id),model=furniture3D(applyProductPreset({},preset));
+    const handles=model.children.filter(n=>n.geometry.type==='SphereGeometry');
+    assert.equal(handles.length,knobs,id);
+    handles.forEach(n=>assert.equal(n.geometry.parameters.radius,.012));
+    const wood=model.children.find(n=>n.geometry.type==='BoxGeometry'&&n.geometry.parameters.widthSegments===16);
+    assert.ok(wood,id);
+    const {width,depth}=wood.geometry.parameters,p=wood.geometry.attributes.position;
+    assert.ok(!Array.from({length:p.count},(_,i)=>i).some(i=>Math.abs(p.getX(i)-width/2)<1e-6&&Math.abs(p.getZ(i)-depth/2)<1e-6),id);
+    model.traverse(n=>{n.geometry?.dispose();n.material?.dispose();});
+  }
+});
+
+test('sheathed iaito has curved saya, cream same, black ito and sageo',()=>{
+  const model=furniture3D({type:'side_table',variant:'sword',width:1,depth:.16,height:.2,colour:'#171717'});
+  const parts=name=>model.children.filter(n=>n.userData.swordPart===name),saya=parts('saya');
+  assert.equal(saya.length,24);assert.ok(saya.at(-1).position.y>saya[0].position.y+.02);
+  assert.equal(parts('same')[0].material.color.getHexString(),'e7d9b4');
+  for(const name of ['saya','ito','sageo']){assert.ok(parts(name).length);parts(name).forEach(n=>assert.equal(n.material.color.getHexString(),'171717'));}
+  const bounds=new Box3().setFromObject(model).getSize(new Vector3());assert.ok(bounds.x<1.01&&bounds.y<=.2&&bounds.z<.161);
+  model.traverse(n=>{n.geometry?.dispose();n.material?.dispose();});
+});
+
 test('framed artwork keeps measured bounds and portable mounting height',()=>{
   const item={id:'art',type:'picture',name:'Framed display',width:.734,depth:.0355,height:.4724,elevation_m:1.3138,x:50,y:50,rotation:90,colour:'#c4a27a'};
   const scene=normaliseScene({floors:[{id:'gallery',objects:[item]}]});

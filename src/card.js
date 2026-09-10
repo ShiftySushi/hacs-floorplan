@@ -168,7 +168,7 @@ export class FloorplanCard extends HTMLElement {
       const three=navigation.classList.contains('three-toolbar'),buttons=[...navigation.children];
       navigation.removeAttribute('style');navigation.classList.add('docked-navigation');
       navigation.setAttribute('role','group');navigation.setAttribute('aria-label','Floorplan navigation');
-      const groups=three?[['Rotate',0,2],['Zoom',2,4],['View',4,6]]:[['Zoom',0,2],['Move',2,6],['View',6,7],['Rotate',7,9]];
+      const groups=three?[['Rotate',0,2],['Zoom',2,4],['View',4,buttons.length]]:[['Zoom',0,2],['Move',2,6],['View',6,7],['Rotate',7,9]];
       navigation.replaceChildren(...groups.map(([name,start,end])=>{
         const controls=buttons.slice(start,end);controls.forEach(control=>control.removeAttribute('style'));
         return element('div',{className:'navigation-group',role:'group','aria-label':name},[element('span',{className:'navigation-caption',text:name}),element('div',{className:'navigation-buttons'},controls)]);

@@ -7,12 +7,20 @@ import { productStorage3D } from './product-storage3d.js';
 export function furniture3D(object) {
   const group = new THREE.Group();
   const product=productPreset(object);
+  const noah=object.product_id?.startsWith('lyla-');
   const w = object.width || 1, d = object.depth || .6, h = object.height || .8;
   const palette = { wood: object.colour || '#ac8059', dark: '#334148', fabric: object.colour || '#8cabb0', pale: '#eee9dc', white: '#f4f3ed', green: '#5c936c' };
   const materials = new Map();
   const mat = colour => { if (!materials.has(colour)) materials.set(colour, new THREE.MeshStandardMaterial({ color: colour, roughness: .78 })); return materials.get(colour); };
   function box(width, height, depth, x = 0, y = height / 2, z = 0, colour = palette.wood) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(Math.max(.01,width), Math.max(.01,height), Math.max(.01,depth)), mat(colour));
+    const rounded=noah&&colour===palette.wood,geometry=new THREE.BoxGeometry(Math.max(.01,width),Math.max(.01,height),Math.max(.01,depth),rounded?16:1,1,rounded?16:1);
+    if(rounded){
+      const p=geometry.attributes.position,r=Math.min(.04,width/2,depth/2);
+      for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i),a=Math.max(0,Math.abs(x)-width/2+r),b=Math.max(0,z-depth/2+r),k=r/Math.hypot(a,b);
+        if(a&&b&&k<1)p.setXYZ(i,Math.sign(x)*(width/2-r+a*k),p.getY(i),depth/2-r+b*k);
+      }geometry.computeVertexNormals();
+    }
+    const mesh = new THREE.Mesh(geometry, mat(colour));
     mesh.position.set(x,y,z); mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh); return mesh;
   }
   function ball(radius,x,y,z,colour,scale=[1,1,1]) {
@@ -28,7 +36,24 @@ export function furniture3D(object) {
     }
   }
   function chair(office=false) { legs(h*.45,object.leg_colour || (office?palette.dark:palette.wood));box(w,h*.13,d,0,h*.48,0,palette.fabric);box(w,h*.48,.09,0,h*.76,-d*.44,palette.fabric); if(office)for(const x of [-w*.48,w*.48])box(.05,.06,d*.65,x,h*.7,0,palette.dark); }
-  if(!productStorage3D(object,box))switch(object.type) {
+  if(object.variant==='sword'){
+    const black='#171717',level=h*.75;
+    box(w*.7,.02,d);for(const x of [-w*.25,w*.25])box(.025,level-.018,d*.3,x);
+    // Sheathed display: the saya follows the blade's gentle upward curve.
+    for(let i=0;i<24;i++){
+      const t=(i+.5)/24,x=w*(-.25+t*.75),y=level+h*.16*t*t;
+      const sheath=box(w*.75/24+.002,.032*(1-t*.45),.028,x,y,0,black);sheath.rotation.z=Math.atan(h*.32*t/(w*.75));sheath.userData.swordPart='saya';
+    }
+    box(w*.25,.032,.028,-w*.375,level,0,'#e7d9b4').userData.swordPart='same';
+    for(let i=0;i<8;i++)for(const sign of [-1,1]){
+      const wrap=box(w*.035,.009,.012,w*(-.485+i*.029),level,sign*.019,black);wrap.rotation.z=sign*Math.PI/4;wrap.userData.swordPart='ito';
+      const cross=box(w*.035,.009,.012,w*(-.485+i*.029),level,sign*.019,black);cross.rotation.z=-sign*Math.PI/4;
+    }
+    box(.016,.06,.05,-w*.25,level,0,black);box(.018,.035,.035,-w*.491,level,0,black);
+    for(let i=0;i<18;i++){
+      const a=i*Math.PI*2/18,cord=box(.009,.016,.01,-w*.13+Math.sin(a)*.025,level-.035+Math.cos(a)*.04,.024,black);cord.rotation.z=-a;cord.userData.swordPart='sageo';
+    }
+  }else if(!productStorage3D(object,box,ball))switch(object.type) {
     case 'rug': box(w,.015,d,0,.012,0,object.colour || '#c5b59a'); for(let z=-d*.42;z<d*.46;z+=.14)box(w*.88,.003,.025,0,.022,z,'#e9dfc8');break;
     case 'sofa':
       box(w,h*.5,d,0,h*.3,0,palette.fabric);box(w,h*.45,d*.18,0,h*.76,-d*.41,palette.fabric);
@@ -49,7 +74,7 @@ export function furniture3D(object) {
       if(object.type==='desk'&&object.variant!=='plain'){box(w*.35,h*.6,d*.8,-w*.28,h*.4);box(w*.32,h*.32,.05,w*.15,h*1.2,-d*.25,palette.dark);box(w*.2,.02,d*.13,w*.15,h+.025,d*.08,palette.dark);}break;
     case 'chair':chair();break;
     case 'office_chair':chair(true);break;
-    case 'picture':box(w,h,d);box(w*.94,h*.91,.01,0,h/2,d/2,'#f3efe3');box(w*.81,h*.71,.01,0,h/2,d/2+.006,'#73948b');box(w*.32,h*.5,.01,-w*.16,h*.43,d/2+.012,'#be9270');break;
+    case 'picture':box(w,h,d);box(w*.94,h*.91,.01,0,h/2,d/2,'#f3efe3');box(w*.81,h*.71,.01,0,h/2,d/2+.006,'#73948b').userData.artwork=true;break;
     case 'tv':{
       const wall=product&&object.variant==='wall',panelDepth=product?Math.min(d,.0243):.06,panelHeight=product&&!wall?h*.9077:h;
       box(w,panelHeight,panelDepth,0,h-panelHeight/2,0,palette.dark);
@@ -83,7 +108,7 @@ export function furniture3D(object) {
     case 'speaker':
       if(object.variant==='sub'){for(const x of [-w*.4,w*.4])box(w*.2,h,d,x,h/2);for(const y of [h*.1,h*.9])box(w,h*.2,d,0,y);}
       else {const bar=new THREE.Mesh(new THREE.CylinderGeometry(h/2,h/2,w,16),mat(palette.wood));bar.rotation.z=Math.PI/2;bar.scale.z=d/h;bar.position.y=h/2;bar.castShadow=bar.receiveShadow=true;group.add(bar);}break;
-    case 'computer':if(object.variant==='north'){box(w,h,d);for(let i=0;i<10;i++)box(w*.045,h*.92,.01,w*(i/10-.45),h/2,d/2-.005,'#795334');break;}box(w,h,d,0,h/2,0,palette.dark);box(w*.82,h*.86,.012,0,h/2,d/2+.008,'#597785');for(const y of [h*.3,h*.7])ball(w*.26,0,y,d/2+.025,object.colour || '#91c4d3',[1,1,.1]);break;
+    case 'computer':if(object.variant==='ps5'){box(w*.75,h*.96,d*.96,0,h/2,0,'#171819');for(const x of [-w/2+.005,w/2-.005]){box(.01,h,d,x);for(let i=0;i<3;i++)box(.012,.01,d,x,h*(.53+i*.035),0,'#171819');}break;}if(object.variant==='north'){box(w,h,d);for(let i=0;i<10;i++)box(w*.045,h*.92,.01,w*(i/10-.45),h/2,d/2-.005,'#795334');break;}box(w,h,d,0,h/2,0,palette.dark);box(w*.82,h*.86,.012,0,h/2,d/2+.008,'#597785');for(const y of [h*.3,h*.7])ball(w*.26,0,y,d/2+.025,object.colour || '#91c4d3',[1,1,.1]);break;
     case 'ultrawide_monitor':box(w,h*.8,.04,0,h*.58,0,palette.dark);box(w*.95,h*.72,.01,0,h*.58,.026,'#548295');box(.035,h*.23,.035,0,h*.12,0,palette.dark);box(w*.4,.025,d,0,.015,0,palette.dark);break;
     case 'tv_bench':case 'display_cabinet':case 'bookshelf':
       box(w,.06,d,0,.03);box(w,.06,d,0,h-.03);for(const x of [-w/2+.03,w/2-.03])box(.06,h,d,x);
@@ -91,12 +116,9 @@ export function furniture3D(object) {
       {const bays=product?.columns || Math.max(1,Math.round(w/(object.variant==='cubes'?.38:.7))),rows=product?.rows || Math.max(1,Math.round(h/.4));
       for(let bay=1;bay<bays;bay++)box(.035,h,d,-w/2+w*bay/bays);
       for(let row=1;row<rows;row++){const y=h*row/rows;box(w,.035,d,0,y);if(object.type!=='tv_bench'&&object.variant!=='cubes'){const books=Math.max(1,Math.floor((w-.12)/.09));for(let i=0;i<books;i++)box(.055,Math.min(.25,h/rows*.75),Math.min(.2,d*.75),-w/2+.08+i*(w-.16)/books,y+Math.min(.25,h/rows*.75)/2,0,['#788e82','#b79877','#a2a8b6','#c8bba6','#819da7'][i%5]);}}}
-      if(product?.id==='lyla-sideboard'||product?.id==='lyla-tv-bench')for(const x of [-w*.33,w*.33]){box(w*.32,h*.86,.035,x,h*.5,d/2);ball(.018,x,h*.6,d/2+.03,palette.dark);}
-      if(product?.id==='lyla-sideboard')for(let i=0;i<3;i++){box(w*.3,h*.27,.035,0,h*(.2+i*.29),d/2);ball(.018,0,h*(.2+i*.29),d/2+.03,palette.dark);}
-      if(product?.id==='lyla-display'){
-        const glass=box(w*.82,h*.9,.01,0,h*.5,d/2,'#b9d0d3');glass.material=glass.material.clone();glass.material.transparent=true;glass.material.opacity=.22;
-        box(.03,h,.03,0,h/2,d/2);for(const x of [-.04,.04])ball(.015,x,h*.5,d/2+.02,palette.dark);
-      }break;
+      if(product?.id==='lyla-sideboard'){for(const x of [-w*.33,w*.33]){box(w*.32,h*.86,.035,x,h*.5,d/2);ball(.012,x,h*.6,d/2+.02,palette.dark);}
+      for(let i=0;i<3;i++){box(w*.3,h*.27,.035,0,h*(.2+i*.29),d/2);ball(.012,0,h*(.2+i*.29),d/2+.02,palette.dark);}}
+      break;
     case 'piano':
       if(object.variant==='grand'){
         const shape=new THREE.Shape();shape.moveTo(-w*.5,-d*.5);shape.lineTo(w*.5,-d*.5);shape.lineTo(w*.45,0);shape.bezierCurveTo(w*.4,d*.6,-w*.5,d*.65,-w*.5,d*.1);shape.closePath();
@@ -129,7 +151,7 @@ export function furniture3D(object) {
     }
     default:box(w,h,d,0,h/2,0,palette.fabric);
   }
-  if(product || object.type==='picture'){
+  if(product || object.type==='picture' || object.variant==='ps5'){
     // Decorative details must not enlarge or shrink a measured product's footprint.
     const bounds=new THREE.Box3().setFromObject(group),size=bounds.getSize(new THREE.Vector3()),centre=bounds.getCenter(new THREE.Vector3());
     for(const child of group.children)child.position.sub(new THREE.Vector3(centre.x,bounds.min.y,centre.z));
