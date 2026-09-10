@@ -15,3 +15,9 @@ export function svgElement(tag, props = {}) {
   for (const [key, value] of Object.entries(props)) node.setAttribute(key, value);
   return node;
 }
+export function preserveFocus(root) {
+  const active=root.activeElement;
+  if (!active || active.tagName!=='BUTTON') return ()=>{};
+  const label=active.getAttribute('aria-label'),text=active.textContent;
+  return ()=>{if(!active.isConnected){const next=[...root.querySelectorAll('button')].find(node=>label?node.getAttribute('aria-label')===label:node.textContent===text);next?.focus({preventScroll:true});}};
+}

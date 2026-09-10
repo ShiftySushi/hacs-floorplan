@@ -1,0 +1,114 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - name: Syntax, HACS package and reproducible build
+        run: npm run check
+      - name: Unit and privacy regression tests
+        run: npm test
+      - name: Inspect all reachable public history
+        run: node scripts/check-public.mjs --history "$(git rev-parse HEAD)"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hacs-floorplan-${{ github.event.pull_request.head.sha || github.sha }}
+          path: dist/hacs-floorplan.js
+          if-no-files-found: error
+          retention-days: 7
+
+  browser:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+      - name: Desktop and mobile checks of the built card
+        run: npm run test:browser
+
+  security:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Trivy REPORT-ONLY source and distribution scan
+        run: bash scripts/security.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: security-summary-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ci-reports/trivy-summary.json
+          if-no-files-found: error
+          retention-days: 7
+
+  hacs:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Official HACS repository validator
+        uses: docker://ghcr.io/hacs/action@sha256:dc92fdad2f6ffbe74bffb7269d781ea8e064f52d9bb486cdf3925d74e7ab6ebf
+        env:
+          INPUT_CATEGORY: plugin
+          INPUT_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          REPOSITORY_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+          # Upstream reads default-branch licence metadata. The required quality
+          # job validates the full approved MIT text at the exact tested revision.
+          INPUT_IGNORE: license
+          INPUT_COMMENT: 'false'
+          INPUT_GITHUB_TOKEN: ${{ github.token }}
+
+  pr-gate:
+    if: ${{ always() }}
+    needs: [quality, browser, security, hacs]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every mandatory result
+        env:
+          QUALITY: ${{ needs.quality.result }}
+          BROWSER: ${{ needs.browser.result }}
+          SECURITY: ${{ needs.security.result }}
+          HACS: ${{ needs.hacs.result }}
+        run: |
+          test "$QUALITY" = success
+          test "$BROWSER" = success
+          test "$SECURITY" = success
+          test "$HACS" = success

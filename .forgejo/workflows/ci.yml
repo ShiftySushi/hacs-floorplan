@@ -1,0 +1,80 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: build-server
+    timeout-minutes: 10
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: https://data.forgejo.org/actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - name: Syntax, HACS package and reproducible build
+        run: npm run check
+      - name: Unit and privacy regression tests
+        run: npm test
+      - name: Inspect all reachable public history
+        run: node scripts/check-public.mjs --history "$(git rev-parse HEAD)"
+
+  browser:
+    needs: quality
+    runs-on: build-server
+    timeout-minutes: 20
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: https://data.forgejo.org/actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+      - name: Desktop and mobile checks of the built card
+        run: npm run test:browser
+
+  security:
+    needs: quality
+    runs-on: build-server
+    timeout-minutes: 15
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: https://data.forgejo.org/actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Trivy REPORT-ONLY source and distribution scan
+        run: bash scripts/security.sh
+
+  pr-gate:
+    if: ${{ always() }}
+    needs: [quality, browser, security]
+    runs-on: build-server
+    timeout-minutes: 5
+    steps:
+      - name: Require every mandatory result
+        env:
+          QUALITY: ${{ needs.quality.result }}
+          BROWSER: ${{ needs.browser.result }}
+          SECURITY: ${{ needs.security.result }}
+        run: |
+          test "$QUALITY" = success
+          test "$BROWSER" = success
+          test "$SECURITY" = success

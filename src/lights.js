@@ -1,4 +1,5 @@
 import { validPolygon } from './rooms.js';
+import { normaliseScene } from './scene.js';
 export const available = state => !!state && !['unavailable', 'unknown'].includes(state.state);
 export function capabilities(state) {
   const modes = state?.attributes?.supported_color_modes || [];
@@ -51,11 +52,12 @@ export function normaliseConfig(config) {
     if (!Array.isArray(floor.entities)) throw new Error('Entities must be a list');
     const entities = new Set();
     for (const item of floor.entities) {
+      if(item.unbound!==undefined&&typeof item.unbound!=='boolean')throw new Error('Element connection state must be a boolean');
       if (!/^(light|sensor|binary_sensor)\.[\w]+$/.test(item.entity) || entities.has(item.entity)) throw new Error('Use unique light, sensor or binary_sensor entities on each floor');
       entities.add(item.entity);
       if (![item.x, item.y].every(n => Number.isFinite(n) && n >= 0 && n <= 100)) throw new Error('Positions must be numbers from 0 to 100');
     }
   }
   for (const group of result.groups) if (!group.name || !Array.isArray(group.entities) || group.entities.some(id => typeof id !== 'string' || !/^light\.[\w]+$/.test(id))) throw new Error('Groups need a name and a list of light entities');
-  return result;
+  return normaliseScene(result);
 }

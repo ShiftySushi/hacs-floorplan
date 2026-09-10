@@ -1,0 +1,51 @@
+import {test,expect} from '@playwright/test';
+test('presence and temperature tints update independently with an outdoor readout',async({page})=>{
+  await page.goto('/demo/');
+  await page.evaluate(()=>{const c=document.querySelector('floorplan-card'),config=structuredClone(c.config);config.outdoor_temperature_entity='sensor.outdoor';config.floors[0].rooms[0].temperature_entity='sensor.indoor';config.floors[0].rooms[0].presence=['binary_sensor.occupancy'];c.setConfig(config);c.hass={...c._hass,states:{...c._hass.states,'sensor.outdoor':{state:'10',attributes:{unit_of_measurement:'°C'}},'sensor.indoor':{state:'26',attributes:{unit_of_measurement:'°C'}},'binary_sensor.occupancy':{state:'on'}}};});
+  const card=page.locator('floorplan-card');
+  await expect(card.locator('.temperature-marker.occupied.temp-warm')).toBeVisible();
+  await expect(card.getByRole('button',{name:/temperature: 26.0 °C · Presence detected/})).toBeVisible();
+  const outside=card.getByRole('button',{name:'Outdoor temperature: 10.0 °C',exact:true});await expect(outside).toHaveClass(/temp-cool/);
+  const a=await outside.boundingBox(),b=await card.locator('.plan').boundingBox();expect(a.x+a.width).toBeLessThanOrEqual(b.x);
+  await page.evaluate(()=>{const c=document.querySelector('floorplan-card');c.hass={...c._hass,states:{...c._hass.states,'binary_sensor.occupancy':{state:'off'},'sensor.indoor':{state:'17',attributes:{unit_of_measurement:'°C'}}}};});
+  await expect(card.locator('.temperature-marker.occupied')).toHaveCount(0);
+  await expect(card.locator('.temperature-marker.temp-cool')).toBeVisible();
+});
+test('radiator and room bindings are configurable without YAML',async({page})=>{
+  await page.goto('/demo/');
+  await page.evaluate(()=>{const e=document.querySelector('floorplan-card-editor');e.hass={...e._hass,states:{...e._hass.states,'climate.room':{state:'heat',attributes:{friendly_name:'Room heating',hvac_action:'idle'}}}};});
+  await page.getByRole('button',{name:'Edit layout',exact:true}).click();
+  const editor=page.locator('floorplan-card-editor');
+  await editor.getByRole('button',{name:'Unlock editing',exact:true}).click();
+  await editor.getByLabel('Find furniture').fill('radiator');
+  await editor.getByRole('button',{name:'Radiator',exact:true}).click();
+  await editor.getByRole('button',{name:'Place furniture in centre',exact:true}).click();
+  await editor.getByRole('combobox',{name:'Radiator heating entity',exact:true}).selectOption('climate.room');
+  await editor.getByRole('button',{name:'2. Rooms',exact:true}).click();
+  await editor.getByRole('combobox',{name:'Room temperature entity',exact:true}).selectOption('sensor.temperature');
+  const config=JSON.parse(await page.locator('#config').textContent());
+  expect(config.floors[0].objects.at(-1)).toMatchObject({type:'radiator',heating_entity:'climate.room'});
+  expect(config.floors[0].rooms[0].temperature_entity).toBe('sensor.temperature');
+});
+test('room temperature and radiator status follow entities and expose HA controls',async({page})=>{
+  await page.goto('/demo/');
+  await page.evaluate(()=>{
+    const card=document.querySelector('floorplan-card');
+    const config=structuredClone(card.config),floor=config.floors[0];floor.rooms[0].temperature_entity='sensor.room_temperature';floor.objects.push({id:'radiator-test',type:'radiator',x:12,y:30,width:1,depth:.12,height:.6,heating_entity:'climate.room'});card.setConfig(config);
+    card.hass={...card._hass,states:{...card._hass.states,'sensor.room_temperature':{state:'20.4',attributes:{unit_of_measurement:'°C'}},'climate.room':{state:'heat',attributes:{hvac_action:'idle'}}}};
+  });
+  const card=page.locator('floorplan-card');
+  await expect(card.getByRole('button',{name:/temperature: 20.4 °C/})).toBeVisible();
+  await expect(card.locator('[data-heating-glow]')).toHaveCount(0);
+  await card.getByRole('button',{name:'Radiator: idle',exact:true}).click();
+  await expect(page.locator('#events')).toContainText('climate.room');
+  await page.evaluate(()=>{const c=document.querySelector('floorplan-card');c.hass={...c._hass,states:{...c._hass.states,'climate.room':{state:'heat',attributes:{hvac_action:'heating'}}}};});
+  await expect(card.locator('[data-heating-glow="radiator-test"]')).toHaveCount(1);
+  await expect(card.getByRole('button',{name:'Radiator: heating',exact:true})).toBeVisible();
+  await card.getByRole('button',{name:'Furnished 3D',exact:true}).click();
+  await expect(card.getByRole('button',{name:/temperature: 20.4 °C/})).toBeVisible();
+  await expect(card.getByRole('button',{name:'Radiator: heating',exact:true})).toBeVisible();
+  await page.evaluate(()=>{const c=document.querySelector('floorplan-card');c.hass={...c._hass,states:{...c._hass.states,'sensor.room_temperature':{state:'unavailable'},'climate.room':{state:'unavailable'}}};});
+  await expect(card.getByRole('button',{name:/temperature: 20.4 °C/})).toHaveCount(0);
+  await expect(card.getByRole('button',{name:'Radiator: unknown',exact:true})).toBeVisible();
+});

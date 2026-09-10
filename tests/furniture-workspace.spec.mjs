@@ -1,0 +1,64 @@
+import { test, expect } from '@playwright/test';
+
+test('catalogue drag uses rotated zoomed coordinates and preserves an explicit snap-off choice',async({page,isMobile})=>{
+  await page.goto('/demo/');await page.getByRole('button',{name:'Edit layout',exact:true}).click();
+  const editor=page.locator('floorplan-card-editor');
+  await editor.getByRole('button',{name:'1. Floors',exact:true}).click();
+  await editor.getByLabel('Rotation (degrees clockwise)').fill('90');await editor.getByLabel('Rotation (degrees clockwise)').press('Tab');
+  await editor.getByRole('button',{name:'3. Furniture',exact:true}).click();await editor.getByRole('button',{name:'Unlock editing',exact:true}).click();
+  await expect(editor.getByRole('combobox',{name:'Snap furniture to grid',exact:true})).toHaveValue('0.1');
+  await editor.getByRole('button',{name:'Zoom in',exact:true}).click();await editor.getByRole('button',{name:'Pan left',exact:true}).click();
+  await editor.getByLabel('Find furniture').fill('piano');
+  const plan=editor.locator('.furniture-canvas .plan'),bounds=await plan.boundingBox();expect(bounds).toBeTruthy();
+  const tile=editor.locator('.furniture-palette').getByRole('button',{name:'Piano',exact:true});
+  if(isMobile){
+    await tile.scrollIntoViewIfNeeded();const source=await tile.boundingBox(),target=await plan.boundingBox();
+    const start={x:source.x+source.width/2,y:source.y+source.height/2},end={x:target.x+target.width*.573,y:target.y+target.height*.439};
+    const touch=await page.context().newCDPSession(page);
+    await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[start]});
+    for(let i=1;i<=8;i++)await touch.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:start.x+(end.x-start.x)*i/8,y:start.y+(end.y-start.y)*i/8}]});
+    await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await touch.detach();
+  }else await tile.dragTo(plan,{targetPosition:{x:bounds.width*.573,y:bounds.height*.439}});
+  await expect(editor.getByRole('combobox',{name:'Furniture variant',exact:true})).toBeVisible();
+  const x=Number(await editor.getByLabel('X position (%)',{exact:true}).inputValue()),y=Number(await editor.getByLabel('Y position (%)',{exact:true}).inputValue());
+  expect(x).toBe(Math.round(x));expect(y).toBe(Math.round(y));expect(Math.abs(x-45)).toBeLessThanOrEqual(2);expect(Math.abs(y-52)).toBeLessThanOrEqual(2);
+  await editor.getByRole('combobox',{name:'Snap furniture to grid',exact:true}).selectOption('0');
+  await editor.getByRole('button',{name:'Rotate furniture',exact:true}).click();
+  await expect(editor.getByRole('combobox',{name:'Snap furniture to grid',exact:true})).toHaveValue('0');
+});
+
+test('furniture workspace locks changes and resizes rotated objects as one undoable edit',async({page})=>{
+  await page.goto('/demo/');
+  await page.getByRole('button',{name:'Edit layout',exact:true}).click();
+  const editor=page.locator('floorplan-card-editor');
+  await editor.getByRole('button',{name:'3. Furniture',exact:true}).click();
+  await editor.getByRole('combobox',{name:'Placed furniture',exact:true}).selectOption('furniture-0');
+  await expect(editor.getByLabel('Width (metres)',{exact:true})).toBeDisabled();
+  await expect(editor.locator('[data-resize-handle]')).toHaveCount(0);
+  await editor.getByRole('button',{name:'Unlock editing',exact:true}).click();
+  await expect(editor.getByLabel('Find furniture',{exact:true})).toBeHidden();
+  await editor.getByRole('button',{name:'Zoom in',exact:true}).click();
+  await editor.getByRole('button',{name:'Pan left',exact:true}).click();
+  const camera=await editor.locator('[data-camera]').getAttribute('data-camera');
+  await editor.getByRole('button',{name:'Rotate furniture',exact:true}).click();
+  await expect(editor.locator('[data-camera]')).toHaveAttribute('data-camera',camera);
+  const before={width:Number(await editor.getByLabel('Width (metres)',{exact:true}).inputValue()),depth:Number(await editor.getByLabel('Depth (metres)',{exact:true}).inputValue()),x:await editor.getByLabel('X position (%)',{exact:true}).inputValue(),y:await editor.getByLabel('Y position (%)',{exact:true}).inputValue()};
+  const handle=editor.locator('[data-object-id="furniture-0"] [data-resize-handle="se"]');
+  await handle.scrollIntoViewIfNeeded();const box=await handle.boundingBox();expect(box).toBeTruthy();
+  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2-12,box.y+box.height/2+18,{steps:8});await page.mouse.up();
+  await expect.poll(async()=>Number(await editor.getByLabel('Width (metres)',{exact:true}).inputValue())).toBeGreaterThan(before.width);
+  await expect.poll(async()=>Number(await editor.getByLabel('Depth (metres)',{exact:true}).inputValue())).toBeGreaterThan(before.depth);
+  await expect(editor.getByLabel('X position (%)',{exact:true})).toHaveValue(before.x);await expect(editor.getByLabel('Y position (%)',{exact:true})).toHaveValue(before.y);
+  await expect(editor.locator('[data-camera]')).toHaveAttribute('data-camera',camera);
+  await editor.getByRole('button',{name:'Undo',exact:true}).click();
+  await expect(editor.getByLabel('Width (metres)',{exact:true})).toHaveValue(String(before.width));
+  await expect(editor.getByLabel('Depth (metres)',{exact:true})).toHaveValue(String(before.depth));
+  await expect(editor.locator('[data-camera]')).toHaveAttribute('data-camera',camera);
+  await editor.getByRole('button',{name:'Redo',exact:true}).click();
+  await expect.poll(async()=>Number(await editor.getByLabel('Width (metres)',{exact:true}).inputValue())).toBeGreaterThan(before.width);
+  await editor.locator('[data-object-id="furniture-0"]').click({button:'right'});
+  await expect(editor.getByRole('button',{name:'Rotate furniture',exact:true})).toBeFocused();
+  await editor.getByRole('button',{name:'Lock editing',exact:true}).click();
+  await expect(editor.getByRole('button',{name:'Remove furniture',exact:true})).toBeDisabled();
+  await expect(editor.locator('[data-resize-handle]')).toHaveCount(0);
+});

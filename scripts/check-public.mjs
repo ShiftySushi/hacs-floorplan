@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 
 // Intentionally narrow: public assets must be reviewed before expanding this list.
-const allowed = /^(?:README\.md|LICENSE|AGENTS\.md|package\.json|hacs\.json|\.gitignore|\.gitattributes|\.githooks\/(?:pre-commit|pre-push)|src\/[\w-]+\.js|scripts\/[\w-]+\.mjs|tests\/[\w-]+\.test\.mjs|dist\/hacs-floorplan\.js|demo\/(?:index\.html|sample\.svg))$/;
+const allowed = /^(?:README\.md|LICENSE|AGENTS\.md|package(?:-lock)?\.json|playwright\.config\.mjs|hacs\.json|\.gitignore|\.gitattributes|\.githooks\/(?:pre-commit|pre-push)|\.(?:forgejo|github)\/workflows\/ci\.yml|src\/[\w-]+\.js|scripts\/[\w-]+\.(?:mjs|sh)|tests\/[\w-]+\.(?:test|spec)\.mjs|dist\/hacs-floorplan\.js|demo\/(?:index\.html|sample\.svg))$/;
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
 const history = process.argv[2] === '--history';
 const ref = process.argv[3];
