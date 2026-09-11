@@ -11,11 +11,11 @@ test('furniture and lights place by click and centre without randomUUID',async({
   await editor.getByRole('button',{name:'Place furniture in centre',exact:true}).click();
   await editor.getByRole('button',{name:'Add furniture',exact:true}).first().click();
   await editor.locator('.furniture-palette').getByRole('button',{name:'Piano',exact:true}).click();
-  await editor.locator('.furniture-canvas .plan').click({position:{x:30,y:30},force:true});
+  await editor.locator('.furniture-canvas .plan').click({position:{x:30,y:30}});
   await expect.poll(async()=>(await counts())[0]).toBe(before[0]+2);
   await editor.getByRole('button',{name:'4. Lights & sensors',exact:true}).click();
   await editor.getByRole('button',{name:'Spotlight',exact:true}).click();await editor.getByRole('button',{name:'Place in centre',exact:true}).click();
-  await editor.getByRole('button',{name:'Pendant light',exact:true}).click();await editor.locator('.plan').click({position:{x:30,y:30},force:true});
+  await editor.getByRole('button',{name:'Pendant light',exact:true}).click();await editor.locator('.plan').click({position:{x:30,y:30}});
   await expect.poll(async()=>(await counts())[1]).toBe(before[1]+2);
   expect(errors).toEqual([]);
 });
