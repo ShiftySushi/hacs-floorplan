@@ -98,7 +98,6 @@ test('guided setup uploads a public SVG and places group members without YAML', 
 });
 
 test('large group lists are collapsed and selection controls stay separate',async({page,isMobile})=>{
-  await page.goto('/demo/');
   await page.evaluate(()=>{const card=document.querySelector('floorplan-card');const config=structuredClone(card.config);config.groups=Array.from({length:12},(_,i)=>({name:`Test group ${i+1}`,entities:['light.diner']}));card.groupsOpen=undefined;card.setConfig(config);});
   const card=page.locator('floorplan-card'),groups=card.locator('.group-section');
   await expect(groups).not.toHaveAttribute('open','');
@@ -118,7 +117,6 @@ test('large group lists are collapsed and selection controls stay separate',asyn
 });
 
 test('unconnected lights cannot send commands even if HA has a matching entity',async({page})=>{
-  await page.goto('/demo/');
   const count=await page.evaluate(async()=>{const card=document.querySelector('floorplan-card');const config=structuredClone(card.config);config.floors[0].entities[0].unbound=true;card.setConfig(config);let calls=0;card.hass={...card._hass,callService:async()=>{calls++;}};await card.control('on',undefined,['light.diner']);return calls;});
   expect(count).toBe(0);
   await expect(page.locator('floorplan-card').getByRole('button',{name:'light.diner: Not connected',exact:true})).toBeDisabled();
