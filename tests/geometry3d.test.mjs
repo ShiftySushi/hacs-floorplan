@@ -100,7 +100,7 @@ test('TV screen follows media activity rather than lighting or standby',()=>{
   assert.equal(tvIsOn(undefined),false);
   const model=furniture3D(CATALOGUE.find(item=>item.type==='tv'));assert.equal(model.children.filter(mesh=>mesh.userData.tvScreen).length,1);model.traverse(node=>{node.geometry?.dispose();node.material?.dispose();});
 });
-test('local TV programmes change every eight seconds and animate between changes',()=>{
-  const capture=time=>{const calls=[],context={};for(const method of ['save','scale','fillRect','beginPath','arc','fill','moveTo','lineTo','closePath','restore'])context[method]=(...args)=>{assert.ok(args.every(Number.isFinite));calls.push([method,context.fillStyle,...args]);};drawTVFrame(context,160,90,time);assert.equal(calls.at(-1)[0],'restore');return calls;};
+test('local TV films animate and cycle through twelve programmes',()=>{
+  const capture=time=>{const calls=[],context={};for(const method of ['createLinearGradient','createRadialGradient'])context[method]=()=>({addColorStop(){}});for(const method of ['save','scale','fillRect','beginPath','arc','fill','moveTo','lineTo','closePath','restore'])context[method]=(...args)=>{assert.ok(args.every(Number.isFinite));calls.push([method,context.fillStyle,...args]);};drawTVFrame(context,160,90,time);assert.equal(calls.at(-1)[0],'restore');return calls;};
   assert.notDeepEqual(capture(0),capture(1000));assert.notDeepEqual(capture(0),capture(8000));assert.notDeepEqual(capture(8000),capture(16000));
 });

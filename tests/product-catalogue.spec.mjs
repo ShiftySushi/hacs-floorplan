@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 test('search and place a measured product, change finish, rotate and restore dimensions',async({page})=>{
-  await page.goto('/demo/');await page.getByRole('button',{name:'Edit layout',exact:true}).click();
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');
   await editor.getByRole('button',{name:'3. Furniture',exact:true}).click();
   await editor.getByRole('button',{name:'Unlock editing',exact:true}).click();
@@ -37,7 +37,7 @@ test('search and place a measured product, change finish, rotate and restore dim
 });
 
 test('thin television preset remains valid and editable',async({page})=>{
-  await page.goto('/demo/');await page.getByRole('button',{name:'Edit layout',exact:true}).click();
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');
   await editor.getByRole('button',{name:'3. Furniture',exact:true}).click();
   await editor.getByRole('button',{name:'Unlock editing',exact:true}).click();

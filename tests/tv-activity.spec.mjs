@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 test('TV screen animates from media-player power independently of its light strip',async({page})=>{
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   await page.evaluate(()=>{const c=document.querySelector('floorplan-card'),config=structuredClone(c.config);config.floors[0].objects.push({id:'tv-test',type:'tv',x:50,y:50,width:1.44,depth:.15,height:.81,media_entity:'media_player.tv'});c.setConfig(config);c.hass={...c._hass,states:{...c._hass.states,'media_player.tv':{state:'playing',attributes:{}}}};});
   const card=page.locator('floorplan-card'),screen=card.locator('[data-tv-screen="tv-test"]');
   await expect(screen).toBeVisible();

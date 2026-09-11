@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 
 test('rendered light pools brighten locally, respect room boundaries and show RGB',async({page})=>{
   await page.emulateMedia({reducedMotion:'reduce'});
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   const result=await page.evaluate(async()=>{
     const card=document.querySelector('floorplan-card');
     card.setConfig({type:'custom:floorplan-card',floors:[{id:'test',name:'Test',aspect_ratio:1,width_m:10,depth_m:10,rooms:[{id:'a',name:'Room',points:[[0,0],[60,0],[60,100],[0,100]],lights:['light.a','light.b'],colour:'#cccccc'},{id:'b',name:'Neighbour',points:[[60,0],[100,0],[100,100],[60,100]],lights:['light.c'],colour:'#cccccc'}],entities:[{entity:'light.a',x:50,y:20,fixture:'spot'},{entity:'light.b',x:20,y:80,fixture:'spot'},{entity:'light.c',x:80,y:20}]}]});

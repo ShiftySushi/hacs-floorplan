@@ -25,7 +25,8 @@ if (history) {
 for (const { path, object } of files) {
   const licensedAsset = ['src/assets/kenney-furniture.json', 'src/assets/kenney-furniture-LICENSE.txt'].includes(path);
   const demoPreview = path === 'demo/preview.png'; // Reviewed capture of the public fictional demo only.
-  if (!allowed.test(path) && !licensedAsset && !demoPreview) { failures.add(`Not approved for publication: ${path}`); continue; }
+  const demoBoot = path === 'src/demo-boot.css'; // Public loading-screen styles.
+  if (!allowed.test(path) && !licensedAsset && !demoPreview && !demoBoot) { failures.add(`Not approved for publication: ${path}`); continue; }
   const content = git('show', object);
   if (/data:image\/[\w+.-]+;base64,[A-Za-z0-9+/=]{32,}/.test(content)) failures.add(`Embedded image data: ${path}`);
   if (/floorplans\/(?:originals|outlines|models)\//.test(content) && (path.startsWith('demo/') || path.startsWith('dist/'))) failures.add(`Private asset reference: ${path}`);

@@ -1,4 +1,4 @@
-import { element, button, field } from './dom.js';
+import { newId, element, button, field } from './dom.js';
 import { renderPlan } from './plan.js';
 import { floorDimensions } from './scene.js';
 export function structureSetup(host, floor) {
@@ -8,7 +8,7 @@ export function structureSetup(host, floor) {
   if (host.wallDrawing) root.append(element('p', { role: 'status', text: 'Tap the two ends of a wall.' }), button('Cancel wall', () => { host.wallDrawing = false; host.wallDraft = []; host.render(); }));
   root.append(renderPlan(floor, host._hass?.states || {}, { edit: true, draft: host.wallDraft || [], onPoint: point => {
     if (!host.wallDrawing) return; host.wallDraft.push(point);
-    if (host.wallDraft.length === 2) { const [a,b] = host.wallDraft; if (Math.hypot(a[0]-b[0],a[1]-b[1]) < .1) { host.error = 'Choose two different wall endpoints.'; host.wallDraft = []; host.render(); return; } const wall = { id: crypto.randomUUID(), a, b, thickness: .15, height: 2.4, openings: [] }; floor.walls.push(wall); host.wallId = wall.id; host.wallDraft = []; host.wallDrawing = false; host.emit(); } else host.render();
+    if (host.wallDraft.length === 2) { const [a,b] = host.wallDraft; if (Math.hypot(a[0]-b[0],a[1]-b[1]) < .1) { host.error = 'Choose two different wall endpoints.'; host.wallDraft = []; host.render(); return; } const wall = { id: newId(), a, b, thickness: .15, height: 2.4, openings: [] }; floor.walls.push(wall); host.wallId = wall.id; host.wallDraft = []; host.wallDrawing = false; host.emit(); } else host.render();
   } }));
   const select = element('select', { onchange: e => { host.wallId = e.target.value; host.render(); } }, [element('option', { value: '', text: 'Choose a wall…' })]);
   floor.walls.forEach((wall, i) => select.append(element('option', { value: wall.id, text: `Wall ${i+1}`, selected: host.wallId === wall.id })));
@@ -28,7 +28,7 @@ export function structureSetup(host, floor) {
     const intervals = wall.openings.map(o=>[o.offset*length-o.width/2,o.offset*length+o.width/2]).sort((a,b)=>a[0]-b[0]);
     const gaps=[];let end=0;for(const [start,next] of intervals){gaps.push([end,start]);end=next;}gaps.push([end,length]);gaps.sort((a,b)=>(b[1]-b[0])-(a[1]-a[0]));const gap=gaps[0];
     if(gap[1]-gap[0]<.15){host.error='There is no space for another opening on this wall. Adjust an existing opening first.';host.render();return;}
-    wall.openings.push({ id: crypto.randomUUID(), type, offset: (gap[0]+gap[1])/2/length, width: Math.min(type === 'door' ? .9 : 1.2,(gap[1]-gap[0])*.7), height: Math.min(type === 'door' ? 2.1 : 1.1,wall.height*.7), sill: type === 'door' ? 0 : wall.height*.2 }); host.emit();
+    wall.openings.push({ id: newId(), type, offset: (gap[0]+gap[1])/2/length, width: Math.min(type === 'door' ? .9 : 1.2,(gap[1]-gap[0])*.7), height: Math.min(type === 'door' ? 2.1 : 1.1,wall.height*.7), sill: type === 'door' ? 0 : wall.height*.2 }); host.emit();
   };
   root.append(element('div',{className:'row'},[button('Add door',()=>add('door')),button('Add window',()=>add('window'))])); return root;
 }

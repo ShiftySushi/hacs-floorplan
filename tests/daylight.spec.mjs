@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 test('stage fills the viewport with the selected palette and follows daylight in 2D and 3D',async({page})=>{
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   const card=page.locator('floorplan-card');
   const sun=async elevation=>page.evaluate(e=>{const c=document.querySelector('floorplan-card');c.hass={...c._hass,states:{...c._hass.states,'sun.sun':{state:e>0?'above_horizon':'below_horizon',attributes:{elevation:e}}}};},elevation);
   await card.getByRole('button',{name:'2D',exact:true}).click();await sun(-10);

@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 test('navigation remains below the plan when zooming and switching renderers',async({page})=>{
-  await page.goto('/demo/');const card=page.locator('floorplan-card');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));const card=page.locator('floorplan-card');
   for(const mode of ['2D','3D']){
     await card.getByRole('button',{name:mode,exact:true}).click();
     const dock=card.locator('.docked-navigation');await expect(dock).toBeVisible();

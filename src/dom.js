@@ -1,3 +1,5 @@
+// randomUUID requires HTTPS; local HTTP editors still provide getRandomValues.
+export const newId=()=>crypto.randomUUID?.()||Array.from(crypto.getRandomValues(new Uint32Array(4)),n=>n.toString(16).padStart(8,'0')).join('');
 export function element(tag, props = {}, children = []) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(props)) {

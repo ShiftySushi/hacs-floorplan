@@ -6,7 +6,7 @@ async function beginDelayedUpload(page) {
   const waitForRelease = new Promise(resolve => { release = resolve; });
   await page.route('**/api/image/upload', async route => { await waitForRelease; await route.fulfill({json:{id:'upload-test'}}); });
   await page.route('**/api/image/serve/upload-test/original', route => route.fulfill({path:'demo/sample.svg',contentType:'image/svg+xml'}));
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   await page.evaluate(() => { const editor=document.querySelector('floorplan-card-editor'); editor.hass={...editor._hass,fetchWithAuth:(url,options)=>fetch(url,options)}; });
   const editor=page.locator('floorplan-card-editor');

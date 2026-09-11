@@ -1,4 +1,4 @@
-import { element, button, field } from './dom.js';
+import { newId, element, button, field } from './dom.js';
 import { renderPlan } from './plan.js';
 import { icon } from './icons.js';
 import { validPolygon } from './rooms.js';
@@ -41,7 +41,7 @@ export function floorSetup(host,floor) {
   const root=element('div');
   root.append(field('Outdoor temperature entity',entitySelect(host,/^(sensor|climate)\./,host.config.outdoor_temperature_entity || '',id=>{host.config.outdoor_temperature_entity=id;host.emit();})));
   root.append(field('Card title',element('input',{value:host.config.title,onchange:e=>{host.config.title=e.target.value;host.emit();}})),element('p',{text:'Add each storey, choose an image, then rotate it to the way you view your home. Lights and rooms stay attached when you rotate.'}));
-  root.append(button('Add floor',()=>{host.config.floors.push({id:crypto.randomUUID(),name:`Floor ${host.config.floors.length+1}`,image:'',rotation:0,rooms:[],entities:[]});host.floorIndex=host.config.floors.length-1;host.emit();}));
+  root.append(button('Add floor',()=>{host.config.floors.push({id:newId(),name:`Floor ${host.config.floors.length+1}`,image:'',rotation:0,rooms:[],entities:[]});host.floorIndex=host.config.floors.length-1;host.emit();}));
   if(!floor)return root;
   root.append(field('Floor name',element('input',{value:floor.name || floor.id,onchange:e=>{floor.name=e.target.value;host.emit();}})));
   root.append(field('Choose floorplan image',element('input',{type:'file',accept:'image/png,image/jpeg,image/webp,image/svg+xml',disabled:!!host.uploading,onchange:async e=>{
@@ -108,7 +108,7 @@ export function roomSetup(host,floor) {
     root.append(element('div',{className:'row'},[button('Undo corner',()=>{host.draft.pop();host.render();},{disabled:!host.draft.length}),button('Finish room',()=>{
       if(!validPolygon(host.draft)){host.error='Use at least three corners without crossing edges.';host.render();return;}
       if(host.redraw && room)room.points=host.draft;
-      else{const r={id:crypto.randomUUID(),name:`Room ${floor.rooms.length+1}`,points:host.draft,lights:[],presence:[]};floor.rooms.push(r);host.roomId=r.id;}
+      else{const r={id:newId(),name:`Room ${floor.rooms.length+1}`,points:host.draft,lights:[],presence:[]};floor.rooms.push(r);host.roomId=r.id;}
       host.draft=[];host.drawing=false;host.emit();
     },{disabled:host.draft.length<3}),button('Cancel drawing',()=>{host.draft=[];host.drawing=false;host.render();})]));
     const coords=element('details',{},[element('summary',{text:'Place a corner using coordinates'})]);
@@ -143,7 +143,7 @@ export function entitySetup(host,floor) {
     if(host.pendingElement){
       const kind=host.pendingElement,domain=kind==='temperature'?'sensor':kind==='presence'?'binary_sensor':'light';
       const names={temperature:'Temperature',presence:'Presence',pendant:'Pendant light',spot:'Spotlight',bulb:'Light'};
-      const entity=`${domain}.floorplan_${crypto.randomUUID().replaceAll('-','')}`;
+      const entity=`${domain}.floorplan_${newId().replaceAll('-','')}`;
       floor.entities.push({entity,unbound:true,name:`${names[kind]} ${floor.entities.filter(e=>e.unbound).length+1}`,x:point[0],y:point[1],...(domain==='light'?{fixture:kind}:{})});
       const room=floor.rooms.find(r=>r.id===host.placementRoom);if(domain==='light'&&room)room.lights.push(entity);
       host.pendingElement='';host.pendingEntity=entity;host.emit();return;

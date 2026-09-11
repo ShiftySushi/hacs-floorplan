@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 for(const cutaway of [false,true])test(`solid walls block light and doorways transmit it (cutaway ${cutaway})`,async({page})=>{
-  await page.emulateMedia({reducedMotion:'reduce'});await page.goto('/demo/');
+  await page.emulateMedia({reducedMotion:'reduce'});await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   const errors=[];page.on('console',message=>{if(message.type()==='error')errors.push(message.text());});
   async function configure(open){await page.evaluate(({open,cutaway})=>{
     const c=document.querySelector('floorplan-card');

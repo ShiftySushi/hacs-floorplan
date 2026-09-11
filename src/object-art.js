@@ -19,10 +19,19 @@ export function objectArtwork(item, mode, width, depth) {
   const colour=item.colour || fabric;
   const panel=fill=>rect(inset,inset,width-2*inset,depth-2*inset,fill);
   const cabinet=['tv_bench','display_cabinet','bookshelf','fridge'].includes(item.type);
-  if(item.type==='wall_light'){panel(item.colour || '#262727');rect(width*.15,depth*.35,width*.7,depth*.45,'#eee9dc');
+  if(item.type==='pegboard'){
+    panel(item.colour || '#242628');for(let i=1;i<12;i++)line(width*i/12,depth*.3,width*i/12,depth*.7,'#7b939d');
+  }else if(item.type==='extractor_fan'){
+    panel(item.colour || white);for(let i=0;i<7;i++)line(width*.18,depth*(.23+i*.09),width*.82,depth*(.23+i*.09));
+  } else if(item.product_id?.startsWith('edifier-s1000db-')){
+    panel('#242527');rect(inset,inset,width*.08,depth-2*inset,'#a76934');rect(width*.87,inset,width*.08,depth-2*inset,'#a76934');line(width*.14,depth*.88,width*.86,depth*.88);
+  } else if(item.type==='printer_3d'){
+    panel(item.colour||edge);rect(width*.18,depth*.18,width*.64,depth*.61,'#bca776');
+    rect(width*.1,depth*.24,width*.8,depth*.07,edge);rect(width*.43,depth*.2,width*.14,depth*.2,'#eb792f');rect(width*.7,depth*.85,width*.22,depth*.1,'#80b8c1');
+  } else if(item.type==='wall_light'){panel(item.colour || '#262727');rect(width*.15,depth*.35,width*.7,depth*.45,'#eee9dc');
   } else if(item.type==='nanoleaf_panels') {
     const faceHeight=Math.max(depth,width*.35),{radius,centres}=panelArrangement(item,width,faceHeight);
-    for(const [index,[x,y]] of centres.entries())g.append(svgElement('polygon',{'data-panel-index':index,points:Array.from({length:6},(_,i)=>{const angle=(30+i*60)*Math.PI/180;return `${width/2+x+Math.cos(angle)*radius*.96},${depth/2+y+Math.sin(angle)*radius*.96}`;}).join(' '),fill:item.colour || white,'stroke-width':Math.max(.5,radius*.08)}));
+    for(const [index,[x,y]] of centres.entries())g.append(svgElement('polygon',{'data-panel-index':index,points:Array.from({length:6},(_,i)=>{const angle=(30+i*60)*Math.PI/180;return `${width/2+x+Math.cos(angle)*radius*.96},${depth/2+(y+Math.sin(angle)*radius*.96)*depth/faceHeight}`;}).join(' '),fill:item.colour || white,'stroke-width':Math.min(depth*.15,radius*.08)}));
   } else if(item.type==='tv_lightstrip') {
     // Top-down strip: a narrow bar behind the screen, within its physical footprint.
     rect(inset,depth*.25,width-inset*2,depth*.5,item.colour || '#d7b7ec',inset);
@@ -35,8 +44,10 @@ export function objectArtwork(item, mode, width, depth) {
     for(let i=0;i<fins;i++)line(inset*2+pitch*(i+.5),inset*2,inset*2+pitch*(i+.5),depth-inset*2);
     rect(0,depth*.32,inset*2,depth*.36,edge,0);rect(width-inset*2,depth*.32,inset*2,depth*.36,edge,0);
   } else if(item.type==='kitchen_unit') {
+    if(item.variant==='cooker'){panel('#303a3e');for(const x of [width*.28,width*.72])for(const y of [depth*.28,depth*.72])circle(x,y,unit*.13,'#98a4a8');}
+    else if(item.variant==='extractor'){panel('#aeb8bc');rect(width*.3,0,width*.4,depth*.45,'#839297');}
     // Adjacent cabinet runs share one continuous top; doors are below the surface.
-    if(item.variant==='wall')g.append(svgElement('rect',{x:0,y:0,width,height:depth,fill:item.colour || wood,'fill-opacity':.3,stroke:edge,'stroke-dasharray':`${inset} ${inset}`}));
+    else if(item.variant==='wall')g.append(svgElement('rect',{x:0,y:0,width,height:depth,fill:item.colour || wood,'fill-opacity':.3,stroke:edge,'stroke-dasharray':`${inset} ${inset}`}));
     else g.append(svgElement('rect',{x:0,y:0,width,height:depth,fill:item.worktop_colour || item.colour || wood,stroke:'none'}));
   } else if(cabinet) {
     panel(item.colour || (item.type==='fridge'?white:wood));

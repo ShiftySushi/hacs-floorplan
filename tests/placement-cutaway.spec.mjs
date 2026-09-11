@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 test('place lights over furniture, assign a room, move and undo',async({page})=>{
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');
   await editor.getByRole('button',{name:'4. Lights & sensors',exact:true}).click();
@@ -23,7 +23,7 @@ test('place lights over furniture, assign a room, move and undo',async({page})=>
 });
 
 test('cutaway walls fade through intermediate opacity and settle',async({page})=>{
-  await page.goto('/demo/');const card=page.locator('floorplan-card');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));const card=page.locator('floorplan-card');
   await card.getByRole('button',{name:'3D',exact:true}).click();
   const plan=card.locator('.plan');
   await expect(plan).toHaveAttribute('data-wall-opacities',/.+/);

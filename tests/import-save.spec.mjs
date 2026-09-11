@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 
 test('large TV stills and framed artwork store compactly and re-export with their images',async({page})=>{
-  await page.goto('/demo/');await page.getByRole('button',{name:'Edit layout',exact:true}).click();
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');
   const result=await editor.evaluate(async el=>{
     const config=structuredClone(el.config),canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;
@@ -36,7 +36,7 @@ test('large TV stills and framed artwork store compactly and re-export with thei
 });
 
 test('HA import stores artwork before emitting a compact, reloadable configuration',async({page})=>{
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');
   const result=await editor.evaluate(async el=>{
@@ -69,7 +69,7 @@ test('HA import stores artwork before emitting a compact, reloadable configurati
 });
 
 test('failed HA artwork upload preserves the previous configuration and emits nothing',async({page})=>{
-  await page.goto('/demo/');await page.getByRole('button',{name:'Edit layout',exact:true}).click();
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');
   const result=await editor.evaluate(async el=>{
     const before=JSON.stringify(el.config),next=structuredClone(el.config);

@@ -3,12 +3,12 @@ export const furnitureStyles = `
 .furniture-header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0}
 .furniture-header p{margin:0;font-size:12px;color:var(--secondary-text-color,#607078);line-height:1.5}
 .furniture-header button{flex-shrink:0;font-size:12px}
-.furniture-workspace{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:0;align-items:stretch;border:1px solid var(--fp-line);border-radius:12px;overflow:hidden}
-.furniture-canvas{min-width:0;padding:16px;background:var(--fp-soft);display:flex;flex-direction:column;align-items:center}
+.furniture-workspace{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:0;align-items:stretch;border:1px solid var(--fp-line);border-radius:12px;overflow:clip}
+.furniture-canvas{position:sticky;top:16px;align-self:start;min-width:0;padding:16px;background:var(--fp-soft);display:flex;flex-direction:column;align-items:center}
 .furniture-canvas .plan{margin:0 auto;width:100%;max-width:none;background:transparent;border-radius:0}
-.furniture-canvas>.row{justify-content:center;gap:4px;margin-top:10px}
+.furniture-canvas>.row{justify-content:center;gap:8px;margin:12px 0}.furniture-panel>.row{gap:8px;margin-bottom:16px}
 .furniture-canvas>.row button{min-width:36px;min-height:36px;padding:6px 9px}
-.furniture-panel{min-width:0;padding:16px;border-left:1px solid var(--fp-line);max-height:calc(100dvh - 320px);overflow:auto;scrollbar-gutter:stable}
+.furniture-panel{min-width:0;padding:16px;border-left:1px solid var(--fp-line)}
 .furniture-panel>details{margin:0 0 16px;border-top:0;padding:0;border-bottom:1px solid var(--fp-line);padding-bottom:12px}
 .furniture-panel summary{font-weight:650;min-height:0;padding:4px 0 10px}
 .furniture-panel label{font-size:12px;margin:12px 0}
@@ -41,8 +41,8 @@ export const furnitureStyles = `
 .furniture-panel [data-object-tools]:focus{outline:2px solid var(--fp-accent);outline-offset:3px}
 @container(max-width:760px){
  .furniture-workspace{grid-template-columns:1fr}
- .furniture-canvas{padding:12px}
- .furniture-panel{border-left:0;border-top:1px solid var(--fp-line);max-height:none;overflow:visible;display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
+ .furniture-canvas{position:static;padding:12px}
+ .furniture-panel{border-left:0;border-top:1px solid var(--fp-line);display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
  .furniture-panel>details,.furniture-panel>.object-inspector,.furniture-panel>.muted{grid-column:1/-1}
  .furniture-panel .furniture-palette{grid-template-columns:repeat(5,minmax(0,1fr));max-height:180px}
  .furniture-panel>label,.furniture-actions{margin:0;align-self:start}

@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 
 test('hover smoothly restores the manual camera without saving the idle angle',async({page})=>{
   test.setTimeout(45000);
-  await page.goto('/demo/');const card=page.locator('floorplan-card');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));const card=page.locator('floorplan-card');
   await card.getByRole('button',{name:'3D',exact:true}).click();
   const plan=card.locator('.plan'),canvas=card.locator('canvas').first();
   await card.locator('.display-settings summary').click();

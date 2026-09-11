@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 test('presence and temperature tints update independently with an outdoor readout',async({page})=>{
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   await page.evaluate(()=>{const c=document.querySelector('floorplan-card'),config=structuredClone(c.config);config.outdoor_temperature_entity='sensor.outdoor';config.floors[0].rooms[0].temperature_entity='sensor.indoor';config.floors[0].rooms[0].presence=['binary_sensor.occupancy'];c.setConfig(config);c.hass={...c._hass,states:{...c._hass.states,'sensor.outdoor':{state:'10',attributes:{unit_of_measurement:'°C'}},'sensor.indoor':{state:'26',attributes:{unit_of_measurement:'°C'}},'binary_sensor.occupancy':{state:'on'}}};});
   const card=page.locator('floorplan-card');
   await expect(card.locator('.temperature-marker.occupied.temp-warm')).toBeVisible();
@@ -12,7 +12,7 @@ test('presence and temperature tints update independently with an outdoor readou
   await expect(card.locator('.temperature-marker.temp-cool')).toBeVisible();
 });
 test('radiator and room bindings are configurable without YAML',async({page})=>{
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   await page.evaluate(()=>{const e=document.querySelector('floorplan-card-editor');e.hass={...e._hass,states:{...e._hass.states,'climate.room':{state:'heat',attributes:{friendly_name:'Room heating',hvac_action:'idle'}}}};});
   await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');
@@ -28,7 +28,7 @@ test('radiator and room bindings are configurable without YAML',async({page})=>{
   expect(config.floors[0].rooms[0].temperature_entity).toBe('sensor.temperature');
 });
 test('room temperature and radiator status follow entities and expose HA controls',async({page})=>{
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   await page.evaluate(()=>{
     const card=document.querySelector('floorplan-card');
     const config=structuredClone(card.config),floor=config.floors[0];floor.rooms[0].temperature_entity='sensor.room_temperature';floor.objects.push({id:'radiator-test',type:'radiator',x:12,y:30,width:1,depth:.12,height:.6,heating_entity:'climate.room'});card.setConfig(config);

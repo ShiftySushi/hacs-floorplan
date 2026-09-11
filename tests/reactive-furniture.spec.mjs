@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 test('a decorative light can be placed, raised and connected in the furniture editor',async({page})=>{
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');
   await editor.getByRole('button',{name:'Unlock editing',exact:true}).click();

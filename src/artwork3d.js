@@ -8,7 +8,7 @@ export function artwork3D(object,model,view,key,changed){
   texture.colorSpace=SRGBColorSpace;
   model.traverse(n=>{if(n.userData.artwork){n.material.map=texture;n.material.color.set('#ffffff');}});
   const scale=model.scale.clone(),base=model.position.y;
-  let current,loaded,serial=0,disposed=false;
+  let current,loaded,serial=0,disposed=false,lastStates={};
   function paint(){
     const portrait=!!view.portraits?.[key],w=portrait?object.height:object.width,h=portrait?object.width:object.height;
     model.scale.set(scale.x*w/object.width,scale.y*h/object.height,scale.z);model.position.y=base+(object.height-h)/2;
@@ -17,11 +17,15 @@ export function artwork3D(object,model,view,key,changed){
     texture.needsUpdate=true;
   }
   function update(states){
-    const url=artworkURL(object,states);if(url===current)return;current=url;const request=++serial;
+    lastStates=states;
+    const portrait=view.portraits?.[key]?object.width>object.height:object.height>object.width;
+    const fallback=safeArtwork(portrait?object.artwork_portrait_image:object.artwork_image);
+    const url=(object.artwork_portrait_image&&fallback)||artworkURL(object,states);if(url===current)return;current=url;const request=++serial;
+    loaded=null;paint();
     if(!url){loaded=null;paint();return;}
     const load=(src,fallback)=>{const image=new Image();image.crossOrigin='anonymous';image.onload=()=>{if(disposed||request!==serial)return;loaded=image;paint();changed();};image.onerror=()=>{if(disposed||request!==serial)return;if(fallback&&fallback!==src)load(fallback,'');else{loaded=null;paint();changed();}};image.src=src;};
-    load(url,safeArtwork(object.artwork_image));
+    load(url,fallback||safeArtwork(object.artwork_image));
   }
   paint();
-  return {model,update,toggle(){view.portraits ??={};view.portraits[key]=!view.portraits[key];paint();changed();},dispose(){disposed=true;serial++;texture.dispose();}};
+  return {model,update,toggle(){view.portraits ??={};view.portraits[key]=!view.portraits[key];paint();update(lastStates);changed();},dispose(){disposed=true;serial++;texture.dispose();}};
 }
