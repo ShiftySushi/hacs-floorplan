@@ -17,7 +17,7 @@ test('information stays visible, updates independently, and exterior returns to 
   await card.getByRole('button',{name:'Exterior',exact:true}).click();
   await expect.poll(()=>card.locator('.plan-3d').getAttribute('data-fitted-bounds')).not.toBeNull();
   const bounds=await card.locator('.plan-3d').evaluate(el=>JSON.parse(el.dataset.fittedBounds));expect(bounds.flat().every(Number.isFinite)).toBe(true);
-  await page.screenshot({path:`/private/tmp/floorplan-information-exterior-${info.project.name}.png`});
+  await page.screenshot({path:info.outputPath('information-exterior.png')});
   const panel=await card.locator('.information-panel').boundingBox();expect(panel.x).toBeGreaterThanOrEqual(0);expect(panel.x+panel.width).toBeLessThanOrEqual(page.viewportSize().width);
   await card.locator('.information-panel summary').click();await expect(card.locator('.information-item').first()).toBeHidden();
   await card.getByRole('button',{name:'Exterior',exact:true}).click();

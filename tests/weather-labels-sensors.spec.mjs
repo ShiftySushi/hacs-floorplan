@@ -21,7 +21,7 @@ test('weather, sensor mounting and combined labels work through the editor and l
   await editor.getByLabel('Label X (%)',{exact:true}).fill('45');await editor.getByLabel('Label X (%)',{exact:true}).blur();
   await expect(card.locator('.entity-label')).toContainText('450 W');
   await expect(card.locator('.entity-label')).toContainText('locked');
-  await page.screenshot({path:`/private/tmp/label-editor-${info.project.name}.png`});
+  await page.screenshot({path:info.outputPath('label-editor.png')});
   await editor.getByRole('button',{name:'3. Furniture',exact:true}).click();
   await editor.getByRole('button',{name:'Unlock editing',exact:true}).click();
   await editor.getByLabel('Find furniture',{exact:true}).fill('Everything Presence Pro');
@@ -37,7 +37,7 @@ test('weather, sensor mounting and combined labels work through the editor and l
   await card.evaluate(el=>{el.__canvas=el.plan.querySelector('canvas');el.hass={...el._hass,states:{...el._hass.states,'sensor.energy':{state:'720',attributes:{friendly_name:'Energy',unit_of_measurement:'W'}}}};});
   await expect(card.locator('.entity-label')).toContainText('720 W');expect(await card.evaluate(el=>el.__canvas===el.plan.querySelector('canvas'))).toBe(true);
   expect(await card.locator('.entity-label').evaluate(node=>node.scrollHeight<=node.clientHeight+2)).toBe(true);
-  await page.screenshot({path:`/private/tmp/weather-labels-${info.project.name}.png`});
+  await page.screenshot({path:info.outputPath('weather-labels.png')});
   await card.evaluate(el=>{el.__opened='';el.addEventListener('hass-more-info',e=>el.__opened=e.detail.entityId,{once:true});});
   await card.getByRole('button',{name:'Front lock: locked',exact:true}).click();expect(await card.evaluate(el=>el.__opened)).toBe('lock.example');
   expect(errors).toEqual([]);
@@ -53,6 +53,6 @@ test('weather changes render in exterior without rebuilding the canvas',async({p
     await card.evaluate((el,state)=>{el.hass={...el._hass,states:{...el._hass.states,'weather.example':{state,attributes:{}}}};},condition);
     await expect(card.locator('.plan-3d')).toHaveAttribute('data-fitted-bounds',/.+/);
     expect(await card.evaluate(el=>el.__canvas===el.plan.querySelector('canvas'))).toBe(true);
-    if(condition==='snowy')await page.screenshot({path:`/private/tmp/weather-exterior-${info.project.name}.png`});
+    if(condition==='snowy')await page.screenshot({path:info.outputPath('weather-exterior.png')});
   }
 });
