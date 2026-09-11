@@ -1,6 +1,7 @@
 import { newId, element, button, field } from './dom.js';
 import { renderPlan } from './plan.js';
 import { floorDimensions } from './scene.js';
+import {liveFields} from './live-fields.js';
 export function structureSetup(host, floor) {
   floor.walls ??= [];
   const root = element('details', { open: !!host.wallDrawing || !!host.wallId }, [element('summary', { text: 'Walls, doors and windows for 3D' }), element('p', { text: 'Trace each shared wall once. Add doors and windows to its inspector. Set the scale in Floors first; opening sizes are in metres.' })]);
@@ -20,6 +21,7 @@ export function structureSetup(host, floor) {
   box.append(button('Remove wall', () => { floor.walls = floor.walls.filter(item => item !== wall);for(const item of floor.objects || [])if(item.mount?.wall_id===wall.id)delete item.mount;host.wallId = ''; host.emit(); })); root.append(box);
   for (const opening of wall.openings || []) {
     const pane = element('fieldset', {}, [element('legend', { text: opening.type === 'door' ? 'Door' : 'Window' })]);
+    if(opening.type==='door')pane.append(...liveFields(host,opening,[['contact_entity','Door contact','binary_sensor'],['lock_entity','Door lock','lock']]));
     pane.append(number(opening,'offset','Position along wall (0–1)',0,1,.01),number(opening,'width','Opening width (metres)',.1,20),number(opening,'height','Opening height (metres)',.1,10),number(opening,'sill','Sill height (metres)',0,10),button('Remove opening',()=>{wall.openings=wall.openings.filter(item=>item!==opening);host.emit();}));root.append(pane);
   }
   const add = type => {

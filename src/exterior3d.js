@@ -99,6 +99,11 @@ export function exterior3D(config,states={}){
       }
     }
     node.name=item.id;node.userData.exterior=true;
+    if(item.type==='car'){
+      node.userData.vehicle=true;
+      const chargingGlow=new THREE.PointLight('#4be3a4',0,3);chargingGlow.position.set(0,.25,0);node.add(chargingGlow);
+      updates.push(next=>{const location=next[item.presence_entity],heading=location?.attributes?.heading;node.visible=!item.presence_entity||location?.state==='home';if(item.presence_entity&&Number.isFinite(Number(heading))&&heading!==null&&heading!==undefined)node.rotation.y=Number(heading)*Math.PI/180;chargingGlow.intensity=next[item.charging_entity]?.state==='on'?2:0;node.userData.charging=chargingGlow.intensity>0;});
+    }
   }
   group.updateStates=next=>updates.forEach(update=>update(next));group.updateStates(states);
   return group;

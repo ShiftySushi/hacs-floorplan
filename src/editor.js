@@ -40,14 +40,22 @@ export class FloorplanEditor extends HTMLElement {
   }
   async importScene(file) {
     if(!file||this.importing)return;
-    this.importing=true;this.error='';this.transferMessage='Preparing import and storing artwork…';this.render();
+    if(this.uploading||this.uploadingStyle){this.error='Wait for the current image upload to finish before replacing the configuration.';this.render();return;}
+    this.importing=true;this.transferOpen=true;this.error='';this.transferMessage='Preparing replacement and storing artwork…';
     try{
+      this.render();
       if(file.size>32*1024*1024)throw Error('Choose a configuration smaller than 32 MB.');
       const raw=JSON.parse(await file.text());
       if(!raw||typeof raw!=='object'||Array.isArray(raw)||!Array.isArray(raw.floors))throw Error('Choose an exported floorplan configuration.');
       const imported=await prepareImportedConfig(normaliseConfig(raw),this._hass);
-      this.config=imported;this.floorIndex=0;this.selectedObject='';this.roomId='';this.wallId='';this.pendingEntity='';this.pendingElement='';this.pendingObject='';this.draft=[];this.drawing=false;
-      this.transferMessage=`Imported ${imported.floors.length} floors and ${imported.groups.length} groups. Review the assignments, then use Home Assistant’s Save button.`;
+      // All scene-relative editor state belongs to the old configuration. Keep
+      // history so the complete replacement can be undone, but no stale tools.
+      this.config=imported;this.floorIndex=0;this.step=0;
+      for(const key of ['selectedObject','roomId','wallId','labelId','placementRoom','pendingEntity','pendingElement','pendingObject','resizeObject','spriteArtworkId'])this[key]='';
+      for(const key of ['drawing','redraw','wallDrawing','calibrating','removingFloor','furnitureUnlocked','labelEditing'])this[key]=false;
+      for(const key of ['draft','wallDraft','calibrationPoints'])this[key]=[];
+      this.furnitureViews=new Map();this.furniture3DViews=new Map();this.roomLiveOpen={};this.exteriorLiveOpen=false;
+      this.transferMessage=`Imported ${imported.floors.length} floor${imported.floors.length===1?'':'s'} and ${imported.groups.length} group${imported.groups.length===1?'':'s'}. Review the assignments, then use Home Assistant’s Save button.`;
       this.importing=false;this.emit();
     }catch(error){this.importing=false;this.transferMessage='';this.error=`Configuration was not imported: ${error.message}`;this.render();}
   }
@@ -73,6 +81,7 @@ export class FloorplanEditor extends HTMLElement {
     const steps = ['Floors', 'Rooms', 'Furniture', 'Lights & sensors', 'Groups', 'Review'];
     const stepIcons = ['floor','grid','sofa','bulb','group','check'];
     root.append(element('div',{className:'editor-heading'},[element('h2',{text:'Layout studio'}),element('p', { className: 'muted', text: `${steps[this.step]} · ${this.step + 1} / 6` }),button('Import / export',()=>{this.transferOpen=!this.transferOpen;this.render();},{'aria-expanded':String(!!this.transferOpen),'aria-controls':'configuration-transfer',className:'transfer-toggle'})]));
+    if(this.importing){root.append(element('p',{role:'status',text:this.transferMessage}));this.disposePlans();this.shadowRoot.replaceChildren(element('style',{text:styles}),root);return;}
     const nav = element('nav', { className: 'row', 'aria-label': 'Setup steps' });
     steps.forEach((step,i) => { const item = button(`${i + 1}. ${step}`, () => { this.step = i; this.render(); }, { 'aria-pressed': String(i === this.step) }); item.prepend(icon(stepIcons[i])); nav.append(item); });
     root.append(nav);
@@ -112,11 +121,11 @@ export class FloorplanEditor extends HTMLElement {
       for(const f of this.config.floors) for(const r of f.rooms) if(!r.lights.length || !r.presence.length) root.append(element('p',{className:'muted',text:`${r.name}: ${!r.lights.length?'assign lights to show lit/dark state. ':''}${!r.presence.length?'Presence is optional and has not been assigned.':''}`}));
       root.append(element('p',{text:'Tap a light, room or group to toggle power. Use Adjust or Select lights for brightness and colour; controls only affect compatible, available lights.'}));
     }
-    const transfer=element('section',{id:'configuration-transfer',className:'configuration-transfer',hidden:!this.transferOpen,'aria-label':'Full configuration transfer'},[element('h3',{text:'Move your configuration between environments'}),element('p',{text:'One JSON file contains all floors and embedded images, rooms, walls, furniture, light and sensor assignments, heating controls, groups and appearance settings. Keep it private; nothing needs to be committed to Git.'})]);
-    const exportPanel=element('div',{},[element('h4',{text:'Export from dev'}),element('p',{text:'Download the complete configuration for this card. Live entity states and Home Assistant credentials are not included.'}),button(this.exporting?'Preparing export…':'Export full configuration',()=>this.exportScene(),{disabled:!!this.exporting})]);
-    const importPanel=element('div',{},[element('h4',{text:'Import into production'}),element('p',{text:'Install the same or a newer card version, then choose the file here. Import replaces this card’s configuration; Undo restores it. Check entity IDs for the destination and use Home Assistant’s Save button.'})]);
+    const transfer=element('section',{id:'configuration-transfer',className:'configuration-transfer',hidden:!this.transferOpen,'aria-label':'Full configuration transfer'},[element('h3',{text:'Import or export a configuration'}),element('p',{text:'Transfer a complete floorplan as JSON. Files include artwork and entity IDs; keep them private.'})]);
+    const exportPanel=element('div',{},[element('h4',{text:'Export current configuration'}),element('p',{text:'Download everything in this card as one JSON file.'}),button(this.exporting?'Preparing export…':'Export full configuration',()=>this.exportScene(),{disabled:!!this.exporting})]);
+    const importPanel=element('div',{},[element('h4',{text:'Replace current configuration'}),element('p',{text:'Upload JSON to replace all items and settings. Undo restores the previous configuration. After importing, use Home Assistant’s Save button.'})]);
     importPanel.append(field('Import configuration JSON',element('input',{type:'file',accept:'.json,application/json',disabled:!!this.importing,onchange:e=>this.importScene(e.target.files?.[0])})));
-    transfer.append(element('div',{className:'transfer-columns'},[exportPanel,importPanel]));
+    transfer.append(element('div',{className:'transfer-columns'},[importPanel,exportPanel]));
     if(this.transferMessage)transfer.append(element('p',{role:'status',text:this.transferMessage}));
     root.querySelector('.editor-heading').after(transfer);
     if(this.error) root.append(element('p',{className:'error',role:'alert',text:this.error}));

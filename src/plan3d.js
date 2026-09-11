@@ -17,6 +17,8 @@ import { element, button } from './dom.js';
 import { floorDimensions } from './scene.js';
 import { roomLightSources, lightAppearance } from './illumination.js';
 import { heatingState } from './heating.js';
+import {radiatorEntity,doorState} from './live-data.js';
+import {updatePrinter3D} from './printers3d.js';
 import { blendAppearance, panelFrame } from './light-animation.js';
 import { daylightLevel } from './daylight.js';
 import {weather3D} from './weather3d.js';
@@ -108,7 +110,7 @@ export function render3D(floor, states, options = {}) {
   renderer.domElement.title='Click lights; drag to orbit.';
   const ambient=new THREE.HemisphereLight('#fff6e8','#6f8291',2);scene.add(ambient);
   const sun=new THREE.DirectionalLight('#fff3de',2.2);sun.position.set(-span,span*2,span);sun.castShadow=options.quality!=='low';sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-span,right:span,top:span,bottom:-span,far:span*5});sun.shadow.normalBias=.04;scene.add(sun);
-  const doors=[],skirtings=[],blinds=[],windows=[],roomMeshes=[],lightMeshes=[],wallMeshes=[],storeyLabels=[],radiators=[],reactiveObjects=[],fixtures=[],televisions=[];
+  const doors=[],skirtings=[],blinds=[],windows=[],roomMeshes=[],lightMeshes=[],wallMeshes=[],storeyLabels=[],radiators=[],reactiveObjects=[],fixtures=[],televisions=[],printers=[];
   const boards=document.createElement('canvas');boards.width=128;boards.height=128;
   // Neutral grain preserves the chosen finish; coloured grain turns grey wood brown.
   const ink=boards.getContext('2d');ink.fillStyle='#f5f5f5';ink.fillRect(0,0,128,128);
@@ -173,8 +175,8 @@ export function render3D(floor, states, options = {}) {
     pieces.push(...wardrobeDoors(group,wall,length));
     for(const opening of wall.openings || []){
       const key=JSON.stringify([floor.id,wall.sourceWallId||wall.id,opening.id]);options.viewState ||= {};options.viewState.doors ||= {};
-      const framed=openingFrame(group,opening,length,{open:options.viewState.doors[key],onChange:open=>{options.viewState.doors[key]=open;options.onViewChange?.();schedule();}});pieces.push(...framed);
-      if(framed.door){doors.push(framed.door);windows.push({floor,room:windowRoom(opening,wall,floor),area:opening.width*opening.height,get transmission(){return framed.door.transmission;}});}
+      const framed=openingFrame(group,{...opening,frame:opening.frame||(opening.contact_entity?'solid':undefined)},length,{open:options.viewState.doors[key],onChange:open=>{if(!opening.contact_entity){options.viewState.doors[key]=open;options.onViewChange?.();}schedule();}});pieces.push(...framed);
+      if(framed.door){framed.door.binding=opening;doors.push(framed.door);windows.push({floor,room:windowRoom(opening,wall,floor),area:opening.width*opening.height,get transmission(){return framed.door.transmission;}});}
       if(framed.door&&opening.outside_lights?.length){const glow=new THREE.PointLight('#ffe7be',0,3,2);glow.position.set(length*opening.offset,1.1,0);group.add(glow);framed.door.outside={glow,ids:opening.outside_lights};}
     }
     // A doorway/window splits geometry, not the wall's cutaway decision.
@@ -206,14 +208,15 @@ export function render3D(floor, states, options = {}) {
     sims?.furniture(model);
     if(options.hideLightFixtures&&['lamp','wall_light','nanoleaf_panels','tv_lightstrip'].includes(object.type))model.visible=false;
     if(options.hideExtractionFans&&object.type==='extractor_fan')model.visible=false;
-    if(!isPresenceSensor(object)&&!object.light_entity&&!object.pattern_entity&&!['tv','picture','radiator'].includes(object.type))batchStaticModel(model);
+    if(!isPresenceSensor(object)&&!object.light_entity&&!object.pattern_entity&&!['tv','picture','radiator','printer_3d'].includes(object.type))batchStaticModel(model);
+    if(object.type==='printer_3d'&&object.status_entity)printers.push({object,model});
     if(object.type==='picture')artworks.push(artwork3D(object,model,options.viewState ||= {},`${floor.id}:${object.id}`,schedule));
     if(object.type==='tv'&&object.media_entity){const canvas=document.createElement('canvas');canvas.width=480;canvas.height=270;const context=canvas.getContext('2d',{willReadFrequently:true}),texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.generateMipmaps=false;texture.minFilter=THREE.LinearFilter;
       const screens=[];model.traverse(node=>{if(node.userData.tvScreen){node.material.map=texture;node.material.emissiveMap=texture;node.material.color.set('#ffffff');node.material.emissive.set('#ffffff');screens.push(node);}});const tv={object,canvas,context,texture,screens,lastFrame:-1,started:performance.now()};tv.slides=tvSlideshow(object.tv_scenes,()=>{tv.lastFrame=-1;schedule();});if(tv.slides.count)tv.timer=setInterval(schedule,300000);televisions.push(tv);
     }
     if(object.light_entity||object.pattern_entity){reactiveObjects.push({object,model});if(object.light_entity)model.userData.lightTarget={floorId:floor.id,id:object.light_entity};}
     if(object.type==='radiator'){
-      const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:textures.heat,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));glow.position.set(0,(object.height || .6)/2,0);glow.scale.set((object.width || 1)*1.5,(object.height || .6)*2,1);model.add(glow);radiators.push({object,model,glow});
+      const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:textures.heat,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));glow.position.set(0,(object.height || .6)/2,0);glow.scale.set((object.width || 1)*1.5,(object.height || .6)*2,1);model.add(glow);radiators.push({object,model,glow,floor});
     }
   }
   }
@@ -295,7 +298,7 @@ export function render3D(floor, states, options = {}) {
     for(const door of doors)door.setVisible(!hideWalls);
     for(const mesh of skirtings)mesh.visible=!hideWalls;for(const blind of blinds)blind.hit.visible=!hideWalls;
     plan.dataset.wallOpacities=JSON.stringify(wallMeshes.map(mesh=>mesh.material.opacity));
-    for(const marker of markers){const space=markerSpaces.get(marker.floorId || floor.id);if(!space)continue;const height=marker.height ?? (marker.entity?.startsWith('light.')?sourceFor(space.floor,marker.entity)?.height ?? 2.1:.35);const p=space.position([marker.x,marker.y],height).applyMatrix4(space.group.matrixWorld).project(camera);marker.node.style.left=`${(p.x*.5+.5)*100}%`;marker.node.style.top=`${(-p.y*.5+.5)*100}%`;}
+    for(const marker of markers){const space=markerSpaces.get(marker.floorId || floor.id);if(!space&&!marker.world)continue;const height=marker.height ?? (marker.entity?.startsWith('light.')?sourceFor(space.floor,marker.entity)?.height ?? 2.1:.35);const p=(marker.world?new THREE.Vector3(...marker.world).applyMatrix4(world.matrixWorld):space.position([marker.x,marker.y],height).applyMatrix4(space.group.matrixWorld)).project(camera);marker.node.style.left=`${(p.x*.5+.5)*100}%`;marker.node.style.top=`${(-p.y*.5+.5)*100}%`;}
     for(const label of storeyLabels){label.node.hidden=!!options.hideOverlays;const p=label.point.clone().applyMatrix4(label.group.matrixWorld).project(camera);label.node.style.left=`${(p.x*.5+.5)*100}%`;label.node.style.top=`${(-p.y*.5+.5)*100}%`;}
     const blindsMoving=[...blinds,...doors].map(b=>b.update(now,reducedMotion)).some(Boolean);
     const closed=blinds.filter(b=>b.closed).length;
@@ -309,11 +312,15 @@ export function render3D(floor, states, options = {}) {
   function sample(id,now){const entry=transitions.get(id);if(!entry)return lightAppearance(states[id]);return blendAppearance(entry.from,entry.to,reducedMotion?1:(now-entry.start)/600);}
   function present(now){
     exteriorScene?.updateStates(states);
+    if(exteriorScene)plan.dataset.vehicleStates=JSON.stringify(exteriorScene.children.filter(n=>n.userData.vehicle).map(n=>({visible:n.visible,charging:n.userData.charging,heading:n.rotation.y})));
     for(const {object,model} of presenceModels){const active=object.presence_entities?.some(id=>states[id]?.state==='on');model.traverse(node=>{if(node.userData.presenceLED){node.material.color.set(active?'#57c7a0':'#576873');node.material.emissive.set(active?'#269f72':'#000000');}});}
     for(const door of doors)if(door.outside){const {glow,ids}=door.outside;let level=0;glow.color.setRGB(0,0,0);for(const id of ids){const a=lightAppearance(states[id]);level+=a.level;glow.color.add(new THREE.Color().setRGB(...a.colour.map(v=>v/255)).multiplyScalar(a.level));}if(level)glow.color.multiplyScalar(1/level);glow.intensity=Math.min(4,level*2)*door.transmission;}
     let animate=weatherScene.update(states,options.weather || {enabled:false},now,reducedMotion);const visualStates={...states};
     for(const id of assignedIds){const appearance=sample(id,now),entry=transitions.get(id);if(entry&&!reducedMotion&&now-entry.start<600)animate=true;visualStates[id]={...states[id],state:appearance.level>0?'on':states[id]?.state || 'off',attributes:{...states[id]?.attributes,brightness:appearance.level*255,color_mode:'rgb',rgb_color:appearance.colour}};}
-    for(const {object,model,glow} of radiators){model.visible=!options.hideRadiators;const active=heatingState(states[object.heating_entity])==='heating';glow.visible=active;model.traverse(node=>{if(node.material?.emissive){node.material.emissive.set(active?'#f34b24':'#000000');node.material.emissiveIntensity=active?.7:0;}});}
+    for(const {object,model,glow,floor} of radiators){model.visible=!options.hideRadiators;const active=heatingState(states[radiatorEntity(object,floor)])==='heating';glow.visible=active;model.traverse(node=>{if(node.material?.emissive){node.material.emissive.set(active?'#f34b24':'#000000');node.material.emissiveIntensity=active?.7:0;}});}
+    for(const {model,object} of printers)animate=updatePrinter3D(model,object,states,now,reducedMotion)||animate;
+    plan.dataset.printerStates=JSON.stringify(printers.map(p=>p.model.userData.printerStatus));
+    for(const door of doors)if(door.binding.contact_entity){const status=doorState(door.binding,states);if(status!=='Unknown'&&door.open!==(status==='Open')){door.toggle();animate=true;}}
     for(const tv of televisions){const on=tvIsOn(states[tv.object.media_entity]),time=tv.slides.count?now-tv.started:(reducedMotion?0:now)+(tv.manualTime||0),fade=reducedMotion?1:Math.min(1,(now-(tv.fadeStart||0))/1400),bucket=on?(tv.slides.count&&fade===1?tvSceneIndex(time,tv.slides.count):Math.floor(time/100)):-2;if(on&&!reducedMotion&&(!tv.slides.count||fade<1))animate=true;
       if(tv.lastFrame!==bucket){tv.lastFrame=bucket;if(on)(tv.slides.count?tv.slides.draw:drawTVFrame)(tv.context,tv.canvas.width,tv.canvas.height,time);else{tv.context.fillStyle='#080e14';tv.context.fillRect(0,0,tv.canvas.width,tv.canvas.height);}tv.texture.needsUpdate=true;
         if(on&&fade<1&&tv.previous){tv.context.globalAlpha=1-fade*fade*(3-2*fade);tv.context.drawImage(tv.previous,0,0);tv.context.globalAlpha=1;}
@@ -350,9 +357,18 @@ export function render3D(floor, states, options = {}) {
       return target;
     }
   }
+  function nearbyLight(clientX,clientY,rect){
+    const candidates=[];world.traverse(node=>{const target=node.userData.lightTarget;if(!target)return;
+      let visible=true;for(let p=node;p;p=p.parent)visible&&=p.visible;if(!visible)return;
+      const bounds=new THREE.Box3().setFromObject(node),centre=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3()),axis=size.x>size.z?'x':'z';
+      for(const t of [-.4,-.2,0,.2,.4]){const point=centre.clone();point[axis]+=size[axis]*t;const p=point.project(camera);if(p.z< -1||p.z>1)continue;
+        const distance=Math.hypot((p.x*.5+.5)*rect.width+rect.left-clientX,(-p.y*.5+.5)*rect.height+rect.top-clientY);if(distance<=24)candidates.push({distance,p,target});}
+    });
+    candidates.sort((a,b)=>a.distance-b.distance);for(const c of candidates){const ray=new THREE.Raycaster();ray.setFromCamera(c.p,camera);const hit=lightAt(ray);if(hit?.id===c.target.id&&hit.floorId===c.target.floorId)return hit;}
+  }
   const move=e=>{if(!pointer)return;pointer.dragged ||= Math.hypot(e.clientX-pointer.startX,e.clientY-pointer.startY)>=5;azimuth-=(e.clientX-pointer.x)*.008;elevation=Math.min(1.45,Math.max(.3,elevation+(e.clientY-pointer.y)*.006));pointer.x=e.clientX;pointer.y=e.clientY;schedule();};
   const up=e=>{if(pointer&&!pointer.dragged&&e.type==='pointerup'&&Math.hypot(e.clientX-pointer.startX,e.clientY-pointer.startY)<5){const rect=renderer.domElement.getBoundingClientRect(),x=(e.clientX-rect.left)/rect.width*2-1,y=1-(e.clientY-rect.top)/rect.height*2;
-    const ray=new THREE.Raycaster();ray.setFromCamera({x,y},camera);const light=lightAt(ray);if(light){options.onLightClick?.(light.floorId,light.id);pointer=null;return;}
+    const ray=new THREE.Raycaster();ray.setFromCamera({x,y},camera);const light=lightAt(ray)||nearbyLight(e.clientX,e.clientY,rect);if(light){options.onLightClick?.(light.floorId,light.id);pointer=null;return;}
     const hit=ray.intersectObjects(artworks.map(a=>a.model),true)[0],art=artworks.find(a=>hit&&a.model.children.includes(hit.object));if(art){art.toggle();pointer=null;return;}
     const screen=ray.intersectObjects(televisions.flatMap(tv=>tv.screens),false)[0],tv=televisions.find(tv=>screen&&tv.screens.includes(screen.object));
     if(tv&&tvIsOn(states[tv.object.media_entity])){
@@ -362,7 +378,7 @@ export function render3D(floor, states, options = {}) {
       else tv.manualTime=(tv.manualTime||0)+16000;
       tv.lastFrame=-1;schedule();pointer=null;return;
     }
-    const doorHit=ray.intersectObjects(doors.flatMap(d=>d.leaves),false)[0],door=doors.find(d=>doorHit&&d.leaves.includes(doorHit.object));if(door&&!hideWalls){door.toggle();pointer=null;return;}
+    const doorHit=ray.intersectObjects(doors.flatMap(d=>d.leaves),false)[0],door=doors.find(d=>doorHit&&d.leaves.includes(doorHit.object));if(door&&!hideWalls){if(door.binding.contact_entity)options.onEntityClick?.(door.binding.lock_entity||door.binding.contact_entity);else door.toggle();pointer=null;return;}
     const hits=blinds.filter(b=>b.hit.visible).map(b=>({b,points:[[-1,-1],[1,-1],[1,1],[-1,1]].map(([x,y])=>new THREE.Vector3(x*b.width/2,y*b.height/2,0).applyMatrix4(b.hit.matrixWorld).project(camera))})).filter(h=>inside(x,y,h.points.map(p=>[p.x,p.y]))).sort((a,b)=>a.points[0].z-b.points[0].z);if(hits[0]){hits[0].b.toggle();schedule();}}pointer=null;};
   const wheel=e=>{e.preventDefault();manualOrbit();zoom=Math.max(.5,Math.min(3,zoom*Math.exp(-e.deltaY*.001)));schedule();};
   const key=e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','=','-','Home'].includes(e.key))return;e.preventDefault();manualOrbit();if(e.key==='ArrowLeft')azimuth-=.15;if(e.key==='ArrowRight')azimuth+=.15;if(e.key==='ArrowUp')elevation=Math.min(1.45,elevation+.1);if(e.key==='ArrowDown')elevation=Math.max(.3,elevation-.1);if(['+','='].includes(e.key))zoom=Math.min(3,zoom*1.15);if(e.key==='-')zoom=Math.max(.5,zoom/1.15);if(e.key==='Home')({azimuth,elevation,zoom}=home);schedule();};

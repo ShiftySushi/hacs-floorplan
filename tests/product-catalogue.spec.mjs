@@ -29,6 +29,8 @@ test('search and place a measured product, change finish, rotate and restore dim
   expect(before).toMatchObject({width:1.455,depth:.475,colour:'#ecebe5',rotation:90});
   await editor.evaluate(async(e,config)=>{await e.importScene(new File([JSON.stringify(config)],'products.json'));},exported);
   expect(await editor.evaluate(e=>e.config.floors[0].objects.find(o=>o.product_id==='kawai-ca901'))).toEqual(before);
+  await editor.getByRole('button',{name:'3. Furniture',exact:true}).click();
+  await editor.getByRole('button',{name:'Unlock editing',exact:true}).click();
   await editor.getByRole('combobox',{name:'Placed furniture',exact:true}).selectOption(before.id);
   await editor.getByRole('button',{name:'Restore product dimensions',exact:true}).scrollIntoViewIfNeeded();
   await editor.getByLabel('Product preset',{exact:true}).selectOption('');
