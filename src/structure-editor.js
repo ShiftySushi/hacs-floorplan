@@ -17,7 +17,7 @@ export function structureSetup(host, floor) {
   const number = (object, key, label, min, max, step = .05) => field(label, element('input', { type: 'number', min, max, step, value: object[key], onchange: e => { object[key] = Number(e.target.value); host.emit(); } }));
   const box = element('fieldset', {}, [element('legend', { text: 'Wall dimensions' }), number(wall,'thickness','Wall thickness (metres)',.05,1), number(wall,'height','Wall height (metres)',.2,10)]);
   for (const end of ['a','b']) for (const [axis,index] of [['X',0],['Y',1]]) box.append(field(`${end === 'a' ? 'Start' : 'End'} ${axis} (%)`,element('input',{type:'number',min:0,max:100,step:.1,value:wall[end][index],onchange:e=>{wall[end][index]=Number(e.target.value);host.emit();}})));
-  box.append(button('Remove wall', () => { floor.walls = floor.walls.filter(item => item !== wall); host.wallId = ''; host.emit(); })); root.append(box);
+  box.append(button('Remove wall', () => { floor.walls = floor.walls.filter(item => item !== wall);for(const item of floor.objects || [])if(item.mount?.wall_id===wall.id)delete item.mount;host.wallId = ''; host.emit(); })); root.append(box);
   for (const opening of wall.openings || []) {
     const pane = element('fieldset', {}, [element('legend', { text: opening.type === 'door' ? 'Door' : 'Window' })]);
     pane.append(number(opening,'offset','Position along wall (0–1)',0,1,.01),number(opening,'width','Opening width (metres)',.1,20),number(opening,'height','Opening height (metres)',.1,10),number(opening,'sill','Sill height (metres)',0,10),button('Remove opening',()=>{wall.openings=wall.openings.filter(item=>item!==opening);host.emit();}));root.append(pane);

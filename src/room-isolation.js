@@ -54,5 +54,5 @@ export function isolateRoomFloor(floor,roomId){
     if(s.type==='rooflight'){const centre=s.vertices.reduce((p,v)=>[p[0]+v[0]/s.vertices.length,p[1]+v[1]/s.vertices.length],[0,0]);return belongs(centre)?[s]:[];}
     return triangles.flatMap((t,i)=>{const vertices=clipPolygon(s.vertices,t);return vertices.length>=3?[{...s,id:`${s.id}:room:${i}`,vertices}]:[];});
   });
-  return {...floor,image:undefined,rooms:[room],objects,walls:roomWalls(floor,polygon,size),entities:(floor.entities||[]).filter(e=>ids.has(e.entity)||belongs([e.x,e.y])),ceiling_slopes:ceilings};
+  return {...floor,image:undefined,rooms:[room],objects,walls:roomWalls(floor,polygon,size),labels:(floor.labels || []).filter(l=>l.room_id?l.room_id===roomId:belongs([l.x,l.y])),entities:(floor.entities||[]).filter(e=>ids.has(e.entity)||belongs([e.x,e.y])),ceiling_slopes:ceilings};
 }

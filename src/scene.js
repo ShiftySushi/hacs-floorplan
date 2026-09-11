@@ -1,4 +1,9 @@
 import { displaySettings } from './display-settings.js';
+import {validateLabels} from './entity-labels.js';
+import {validateWeather} from './weather.js';
+import {isPresenceSensor,sensorPlacement} from './presence-sensors.js';
+import {validateInformation} from './information.js';
+import {validateExterior} from './exterior.js';
 import { CATALOGUE } from './catalogue.js';
 
 export function floorDimensions(floor) {
@@ -6,6 +11,9 @@ export function floorDimensions(floor) {
   return { width, depth: floor.depth_m || width / (floor.aspect_ratio || .6875) };
 }
 export function normaliseScene(config) {
+  validateWeather(config.weather);
+  validateInformation(config.information);
+  validateExterior(config.exterior);
   if(config.outdoor_temperature_entity&&!/^(sensor|climate)\.[a-z0-9_]+$/.test(config.outdoor_temperature_entity))throw new Error('Choose an outdoor temperature sensor');
   if (config.scene_version !== undefined && config.scene_version !== 1) throw new Error('This scene version is not supported. Update the card before importing it.');
   config.scene_version = 1;
@@ -17,6 +25,7 @@ export function normaliseScene(config) {
   const positive = (n, name, max=1000) => { if (!Number.isFinite(n) || n <= 0 || n > max) throw new Error(`${name} must be a positive dimension`); };
   const coordinate = p => Array.isArray(p) && p.length === 2 && p.every(n => Number.isFinite(n) && n >= 0 && n <= 100);
   for (const floor of config.floors || []) {
+    validateLabels(floor);
     if(floor.style_images !== undefined && (!floor.style_images||typeof floor.style_images!=='object'||Array.isArray(floor.style_images)||Object.entries(floor.style_images).some(([key,value])=>!['pokemon','zelda'].includes(key)||typeof value!=='string'||!value||!/^(\/(?!\/)|https?:\/\/|data:image\/(png|jpeg|webp|svg\+xml);base64,)/.test(value))))throw new Error('Style images must use a Pokémon or Zelda image upload, /local/ path or HTTP(S) URL');
     floor.width_m ??= 10; positive(floor.width_m, 'Floor width');
     if (floor.depth_m !== undefined) positive(floor.depth_m, 'Floor depth');
@@ -42,9 +51,13 @@ export function normaliseScene(config) {
     }
     for (const item of floor.objects) {
       identify(item);
+      if(item.presence_entities!==undefined&&(!isPresenceSensor(item)||!Array.isArray(item.presence_entities)||item.presence_entities.length>16||item.presence_entities.some(id=>typeof id!=='string'||!/^binary_sensor\.[a-z0-9_]+$/.test(id))))throw Error('Choose up to 16 presence entities for a sensor');
+      if(item.presence_room&&!floor.rooms.some(r=>r.id===item.presence_room))throw Error('Choose a room for sensor occupancy');
       if(item.style_images !== undefined && (!item.style_images||typeof item.style_images!=='object'||Array.isArray(item.style_images)||Object.entries(item.style_images).some(([key,value])=>!['pokemon','zelda'].includes(key)||typeof value!=='string'||!value||!/^(\/(?!\/)|https?:\/\/|data:image\/(png|jpeg|webp|svg\+xml);base64,)/.test(value))))throw new Error('Furniture sprites must use a Pokémon or Zelda image upload, /local/ path or HTTP(S) URL');
       if(item.heating_entity && !/^(climate|switch|binary_sensor)\.[a-z0-9_]+$/.test(item.heating_entity))throw new Error('Choose a thermostat, heating switch or activity sensor');
       if(item.light_entity && !/^light\.[a-z0-9_]+$/.test(item.light_entity))throw new Error('Choose a light entity for this object');
+      for(const key of ['pattern_entity','colour_entity','fill_entity'])if(item[key]&&(item.type!=='tv_lightstrip'||!/^sensor\.[a-z0-9_]+$/.test(item[key])))throw Error('Strip display fields need sensor entities on a TV light strip');
+      if(item.fill_direction!==undefined&&!['left-to-right','right-to-left'].includes(item.fill_direction))throw Error('Choose a strip fill direction');
       if(item.sync_media_entity&&!/^media_player\.[a-z0-9_]+$/.test(item.sync_media_entity))throw new Error('Choose a TV media player for Hue Sync');
       if(item.media_entity!==undefined&&(typeof item.media_entity!=='string'||(item.media_entity!==''&&!/^media_player\.[a-z0-9_]+$/.test(item.media_entity))))throw new Error('Choose a media player entity');
       if(item.artwork_image && (typeof item.artwork_image!=='string'||!/^(\/(?!\/)|https?:\/\/|data:image\/(png|jpeg|webp);base64,)/.test(item.artwork_image)))throw Error('Use an image URL, /local/ path or embedded PNG, JPEG or WebP');
@@ -54,9 +67,10 @@ export function normaliseScene(config) {
       if(item.panel_effect!==undefined&&!['static','breathe','wave','rainbow'].includes(item.panel_effect))throw Error('Choose a supported panel light effect');
       if(item.panel_layout !== undefined && (!Array.isArray(item.panel_layout)||!item.panel_layout.length||item.panel_layout.length>100||item.panel_layout.some(p=>!Array.isArray(p)||p.length!==2||p.some(n=>!Number.isInteger(n)||Math.abs(n)>50))||new Set(item.panel_layout.map(p=>p.join(','))).size!==item.panel_layout.length))throw new Error('Panel layout must contain unique integer hexagon coordinates');
       const definition = CATALOGUE.find(d => d.type === item.type);
-      if (!definition) throw new Error('Choose an object from the furniture catalogue');
+      if (!definition) throw new Error(`Unsupported furniture type "${String(item.type).slice(0,80)}" for object "${item.id.slice(0,80)}". Update the Home Assistant floorplan card and refresh the dashboard before importing this scene.`);
       if (!coordinate([item.x,item.y])) throw new Error('Furniture must be placed within the floor');
       for (const key of ['width','depth','height']) { item[key] ??= definition[key]; positive(item[key], `Furniture ${key}`, 100); }
+      if(item.mount!==undefined){if(!isPresenceSensor(item))throw Error('Only presence sensors support mounting');Object.assign(item,sensorPlacement(floor,item));delete item.support_id;}
       item.rotation ??= 0;
       if (!Number.isFinite(item.rotation)) throw new Error('Invalid furniture rotation');
       item.rotation = ((item.rotation % 360) + 360) % 360;
@@ -83,6 +97,9 @@ export function normaliseScene(config) {
         if (!['door','window'].includes(opening.type)) throw new Error('Choose a door or window');
         opening.offset ??= .5; opening.width ??= .9; opening.height ??= opening.type==='door'?2.1:1.2; opening.sill ??= opening.type==='door'?0:.9;
         positive(opening.width,'Opening width'); positive(opening.height,'Opening height');
+        if(opening.outside_lights!==undefined&&(!Array.isArray(opening.outside_lights)||opening.outside_lights.length>8||opening.outside_lights.some(id=>typeof id!=='string'||!/^light\.[a-z0-9_]+$/.test(id))))throw Error('Choose up to eight exterior lights for an opening');
+        if(opening.transom_height!==undefined&&(opening.type!=='door'||!Number.isFinite(opening.transom_height)||opening.transom_height<.1||opening.transom_height>opening.height-.5))throw Error('Door transom must fit above its leaf');
+        if(opening.glazing!==undefined){const g=opening.glazing,h=opening.height-(opening.transom_height || 0);if(opening.type!=='door'||opening.frame!=='solid'||!g||![g.width,g.height,g.sill].every(Number.isFinite)||g.width<=0||g.width>opening.width-.2||g.height<=0||g.sill<=.04||g.sill+g.height>=h-.04)throw Error('Door glazing must fit inside a solid door leaf');}
         if (!Number.isFinite(opening.offset) || opening.offset < 0 || opening.offset > 1 || !Number.isFinite(opening.sill) || opening.sill < 0 || opening.sill+opening.height > wall.height+1e-6 || opening.offset*length-opening.width/2 < -1e-6 || opening.offset*length+opening.width/2 > length+1e-6) throw new Error('Fit each opening inside its wall');
       }
       const intervals=wall.openings.map(o=>[o.offset*length-o.width/2,o.offset*length+o.width/2]).sort((a,b)=>a[0]-b[0]);

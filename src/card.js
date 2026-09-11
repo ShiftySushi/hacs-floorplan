@@ -1,16 +1,19 @@
 import { available, capabilities, normaliseConfig, serviceCalls } from './lights.js';
 import {isolateRoomFloor} from './room-isolation.js';
+import {labelMarkers} from './entity-labels.js';
+import {weatherEntity} from './weather.js';
 import { displaySettings, displayFields } from './display-settings.js';
 import { styles } from './styles.js';
 import { element, button, field, preserveFocus } from './dom.js';
 import { renderPlan } from './plan.js';
-import { roomState } from './rooms.js';
+import { roomState,roomPresence } from './rooms.js';
 import { icon, iconButton } from './icons.js';
 import { render3D } from './plan3d.js';
 import { roomTemperature, roomReadoutPoint, heatingState, temperatureTone } from './heating.js';
 import { daylightLevel, stageColour } from './daylight.js';
 const collectionStyles='.collection-controls{display:grid;grid-template-columns:minmax(0,1fr) 70px;gap:4px;align-items:center;width:100%;padding:3px 0}.collection-controls .collection-adjust{display:inline-flex;align-items:center;justify-content:center;gap:4px;align-self:center;width:70px;min-width:0;min-height:44px;padding:3px;font-size:11px;line-height:1.2;border-color:transparent;background:transparent;color:var(--secondary-text-color,#63776e);box-shadow:none}.collection-controls .collection-adjust .icon{width:15px;height:15px}.collection-controls .collection-adjust:hover,.collection-controls .collection-adjust[aria-pressed=true]{background:var(--secondary-background-color,#eef4f0);color:var(--primary-text-color,#26343d)}.collection-controls .collection-adjust:focus-visible{outline:2px solid var(--primary-color,#007c91);outline-offset:1px}';
 import {sceneEntities,sceneState} from './ha-updates.js';
+import {informationPanel,informationStyles} from './information-panel.js';
 import {lightToggleIds} from './light-targets.js';
 
 export class FloorplanCard extends HTMLElement {
@@ -25,6 +28,7 @@ export class FloorplanCard extends HTMLElement {
   connectedCallback() { if (this.config) this.render();clearInterval(this.daylightTimer);this.daylightTimer=setInterval(()=>{if(!document.hidden&&this.config)this.render();},60000); }
   disconnectedCallback() { clearInterval(this.daylightTimer);this.entranceObserver?.disconnect();this.plan?.dispose?.(); this.plan=null; this.planKey=null; this.stageObserver?.disconnect(); this.planObserver?.disconnect(); }
   fitPlan() {
+    const tools=this.planSlot?.querySelector('.stage-tools');if(tools)this.planSlot.style.setProperty('--fp-info-top',`${tools.offsetTop+tools.offsetHeight+12}px`);
     if(!this.plan || !this.planSlot?.clientWidth)return;
     const ratioText=this.plan.style.aspectRatio || '1.15',parts=ratioText.split('/').map(Number),ratio=parts.length===2?parts[0]/parts[1]:parts[0];
     if(!Number.isFinite(ratio) || ratio<=0)return;
@@ -43,13 +47,13 @@ export class FloorplanCard extends HTMLElement {
     const identity=JSON.stringify([location.pathname,this.config.title,this.config.floors.map(f=>f.id)]);
     let hash=2166136261;for(const char of identity)hash=Math.imul(hash^char.charCodeAt(0),16777619);
     const key=`floorplan-view-${hash>>>0}`;
-    if(this.viewStorageKey!==key){this.viewStorageKey=key;this.viewStates={};this.blindStates={};this.inspectorOpen=false;try{const saved=JSON.parse(localStorage.getItem(key));if(saved){if(['clean','3d','pokemon','zelda','sims'].includes(saved.mode))this.viewMode=saved.mode;this.floorId=saved.floorId;this.building=!!saved.building;this.hideOverlays=!!saved.hideOverlays;this.inspectorOpen=!!saved.inspectorOpen;this.displayPreferences=saved.display;this.isolatedRooms=saved.isolatedRooms || {};this.viewStates=saved.cameras || {};this.blindStates=saved.blinds || {};}}catch{}}
+    if(this.viewStorageKey!==key){this.viewStorageKey=key;this.viewStates={};this.blindStates={};this.inspectorOpen=false;try{const saved=JSON.parse(localStorage.getItem(key));if(saved){if(['clean','3d','pokemon','zelda','sims'].includes(saved.mode))this.viewMode=saved.mode;this.floorId=saved.floorId;this.building=!!saved.building;this.exterior=!!saved.exterior;this.hideOverlays=!!saved.hideOverlays;this.inspectorOpen=!!saved.inspectorOpen;this.displayPreferences=saved.display;this.isolatedRooms=saved.isolatedRooms || {};this.viewStates=saved.cameras || {};this.blindStates=saved.blinds || {};}}catch{}}
     if (!this.config.floors.some(f => f.id === this.floorId)) this.floorId = this.config.floors[0]?.id;
     const configured = new Set([...this.config.floors.flatMap(f => [...f.entities.map(e => e.entity), ...f.rooms.flatMap(r => r.lights), ...(f.objects || []).map(o=>o.light_entity).filter(Boolean)]), ...this.config.groups.flatMap(g => g.entities)]);
     this.selected = new Set([...this.selected].filter(id => configured.has(id))); this.render();
   }
   set hass(hass) { const next=sceneState(hass,this.watchedEntities);this._hass = hass;if(next===this.hassSceneState)return;this.hassSceneState=next; if (!['INPUT', 'SELECT'].includes(this.shadowRoot.activeElement?.tagName)) this.render(); else this.deferredUpdate = true; }
-  saveView(){try{localStorage.setItem(this.viewStorageKey,JSON.stringify({mode:this.viewMode || this.config.appearance.mode,floorId:this.floorId,building:!!this.building,hideOverlays:!!this.hideOverlays,inspectorOpen:!!this.inspectorOpen,display:this.displayPreferences,isolatedRooms:this.isolatedRooms,cameras:this.viewStates,blinds:this.blindStates}));}catch{}}
+  saveView(){try{localStorage.setItem(this.viewStorageKey,JSON.stringify({mode:this.viewMode || this.config.appearance.mode,floorId:this.floorId,building:!!this.building,exterior:!!this.exterior,hideOverlays:!!this.hideOverlays,inspectorOpen:!!this.inspectorOpen,display:this.displayPreferences,isolatedRooms:this.isolatedRooms,cameras:this.viewStates,blinds:this.blindStates}));}catch{}}
   getCardSize() { return 12; }
   getGridOptions() { return { columns: 12, min_columns: 6 }; }
   toggle(ids) {
@@ -85,7 +89,7 @@ export class FloorplanCard extends HTMLElement {
       this.card=element('ha-card',{className:'floorplan-dashboard'});
       this.headerSlot=element('div');this.planSlot=element('div',{className:'plan-slot'});this.controlsSlot=element('div',{className:'inspector-slot'});
       this.card.append(this.headerSlot,element('div',{className:'card-workspace'},[this.planSlot,this.controlsSlot]));
-      this.shadowRoot.replaceChildren(element('style',{text:styles+collectionStyles}),this.card);
+      this.shadowRoot.replaceChildren(element('style',{text:styles+collectionStyles+informationStyles}),this.card);
       this.entranceObserver=new IntersectionObserver(entries=>{if(entries.some(entry=>entry.isIntersecting)){this.card.classList.add('has-entered');this.entranceObserver.disconnect();}});this.entranceObserver.observe(this.card);
     }
     const display=displaySettings({...this.config.appearance?.display,...this.displayPreferences});
@@ -95,19 +99,22 @@ export class FloorplanCard extends HTMLElement {
     this.planSlot.classList.toggle('has-outdoor',!!roomTemperature({temperature_entity:this.config.outdoor_temperature_entity},states));
     const header = element('div', {className:'card-header stage-style'});
     const tabs = element('div', { className: 'row floor-tabs', role: 'group', 'aria-label': 'Floors' });
-    this.config.floors.forEach(floor => tabs.append(iconButton(floor.name || floor.id,'floor', () => { this.floorId = floor.id; this.render(); }, { 'aria-pressed': String(floor.id === this.floorId) })));
+    this.config.floors.forEach(floor => tabs.append(iconButton(floor.name || floor.id,'floor', () => { this.floorId = floor.id; this.exterior=false; this.render(); }, { 'aria-pressed': String(floor.id === this.floorId) })));
     const mode=this.viewMode || this.config.appearance?.mode || 'clean';
-    const daylight=daylightLevel(states,new Date(),this._hass?.config);this.planSlot.style.setProperty('--fp-stage-background',stageColour(mode,daylight));
+    const exterior=['3d','sims'].includes(mode)&&this.exterior?this.config.exterior:undefined;
+    const weather={...this.config.weather,entity:weatherEntity(this.config)};
+    const daylight=daylightLevel(states,new Date(),this._hass?.config,weather.entity);this.planSlot.style.setProperty('--fp-stage-background',stageColour(mode,daylight));
     const modes=element('div',{className:'row view-modes',role:'group','aria-label':'Render style'});
     for(const [id,label,glyph] of [['clean','2D','grid'],['3d','3D','cube']]) modes.append(iconButton(label,glyph,()=>{this.viewMode=id;this.render();},{'aria-pressed':String(mode===id)}));
     const customStyle=element('select',{'aria-label':'Custom style',onchange:e=>{this.viewMode=e.target.value;this.render();}},[element('option',{value:'',text:'Custom',disabled:true,selected:!['pokemon','zelda','sims'].includes(mode)})]);
     for(const [value,text] of [['pokemon','Pokémon'],['zelda','Zelda'],['sims','Sims-like']])customStyle.append(element('option',{value,text,selected:mode===value}));modes.append(customStyle);
-    if(['3d','sims'].includes(mode)){
+    if(['3d','sims'].includes(mode)&&!exterior){
       const activeFloor=this.config.floors.find(f=>f.id===this.floorId);this.isolatedRooms ||= {};
       const isolation=element('select',{'aria-label':'Isolate room',title:'Isolate a room for an unobstructed view',className:'room-isolation',onchange:e=>{this.isolatedRooms[this.floorId]=e.target.value;this.render();}},[element('option',{value:'',text:'Whole floor',selected:!this.isolatedRooms[this.floorId]}),...(activeFloor?.rooms||[]).map(r=>element('option',{value:r.id,text:r.name||r.id,selected:this.isolatedRooms[this.floorId]===r.id}))]);modes.append(isolation);
     }
     if(this.config.floors.length)header.append(modes);
-    if(['3d','sims'].includes(mode)&&this.config.floors.length>1)tabs.append(iconButton('All storeys','floor',()=>{if(this.isolatedRooms?.[this.floorId]){this.isolatedRooms[this.floorId]='';this.building=true;}else this.building=!this.building;this.render();},{'aria-pressed':String(!!this.building&&!this.isolatedRooms?.[this.floorId])}));
+    if(['3d','sims'].includes(mode)&&!exterior&&this.config.floors.length>1)tabs.append(iconButton('All storeys','floor',()=>{if(this.isolatedRooms?.[this.floorId]){this.isolatedRooms[this.floorId]='';this.building=true;}else this.building=!this.building;this.render();},{'aria-pressed':String(!!this.building&&!this.isolatedRooms?.[this.floorId])}));
+    if(['3d','sims'].includes(mode)&&this.config.exterior?.items.length)tabs.append(iconButton('Exterior','cube',()=>{this.exterior=!this.exterior;this.render();},{'aria-pressed':String(!!this.exterior)}));
     const stageTools=element('div',{className:'stage-tools'},[tabs,iconButton(this.hideOverlays?'Show overlays':'Hide overlays','eye',()=>{this.hideOverlays=!this.hideOverlays;this.render();},{'aria-pressed':String(!!this.hideOverlays),title:this.hideOverlays?'Show overlays':'Hide overlays',className:'overlay-toggle'})]);
     stageTools.append(iconButton(this.inspectorOpen?'Hide lighting':'Lighting','bulb',()=>{this.inspectorOpen=!this.inspectorOpen;this.render();},{'aria-expanded':String(!!this.inspectorOpen),'aria-controls':'lighting-panel',title:this.inspectorOpen?'Hide lighting':'Lighting',className:'inspector-toggle'}));
     const settings=element('details',{className:'display-settings',open:!!this.displayOpen},[element('summary',{'aria-label':'Display settings',title:'Display settings'},[icon('sliders')]),element('div',{className:'display-popover'},[element('h3',{text:'Display settings'}),element('p',{className:'display-description',text:'Choose what stays visible on your floorplan.'}),...displayFields(display,next=>{this.displayPreferences=next;this.displayOpen=true;this.render();}),element('p',{className:'muted',text:'Saved for this browser. Set shared defaults in the card editor.'})])]);
@@ -134,6 +141,7 @@ export class FloorplanCard extends HTMLElement {
       const markers = [];
       const markerFloors=this.building&&!isolatedRoom&&['3d','sims'].includes(mode)?this.config.floors:[floor];
       for(const floor of markerFloors) {
+      markers.push(...labelMarkers(floor,states,entityId=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId},bubbles:true,composed:true}))));
       floor.entities.forEach(item => {
         const state = item.unbound?undefined:states[item.entity]; const light = item.entity.startsWith('light.');
         const name = item.name || state?.attributes.friendly_name || item.entity;
@@ -154,10 +162,10 @@ export class FloorplanCard extends HTMLElement {
       });
       for(const room of floor.rooms || []) {
         const temperature=roomTemperature(room,states);
-        const presence=roomState(room,states);
+        const presence=roomState(room,states,floor);
         if((!temperature&&!presence.occupied) || !room.points?.length)continue;
         const centre=roomReadoutPoint(room,floor);
-        const entityId=room.temperature_entity || room.presence.find(id=>states[id]?.state==='on');
+        const entityId=room.temperature_entity || roomPresence(room,floor).find(id=>states[id]?.state==='on');
         const label=[temperature?`${room.name} temperature: ${temperature}`:room.name,presence.occupied?'Presence detected':''].filter(Boolean).join(' · ');
         const marker=button(temperature,()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId},bubbles:true,composed:true})),{className:`marker overlay-temperatures temperature-marker temp-${temperatureTone(room.temperature_entity,states[room.temperature_entity])}${presence.occupied?' occupied':''}`,title:label,'aria-label':label});
         if(presence.occupied)marker.prepend(icon('presence'));
@@ -169,14 +177,15 @@ export class FloorplanCard extends HTMLElement {
         markers.push({node:marker,x:radiator.x,y:radiator.y,floorId:floor.id});
       }
       }
-      const options={...this.config.appearance,isolatedRoom,hideLightFixtures:display.hide_light_fixtures,hideRadiators:display.hide_radiators,hideExtractionFans:display.hide_extraction_fans,idleRotation:display.idle_rotation,labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays?[]:markers,daylight,building:!!this.building&&!isolatedRoom,allFloors:this.config.floors};
+      const options={...this.config.appearance,exterior,isolatedRoom,hideLightFixtures:display.hide_light_fixtures,hideRadiators:display.hide_radiators,hideExtractionFans:display.hide_extraction_fans,idleRotation:display.idle_rotation,labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays||exterior?[]:markers,daylight,building:!!this.building&&!isolatedRoom,allFloors:this.config.floors};
       options.onLightClick=(floorId,id)=>this.activateLight(floorId,id);
+      options.weather=weather;
       options.blindStates=this.blindStates;
-      const baseCameraKey=`${floor.id}:${mode}:${!!this.building}`,cameraKey=baseCameraKey+(isolatedRoom?`:${isolatedRoom}`:'');this.viewStates ||= {};
+      const baseCameraKey=`${floor.id}:${mode}:${!!this.building}`+(exterior?':exterior':''),cameraKey=baseCameraKey+(isolatedRoom?`:${isolatedRoom}`:'');this.viewStates ||= {};
       const baseView=this.viewStates[baseCameraKey] ||= {};options.viewState=this.viewStates[cameraKey] ||= {};
       for(const key of ['doors','portraits'])options.viewState[key]=baseView[key] ||= {};
       options.onViewChange=()=>this.saveView();
-      const key=JSON.stringify([floor,display.hide_light_fixtures,display.hide_radiators,display.hide_extraction_fans,this.config.appearance,mode,!!this.building,this.building?this.config.floors:null]);
+      const key=JSON.stringify([floor,exterior,display.hide_light_fixtures,display.hide_radiators,display.hide_extraction_fans,this.config.appearance,mode,!!this.building,this.building?this.config.floors:null]);
       if(key!==this.planKey || !this.plan) {
         this.plan?.dispose?.();
         this.plan=(['3d','sims'].includes(mode)?render3D:renderPlan)(floor,states,options);this.planKey=key;
@@ -186,9 +195,12 @@ export class FloorplanCard extends HTMLElement {
       this.fitPlan();
       this.planSlot.querySelector('.outdoor-temperature')?.remove();
       const outdoorId=this.config.outdoor_temperature_entity, outdoor=roomTemperature({temperature_entity:outdoorId},states);
-      if(outdoor&&!this.hideOverlays){const readout=button(`Outside ${outdoor}`,()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:outdoorId},bubbles:true,composed:true})),{className:`outdoor-temperature temp-${temperatureTone(outdoorId,states[outdoorId])}`,'aria-label':`Outdoor temperature: ${outdoor}`});this.planSlot.append(readout);}
+      if(outdoor&&!this.hideOverlays&&!(this.config.information?.enabled!==false&&this.config.information?.items?.some(i=>i.type==='weather'))){const readout=button(`Outside ${outdoor}`,()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:outdoorId},bubbles:true,composed:true})),{className:`outdoor-temperature temp-${temperatureTone(outdoorId,states[outdoorId])}`,'aria-label':`Outdoor temperature: ${outdoor}`});this.planSlot.append(readout);}
     }
     this.planSlot.querySelector('.stage-tools')?.remove();this.planSlot.append(stageTools);
+    this.planSlot.querySelector('.information-panel')?.remove();
+    const information=informationPanel(this,states);if(information)this.planSlot.append(information);
+    this.fitPlan();
     const navigation=this.planSlot.querySelector('.plan-navigation,.three-toolbar');
     if(navigation && !navigation.classList.contains('docked-navigation')) {
       const three=navigation.classList.contains('three-toolbar'),buttons=[...navigation.children];
@@ -199,7 +211,7 @@ export class FloorplanCard extends HTMLElement {
         const controls=buttons.slice(start,end);controls.forEach(control=>control.removeAttribute('style'));
         return element('div',{className:'navigation-group',role:'group','aria-label':name},[element('span',{className:'navigation-caption',text:name}),element('div',{className:'navigation-buttons'},controls)]);
       }));
-      if(three){buttons[4].textContent='Reset';buttons[5].textContent='Walls';}
+      if(three){buttons[4].textContent='Reset';const walls=buttons.find(b=>b.getAttribute('aria-label')==='Toggle cutaway walls');if(walls)walls.textContent='Walls';}
       this.planSlot.append(navigation);
     }
     const controls = element('section', { className: 'controls', 'aria-label': 'Light controls' });
@@ -221,7 +233,7 @@ export class FloorplanCard extends HTMLElement {
       const rooms = element('div', { className: 'room-status', 'aria-label': 'Rooms' });
       rooms.style.gridTemplateColumns='1fr';
       for(const room of floor.rooms) {
-        const state=roomState(room,states);
+        const state=roomState(room,states,floor);
         rooms.append(collectionControls(room.name,room.lights,state));
       }
       choices.append(rooms);

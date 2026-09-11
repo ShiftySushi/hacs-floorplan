@@ -8,6 +8,10 @@ export function tvDimensions(inches) {
 const defaultTV=tvDimensions(65);
 
 export const CATALOGUE = [
+  ['hue_motion_sensor','Hue Motion Sensor',.055,.028,.055,'Sensors'],
+  ['everything_presence_pro','Everything Presence Pro',.075,.035,.085,'Sensors'],
+  ['everything_presence_one','Everything Presence One',.065,.035,.065,'Sensors'],
+  ['everything_presence_lite','Everything Presence Lite',.065,.03,.045,'Sensors'],
   ['pegboard','SKÅDIS-style pegboard',.76,.035,.56,'Storage'],
   ['extractor_fan','Extractor fan',.2,.2,.06,'Bathroom'],
   ['printer_3d','3D printer',.4,.4,.5,'Office'],
@@ -46,6 +50,7 @@ export function objectGlyph(item, mode='clean') {
   const line=(x1,y1,x2,y2,stroke=edge,width=2)=>g.append(svgElement('line',{x1,y1,x2,y2,stroke,'stroke-width':width}));
   const ellipse=(cx,cy,rx,ry,fill=white)=>g.append(svgElement('ellipse',{cx,cy,rx,ry,fill}));
   const colour=item.colour || fabric;
+  if(item.type==='hue_motion_sensor'||item.type.startsWith('everything_presence_')){rect(8,5,84,90,item.colour || white,18);if(item.type!=='everything_presence_lite')ellipse(50,46,23,23,'#d3d8d4');ellipse(73,20,5,5,edge);}
   if(item.variant==='sword'){rect(0,43,25,14,'#e7d9b4');for(let x=2;x<25;x+=4){line(x,43,x+4,57,colour,2);line(x,57,x+4,43,colour,2);}g.append(svgElement('path',{d:'M25 50Q65 50 98 70',fill:'none',stroke:colour,'stroke-width':12}));line(25,35,25,65,colour,4);}
   else if(item.variant==='malm'){rect(2,2,96,96,item.product_id==='malm-6-glass'?'#f4f5f2':colour,0);line(3,94,97,94,colour,4);}
   else if(item.type==='nanoleaf_panels') {for(const [x,y] of [[22,30],[50,30],[78,30],[36,55],[64,55]])g.append(svgElement('polygon',{points:Array.from({length:6},(_,i)=>`${x+15*Math.cos((30+i*60)*Math.PI/180)},${y+15*Math.sin((30+i*60)*Math.PI/180)}`).join(' '),fill:white}));}
