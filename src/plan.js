@@ -128,7 +128,9 @@ export function renderPlan(floor, states, options={}) {
       for(const opening of wall.openings || []){const size=opening.width/dims.width*w,centre=opening.offset*length;wg.append(svgElement('rect',{x:centre-size/2,y:-thickness/2-1,width:size,height:thickness+2,fill:opening.type==='window'?'#a9d9e3':'#e9e5da',stroke:opening.type==='window'?'#558d9a':'none'}));if(opening.type==='door')wg.append(svgElement('path',{d:`M${centre-size/2} 0v${size} M${centre-size/2} ${size}A${size} ${size} 0 0 0 ${centre+size/2} 0`,fill:'none',stroke:'#8b8c80','stroke-width':2}));}
       wallOpenings.append(wg);
     }
-    for(const item of floor.objects || []) {
+    for(const item of [...(floor.objects || [])].sort((a,b)=>(a.elevation_m||0)-(b.elevation_m||0))) {
+      if(!options.edit&&options.hideExtractionFans&&item.type==='extractor_fan')continue;
+      if(!options.edit&&((options.hideRadiators&&item.type==='radiator')||(options.hideLightFixtures&&(item.light_entity||['lamp','wall_light','nanoleaf_panels','tv_lightstrip'].includes(item.type)))))continue;
       const ow=item.width/dims.width*w,oh=item.depth/dims.depth*h,object=svgElement('g',{transform:`translate(${item.x/100*w} ${item.y/100*h}) rotate(${item.rotation || 0})`,'data-object-id':item.id,opacity:options.edit?1:(options.furniture_opacity ?? (pixel?.9:.55))});
       if(item.light_entity){const light=lightAppearance(states[item.light_entity]);if(light.level){
         const strip=item.type==='tv_lightstrip',glowId=`${patternId}-object-${defs.childNodes.length}`;
@@ -138,6 +140,9 @@ export function renderPlan(floor, states, options={}) {
       const art=svgElement('g',{transform:`translate(${-ow/2} ${-oh/2})`});
       if(pixel&&item.style_images?.[mode]){const spriteHeight=['tv','bookshelf','display_cabinet','computer','ultrawide_monitor'].includes(item.type)?Math.max(oh,ow*.75):oh;art.append(svgElement('rect',{width:ow,height:oh,fill:'transparent'}),svgElement('image',{href:item.style_images[mode],x:0,y:(oh-spriteHeight)/2,width:ow,height:spriteHeight,preserveAspectRatio:'xMidYMid meet',style:'image-rendering:pixelated','data-private-sprite':item.id}));}
       else art.append(objectArtwork(item,mode,ow,oh));object.append(art);
+      // Furniture fronts face local +Y in the plan (local +Z in 3D).
+      // Keep the marker inside the rotating object group and out of hit testing.
+      if(options.edit)object.append(svgElement('path',{d:`M-8 ${oh/2-8}L0 ${oh/2+4}L8 ${oh/2-8}Z`,fill:'#007c91',stroke:'#fff','stroke-width':1.5,'vector-effect':'non-scaling-stroke','pointer-events':'none','data-furniture-front':'',role:'img','aria-label':'Front'}));
       if(item.type==='tv'&&item.media_entity){object.append(svgElement('image',{x:-ow*.46,y:-oh*.37,width:ow*.92,height:oh*.22,preserveAspectRatio:'none','data-tv-screen':item.id,style:'image-rendering:pixelated','pointer-events':'none'}));}
       const name=item.name || CATALOGUE.find(d=>d.type===item.type)?.name || item.type,title=svgElement('title');title.textContent=name;object.append(title);
       if(options.selectedObject===item.id)object.append(svgElement('rect',{x:-ow/2-5,y:-oh/2-5,width:ow+10,height:oh+10,fill:'none',stroke:'#007c91','stroke-width':3,'vector-effect':'non-scaling-stroke','stroke-dasharray':'5 3'}));
@@ -149,14 +154,14 @@ export function renderPlan(floor, states, options={}) {
         handle.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();e.stopPropagation();moved=false;drag={id:item.id,type:'resize',start:pointAt(e),x:item.x,y:item.y,node:object,rotation:item.rotation || 0,width:item.width,depth:item.depth,dims,ow,oh,sx,sy};svg.setPointerCapture(e.pointerId);});
         handle.addEventListener('keydown',e=>{const deltas={ArrowLeft:[-.05,0],ArrowRight:[.05,0],ArrowUp:[0,-.05],ArrowDown:[0,.05]};if(!deltas[e.key])return;e.preventDefault();e.stopPropagation();const [dw,dd]=deltas[e.key],focusRoot=plan.getRootNode();options.onObjectResize(item.id,{width:Math.max(.05,Math.min(30,item.width+dw)),depth:Math.max(.05,Math.min(30,item.depth+dd))});focusRoot.querySelector(`[data-object-id="${CSS.escape(item.id)}"] [data-resize-handle="${corner}"]`)?.focus();});object.append(handle);
       }
-      if(options.onObject){object.setAttribute('role','button');object.setAttribute('tabindex','0');object.setAttribute('aria-label',name);object.style.cursor='grab';object.addEventListener('click',e=>{e.stopPropagation();if(!moved)options.onObject(item.id);});object.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();options.onObject(item.id);}if(options.onObjectMove&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const d=e.shiftKey?1:.2;options.onObjectMove(item.id,[Math.max(0,Math.min(100,item.x+(e.key==='ArrowRight'?d:e.key==='ArrowLeft'?-d:0))),Math.max(0,Math.min(100,item.y+(e.key==='ArrowDown'?d:e.key==='ArrowUp'?-d:0)))]);}});}
+      if(options.onObject){object.setAttribute('role','button');object.setAttribute('tabindex','0');object.setAttribute('aria-label',name);object.style.cursor='grab';object.addEventListener('click',e=>{e.stopPropagation();if(!moved)options.onObject(item.id,pointAt(e));});object.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();options.onObject(item.id,[item.x,item.y]);}if(options.onObjectMove&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const d=e.shiftKey?1:.2;options.onObjectMove(item.id,[Math.max(0,Math.min(100,item.x+(e.key==='ArrowRight'?d:e.key==='ArrowLeft'?-d:0))),Math.max(0,Math.min(100,item.y+(e.key==='ArrowDown'?d:e.key==='ArrowUp'?-d:0)))]);}});}
       if(options.onObjectContext){object.addEventListener('contextmenu',e=>{e.preventDefault();e.stopPropagation();options.onObjectContext(item.id);});object.addEventListener('keydown',e=>{if(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')){e.preventDefault();options.onObjectContext(item.id);}});}
       if(options.onObjectMove){object.style.touchAction='none';object.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();e.stopPropagation();moved=false;drag={id:item.id,start:pointAt(e),x:item.x,y:item.y,node:object,rotation:item.rotation || 0};svg.setPointerCapture(e.pointerId);});}
       group.append(object);
     }
     overlays.forEach(node=>{node.style.pointerEvents='none';group.append(node);});
     solidFaces.forEach(node=>{node.style.pointerEvents='none';group.append(node);});
-    if(!options.edit)for(const item of floor.objects || [])if(item.type==='radiator'&&heatingState(states[item.heating_entity])==='heating'){
+    if(!options.edit)for(const item of floor.objects || [])if(!options.hideRadiators&&item.type==='radiator'&&heatingState(states[item.heating_entity])==='heating'){
       const id=`${patternId}-heat-${defs.childNodes.length}`,gradient=svgElement('radialGradient',{id});
       gradient.append(svgElement('stop',{offset:0,'stop-color':'#ff5039','stop-opacity':.65}),svgElement('stop',{offset:1,'stop-color':'#ff5039','stop-opacity':0}));defs.append(gradient);
       const glow=svgElement('ellipse',{cx:item.x/100*w,cy:item.y/100*h,rx:(item.width/2+.35)/dims.width*w,ry:(item.depth/2+.45)/dims.depth*h,fill:`url(#${id})`,transform:`rotate(${item.rotation || 0} ${item.x/100*w} ${item.y/100*h})`,'data-heating-glow':item.id});glow.style.pointerEvents='none';group.append(glow);

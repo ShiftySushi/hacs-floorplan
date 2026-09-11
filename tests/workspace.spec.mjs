@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 test('live workspace fits a tall plan and keeps editing separate',async({page})=>{
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   const card=page.locator('floorplan-card');
   await page.evaluate(()=>{const card=document.querySelector('floorplan-card');const config=structuredClone(card.config);config.floors[0].aspect_ratio=.6;card.setConfig(config);});
   await expect.poll(async()=>{const r=await card.locator('.plan').boundingBox();return !!r&&r.y>=0&&r.y+r.height<=page.viewportSize().height;}).toBe(true);

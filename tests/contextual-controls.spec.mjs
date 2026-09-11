@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 test('graphical card reveals controls and remembers a collapsible lighting panel',async({page},info)=>{
-  await page.goto('/demo/');const card=page.locator('floorplan-card');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));const card=page.locator('floorplan-card');
   await expect(card.locator('.card-title')).toHaveCount(0);
   await expect(card.getByRole('region',{name:'Light controls'})).toBeHidden();
   const stage=card.locator('.plan-slot'),tools=card.locator('.stage-tools');

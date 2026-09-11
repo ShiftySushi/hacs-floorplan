@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 test('all storeys has per-floor overlays and an inspection toggle without rebuilding the camera',async({page})=>{
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   await page.evaluate(()=>{
     const card=document.querySelector('floorplan-card'),config=JSON.parse(document.querySelector('#config').textContent);
     const original=config.floors[0];

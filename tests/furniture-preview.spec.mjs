@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 test('furniture editor uses 2D independently of live style and offers editable 3D height preview',async({page})=>{
-  await page.goto('/demo/');await page.getByRole('button',{name:'Edit layout',exact:true}).click();
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const e=page.locator('floorplan-card-editor');
   await e.evaluate(el=>{el.config.appearance.mode='pokemon';el.render();});
   await e.getByRole('button',{name:'3. Furniture',exact:true}).click();

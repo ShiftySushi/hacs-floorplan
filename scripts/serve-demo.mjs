@@ -1,6 +1,9 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 const assets = new Map([
+  ['/src/demo-preview.js', ['src/demo-preview.js', 'text/javascript']],
+  ['/src/demo-boot.js', ['src/demo-boot.js', 'text/javascript']],
+  ['/src/demo-boot.css', ['src/demo-boot.css', 'text/css']],
   ['/demo/', ['demo/index.html', 'text/html']],
   ['/demo/sample.svg', ['demo/sample.svg', 'image/svg+xml']],
   ['/dist/hacs-floorplan.js', ['dist/hacs-floorplan.js', 'text/javascript']],

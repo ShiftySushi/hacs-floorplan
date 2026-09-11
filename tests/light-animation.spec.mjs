@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 test('lights fade through intermediate levels and panels animate only when enabled',async({page})=>{
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   await page.evaluate(()=>{
     const floor={id:'test',name:'Test',aspect_ratio:1,width_m:5,rooms:[{id:'room',name:'Room',points:[[0,0],[100,0],[100,100],[0,100]],lights:['light.test']}],entities:[{entity:'light.test',x:50,y:50}],objects:[{id:'panels',type:'nanoleaf_panels',x:50,y:30,width:2,depth:.1,height:1,light_entity:'light.test',panel_effect:'rainbow'}]};
     const states={'light.test':{state:'on',attributes:{rgb_color:[50,150,255]}}};

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('catalogue drag uses rotated zoomed coordinates and preserves an explicit snap-off choice',async({page,isMobile})=>{
-  await page.goto('/demo/');await page.getByRole('button',{name:'Edit layout',exact:true}).click();
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');
   await editor.getByRole('button',{name:'1. Floors',exact:true}).click();
   await editor.getByLabel('Rotation (degrees clockwise)').fill('90');await editor.getByLabel('Rotation (degrees clockwise)').press('Tab');
@@ -28,7 +28,7 @@ test('catalogue drag uses rotated zoomed coordinates and preserves an explicit s
 });
 
 test('furniture workspace locks changes and resizes rotated objects as one undoable edit',async({page})=>{
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');
   await editor.getByRole('button',{name:'3. Furniture',exact:true}).click();
@@ -36,13 +36,31 @@ test('furniture workspace locks changes and resizes rotated objects as one undoa
   await expect(editor.getByLabel('Width (metres)',{exact:true})).toBeDisabled();
   await expect(editor.locator('[data-resize-handle]')).toHaveCount(0);
   await editor.getByRole('button',{name:'Unlock editing',exact:true}).click();
+  await expect(editor.locator('[data-resize-handle]')).toHaveCount(0);
   await expect(editor.getByLabel('Find furniture',{exact:true})).toBeHidden();
   await editor.getByRole('button',{name:'Zoom in',exact:true}).click();
   await editor.getByRole('button',{name:'Pan left',exact:true}).click();
   const camera=await editor.locator('[data-camera]').getAttribute('data-camera');
+  const front=editor.locator('[data-object-id="furniture-0"] [data-furniture-front]');
+  await expect(front).toHaveAttribute('pointer-events','none');
+  const direction=()=>front.evaluate(n=>{const m=n.getScreenCTM(),length=Math.hypot(m.c,m.d);return [m.c/length,m.d/length];});
+  const facing=await direction();
   await editor.getByRole('button',{name:'Rotate furniture',exact:true}).click();
+  const rotated=await direction();
+  expect(rotated[0]).toBeCloseTo(-facing[1],5);expect(rotated[1]).toBeCloseTo(facing[0],5);
   await expect(editor.locator('[data-camera]')).toHaveAttribute('data-camera',camera);
   const before={width:Number(await editor.getByLabel('Width (metres)',{exact:true}).inputValue()),depth:Number(await editor.getByLabel('Depth (metres)',{exact:true}).inputValue()),x:await editor.getByLabel('X position (%)',{exact:true}).inputValue(),y:await editor.getByLabel('Y position (%)',{exact:true}).inputValue()};
+  // A corner drag in the default mode moves the object without changing its size.
+  const object=editor.locator('[data-object-id="furniture-0"]');
+  await object.scrollIntoViewIfNeeded();const corner=await object.locator(':scope > g').first().boundingBox();
+  const start={x:corner.x+corner.width*.15,y:corner.y+corner.height*.15};
+  await page.mouse.move(start.x,start.y);await page.mouse.down();await page.mouse.move(start.x+20,start.y+20,{steps:8});await page.mouse.up();
+  await expect(editor.getByLabel('Width (metres)',{exact:true})).toHaveValue(String(before.width));
+  await expect(editor.getByLabel('Depth (metres)',{exact:true})).toHaveValue(String(before.depth));
+  await expect(editor.getByLabel('X position (%)',{exact:true})).not.toHaveValue(before.x);
+  await editor.getByRole('button',{name:'Undo',exact:true}).click();
+  await editor.getByRole('button',{name:'Resize furniture',exact:true}).click();
+  await expect(editor.locator('[data-resize-handle]')).toHaveCount(4);
   const handle=editor.locator('[data-object-id="furniture-0"] [data-resize-handle="se"]');
   await handle.scrollIntoViewIfNeeded();const box=await handle.boundingBox();expect(box).toBeTruthy();
   await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2-12,box.y+box.height/2+18,{steps:8});await page.mouse.up();
@@ -58,7 +76,14 @@ test('furniture workspace locks changes and resizes rotated objects as one undoa
   await expect.poll(async()=>Number(await editor.getByLabel('Width (metres)',{exact:true}).inputValue())).toBeGreaterThan(before.width);
   await editor.locator('[data-object-id="furniture-0"]').click({button:'right'});
   await expect(editor.getByRole('button',{name:'Rotate furniture',exact:true})).toBeFocused();
+  await editor.getByRole('combobox',{name:'Placed furniture',exact:true}).selectOption({index:2});
+  await expect(editor.locator('[data-resize-handle]')).toHaveCount(0);
+  await editor.getByRole('combobox',{name:'Placed furniture',exact:true}).selectOption('furniture-0');
+  await expect(editor.locator('[data-resize-handle]')).toHaveCount(0);
+  await editor.getByRole('button',{name:'Resize furniture',exact:true}).click();
   await editor.getByRole('button',{name:'Lock editing',exact:true}).click();
   await expect(editor.getByRole('button',{name:'Remove furniture',exact:true})).toBeDisabled();
+  await expect(editor.locator('[data-resize-handle]')).toHaveCount(0);
+  await editor.getByRole('button',{name:'Unlock editing',exact:true}).click();
   await expect(editor.locator('[data-resize-handle]')).toHaveCount(0);
 });

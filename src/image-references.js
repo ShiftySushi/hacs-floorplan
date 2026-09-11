@@ -3,6 +3,6 @@ export function imageReferences(config){
   return config.floors.flatMap(floor=>[
     [floor,'image'],
     ...[floor,...(floor.objects || [])].flatMap(item=>Object.keys(item.style_images || {}).map(key=>[item.style_images,key])),
-    ...(floor.objects || []).flatMap(item=>[[item,'artwork_image'],...(item.tv_scenes || []).map(scene=>[scene,'image'])])
+    ...(floor.objects || []).flatMap(item=>[[item,'artwork_image'],[item,'artwork_portrait_image'],...(item.tv_scenes || []).map(scene=>[scene,'image'])])
   ]);
 }

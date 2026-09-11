@@ -1,4 +1,5 @@
 import { available, capabilities, normaliseConfig, serviceCalls } from './lights.js';
+import {isolateRoomFloor} from './room-isolation.js';
 import { displaySettings, displayFields } from './display-settings.js';
 import { styles } from './styles.js';
 import { element, button, field, preserveFocus } from './dom.js';
@@ -10,6 +11,7 @@ import { roomTemperature, roomReadoutPoint, heatingState, temperatureTone } from
 import { daylightLevel, stageColour } from './daylight.js';
 const collectionStyles='.collection-controls{display:grid;grid-template-columns:minmax(0,1fr) 70px;gap:4px;align-items:center;width:100%;padding:3px 0}.collection-controls .collection-adjust{display:inline-flex;align-items:center;justify-content:center;gap:4px;align-self:center;width:70px;min-width:0;min-height:44px;padding:3px;font-size:11px;line-height:1.2;border-color:transparent;background:transparent;color:var(--secondary-text-color,#63776e);box-shadow:none}.collection-controls .collection-adjust .icon{width:15px;height:15px}.collection-controls .collection-adjust:hover,.collection-controls .collection-adjust[aria-pressed=true]{background:var(--secondary-background-color,#eef4f0);color:var(--primary-text-color,#26343d)}.collection-controls .collection-adjust:focus-visible{outline:2px solid var(--primary-color,#007c91);outline-offset:1px}';
 import {sceneEntities,sceneState} from './ha-updates.js';
+import {lightToggleIds} from './light-targets.js';
 
 export class FloorplanCard extends HTMLElement {
   constructor() {
@@ -41,13 +43,13 @@ export class FloorplanCard extends HTMLElement {
     const identity=JSON.stringify([location.pathname,this.config.title,this.config.floors.map(f=>f.id)]);
     let hash=2166136261;for(const char of identity)hash=Math.imul(hash^char.charCodeAt(0),16777619);
     const key=`floorplan-view-${hash>>>0}`;
-    if(this.viewStorageKey!==key){this.viewStorageKey=key;this.viewStates={};this.inspectorOpen=false;try{const saved=JSON.parse(localStorage.getItem(key));if(saved){if(['clean','3d','pokemon','zelda','sims'].includes(saved.mode))this.viewMode=saved.mode;this.floorId=saved.floorId;this.building=!!saved.building;this.hideOverlays=!!saved.hideOverlays;this.inspectorOpen=!!saved.inspectorOpen;this.displayPreferences=saved.display;this.viewStates=saved.cameras || {};}}catch{}}
+    if(this.viewStorageKey!==key){this.viewStorageKey=key;this.viewStates={};this.blindStates={};this.inspectorOpen=false;try{const saved=JSON.parse(localStorage.getItem(key));if(saved){if(['clean','3d','pokemon','zelda','sims'].includes(saved.mode))this.viewMode=saved.mode;this.floorId=saved.floorId;this.building=!!saved.building;this.hideOverlays=!!saved.hideOverlays;this.inspectorOpen=!!saved.inspectorOpen;this.displayPreferences=saved.display;this.isolatedRooms=saved.isolatedRooms || {};this.viewStates=saved.cameras || {};this.blindStates=saved.blinds || {};}}catch{}}
     if (!this.config.floors.some(f => f.id === this.floorId)) this.floorId = this.config.floors[0]?.id;
     const configured = new Set([...this.config.floors.flatMap(f => [...f.entities.map(e => e.entity), ...f.rooms.flatMap(r => r.lights), ...(f.objects || []).map(o=>o.light_entity).filter(Boolean)]), ...this.config.groups.flatMap(g => g.entities)]);
     this.selected = new Set([...this.selected].filter(id => configured.has(id))); this.render();
   }
   set hass(hass) { const next=sceneState(hass,this.watchedEntities);this._hass = hass;if(next===this.hassSceneState)return;this.hassSceneState=next; if (!['INPUT', 'SELECT'].includes(this.shadowRoot.activeElement?.tagName)) this.render(); else this.deferredUpdate = true; }
-  saveView(){try{localStorage.setItem(this.viewStorageKey,JSON.stringify({mode:this.viewMode || this.config.appearance.mode,floorId:this.floorId,building:!!this.building,hideOverlays:!!this.hideOverlays,inspectorOpen:!!this.inspectorOpen,display:this.displayPreferences,cameras:this.viewStates}));}catch{}}
+  saveView(){try{localStorage.setItem(this.viewStorageKey,JSON.stringify({mode:this.viewMode || this.config.appearance.mode,floorId:this.floorId,building:!!this.building,hideOverlays:!!this.hideOverlays,inspectorOpen:!!this.inspectorOpen,display:this.displayPreferences,isolatedRooms:this.isolatedRooms,cameras:this.viewStates,blinds:this.blindStates}));}catch{}}
   getCardSize() { return 12; }
   getGridOptions() { return { columns: 12, min_columns: 6 }; }
   toggle(ids) {
@@ -65,6 +67,14 @@ export class FloorplanCard extends HTMLElement {
       if (results.some(result => result.status === 'rejected')) this.error = 'Some lights could not be updated. Check their state and try again.';
     } catch { this.error = 'The light command could not be sent. Please try again.'; }
     finally { this.busy = false; this.render(); }
+  }
+  activateLight(floorId,id){
+    const marker=this.config.floors.find(f=>f.id===floorId)?.entities.find(e=>e.entity===id),states=this._hass?.states || {};
+    if(marker?.unbound||!available(states[id]))return;
+    const unbound=new Set(this.config.floors.flatMap(f=>f.entities).filter(e=>e.unbound).map(e=>e.entity));
+    const ids=lightToggleIds(this.config,floorId,id).filter(entity=>!unbound.has(entity)&&available(states[entity]));
+    if(this.selectionMode)this.toggle(ids);
+    else this.control(ids.some(entity=>states[entity]?.state==='on')?'off':'on',undefined,ids);
   }
   render() {
     if (!this.config) return;
@@ -92,8 +102,12 @@ export class FloorplanCard extends HTMLElement {
     for(const [id,label,glyph] of [['clean','2D','grid'],['3d','3D','cube']]) modes.append(iconButton(label,glyph,()=>{this.viewMode=id;this.render();},{'aria-pressed':String(mode===id)}));
     const customStyle=element('select',{'aria-label':'Custom style',onchange:e=>{this.viewMode=e.target.value;this.render();}},[element('option',{value:'',text:'Custom',disabled:true,selected:!['pokemon','zelda','sims'].includes(mode)})]);
     for(const [value,text] of [['pokemon','Pokémon'],['zelda','Zelda'],['sims','Sims-like']])customStyle.append(element('option',{value,text,selected:mode===value}));modes.append(customStyle);
+    if(['3d','sims'].includes(mode)){
+      const activeFloor=this.config.floors.find(f=>f.id===this.floorId);this.isolatedRooms ||= {};
+      const isolation=element('select',{'aria-label':'Isolate room',title:'Isolate a room for an unobstructed view',className:'room-isolation',onchange:e=>{this.isolatedRooms[this.floorId]=e.target.value;this.render();}},[element('option',{value:'',text:'Whole floor',selected:!this.isolatedRooms[this.floorId]}),...(activeFloor?.rooms||[]).map(r=>element('option',{value:r.id,text:r.name||r.id,selected:this.isolatedRooms[this.floorId]===r.id}))]);modes.append(isolation);
+    }
     if(this.config.floors.length)header.append(modes);
-    if(['3d','sims'].includes(mode)&&this.config.floors.length>1)tabs.append(iconButton('All storeys','floor',()=>{this.building=!this.building;this.render();},{'aria-pressed':String(!!this.building)}));
+    if(['3d','sims'].includes(mode)&&this.config.floors.length>1)tabs.append(iconButton('All storeys','floor',()=>{if(this.isolatedRooms?.[this.floorId]){this.isolatedRooms[this.floorId]='';this.building=true;}else this.building=!this.building;this.render();},{'aria-pressed':String(!!this.building&&!this.isolatedRooms?.[this.floorId])}));
     const stageTools=element('div',{className:'stage-tools'},[tabs,iconButton(this.hideOverlays?'Show overlays':'Hide overlays','eye',()=>{this.hideOverlays=!this.hideOverlays;this.render();},{'aria-pressed':String(!!this.hideOverlays),title:this.hideOverlays?'Show overlays':'Hide overlays',className:'overlay-toggle'})]);
     stageTools.append(iconButton(this.inspectorOpen?'Hide lighting':'Lighting','bulb',()=>{this.inspectorOpen=!this.inspectorOpen;this.render();},{'aria-expanded':String(!!this.inspectorOpen),'aria-controls':'lighting-panel',title:this.inspectorOpen?'Hide lighting':'Lighting',className:'inspector-toggle'}));
     const settings=element('details',{className:'display-settings',open:!!this.displayOpen},[element('summary',{'aria-label':'Display settings',title:'Display settings'},[icon('sliders')]),element('div',{className:'display-popover'},[element('h3',{text:'Display settings'}),element('p',{className:'display-description',text:'Choose what stays visible on your floorplan.'}),...displayFields(display,next=>{this.displayPreferences=next;this.displayOpen=true;this.render();}),element('p',{className:'muted',text:'Saved for this browser. Set shared defaults in the card editor.'})])]);
@@ -109,14 +123,16 @@ export class FloorplanCard extends HTMLElement {
     this.card.classList.toggle('inspector-collapsed',!this.inspectorOpen);
     this.controlsSlot.id='lighting-panel';
     this.controlsSlot.hidden=!this.inspectorOpen;
-    const floor = this.config.floors.find(f => f.id === this.floorId);
+    const sourceFloor = this.config.floors.find(f => f.id === this.floorId);
+    const isolatedRoom=['3d','sims'].includes(mode)&&sourceFloor?.rooms.some(r=>r.id===this.isolatedRooms?.[this.floorId])?this.isolatedRooms[this.floorId]:'';
+    const floor=isolatedRoom?isolateRoomFloor(sourceFloor,isolatedRoom):sourceFloor;
     if (!floor || (!floor.image && !floor.rooms.length && !floor.walls?.length)) {
       this.plan?.dispose?.();this.plan=null;this.planKey=null;
       this.planSlot.replaceChildren(element('div',{className:'empty-plan'},[icon('floor'),element('h3',{text:'Make this space yours'}),element('p',{text:'Open the card editor to add your floorplan, furnish the rooms and place lights. The guided setup takes care of the configuration.'})]));
     }
     else {
       const markers = [];
-      const markerFloors=this.building&&['3d','sims'].includes(mode)?this.config.floors:[floor];
+      const markerFloors=this.building&&!isolatedRoom&&['3d','sims'].includes(mode)?this.config.floors:[floor];
       for(const floor of markerFloors) {
       floor.entities.forEach(item => {
         const state = item.unbound?undefined:states[item.entity]; const light = item.entity.startsWith('light.');
@@ -125,7 +141,8 @@ export class FloorplanCard extends HTMLElement {
         const marker = button('', () => {
           if(item.unbound)return;
           if (light) {
-            if(this.selectionMode)this.toggle([item.entity]);
+            if(['3d','sims'].includes(mode))this.activateLight(floor.id,item.entity);
+            else if(this.selectionMode)this.toggle([item.entity]);
             else this.control(state?.state==='on'?'off':'on',undefined,[item.entity]);
           }
           else this.dispatchEvent(new CustomEvent('hass-more-info', { detail: { entityId: item.entity }, bubbles: true, composed: true }));
@@ -152,9 +169,14 @@ export class FloorplanCard extends HTMLElement {
         markers.push({node:marker,x:radiator.x,y:radiator.y,floorId:floor.id});
       }
       }
-      const options={...this.config.appearance,idleRotation:display.idle_rotation,labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays?[]:markers,daylight,building:!!this.building,allFloors:this.config.floors};
-      const cameraKey=`${floor.id}:${mode}:${!!this.building}`;this.viewStates ||= {};options.viewState=this.viewStates[cameraKey] ||= {};options.onViewChange=()=>this.saveView();
-      const key=JSON.stringify([floor,this.config.appearance,mode,!!this.building,this.building?this.config.floors:null]);
+      const options={...this.config.appearance,isolatedRoom,hideLightFixtures:display.hide_light_fixtures,hideRadiators:display.hide_radiators,hideExtractionFans:display.hide_extraction_fans,idleRotation:display.idle_rotation,labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays?[]:markers,daylight,building:!!this.building&&!isolatedRoom,allFloors:this.config.floors};
+      options.onLightClick=(floorId,id)=>this.activateLight(floorId,id);
+      options.blindStates=this.blindStates;
+      const baseCameraKey=`${floor.id}:${mode}:${!!this.building}`,cameraKey=baseCameraKey+(isolatedRoom?`:${isolatedRoom}`:'');this.viewStates ||= {};
+      const baseView=this.viewStates[baseCameraKey] ||= {};options.viewState=this.viewStates[cameraKey] ||= {};
+      for(const key of ['doors','portraits'])options.viewState[key]=baseView[key] ||= {};
+      options.onViewChange=()=>this.saveView();
+      const key=JSON.stringify([floor,display.hide_light_fixtures,display.hide_radiators,display.hide_extraction_fans,this.config.appearance,mode,!!this.building,this.building?this.config.floors:null]);
       if(key!==this.planKey || !this.plan) {
         this.plan?.dispose?.();
         this.plan=(['3d','sims'].includes(mode)?render3D:renderPlan)(floor,states,options);this.planKey=key;

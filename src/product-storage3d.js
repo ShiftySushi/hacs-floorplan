@@ -2,6 +2,26 @@
 // carcass so openings remain genuinely open when viewed from an angle.
 export function productStorage3D(o,box,ball){
   const id=o.product_id;
+  if(id==='lyla-sideboard'){
+    const w=o.width,h=o.height,d=o.depth,c=o.colour||'#ae784b',base=.09,body=h-base;
+    box(w,.035,d,0,h-.0175,0,c);box(w,.025,d,0,base,0,c);box(w,body,.025,0,base+body/2,-d/2,c);
+    for(const x of [-w/2+.025,w/2-.025]){box(.05,h,d,x,h/2,0,c);}
+    for(let i=0;i<2;i++){const x=-w/2+w*(i+.5)/3;box(w/3-.012,body-.045,.025,x,base+body/2,d/2,c).userData.storagePart='door';ball(.012,x+(i?-.1:.1),h*.4,d/2+.02,'#343638');}
+    for(let i=0;i<3;i++){const y=base+body*(i+.5)/3;box(w/3-.012,body/3-.016,.025,w/3,y,d/2,c).userData.storagePart='drawer';ball(.012,w/3,y,d/2+.02,'#343638');}
+    return true;
+  }
+  if(id==='malm-2'||id==='malm-6-glass'){
+    const w=o.width,d=o.depth,h=o.height,glass=id==='malm-6-glass',body=h-(glass?.006:0),wood=o.colour||'#302723',cols=glass?2:1,rows=glass?3:2;
+    box(w,body,d,0,body/2,0,wood);
+    // Recessed plinth and narrow gaps define MALM's handleless drawer fronts.
+    box(w-.04,.055,.012,0,.0275,d/2,'#171311');
+    for(let c=0;c<cols;c++)for(let r=0;r<rows;r++){
+      const front=box(w/cols-.018,(body-.08)/rows-.012,.018,-w/2+w/cols*(c+.5),.055+(body-.08)/rows*(r+.5),d/2,wood);
+      front.userData.storagePart='drawer';
+    }
+    if(glass){const top=box(w,.006,d,0,h-.003,0,'#f4f5f2');top.material=top.material.clone();top.material.roughness=.08;top.userData.storagePart='glass-top';}
+    return true;
+  }
   if(!['lyla-display','lyla-tv-bench','dunelm-fulton-extra-wide-pine'].includes(id))return false;
   const w=o.width,d=o.depth,h=o.height,wood=o.colour || '#ae784b',metal='#343638',t=.025;
   const fulton=id==='dunelm-fulton-extra-wide-pine',base=fulton?h*12/42:0;

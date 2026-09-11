@@ -1,7 +1,11 @@
 <!doctype html>
-<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Floorplan Card · Local demo</title>
+<html lang="en" data-loading><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Floorplan Card · Local demo</title>
+<link rel="stylesheet" href="/src/demo-boot.css"><script src="/src/demo-boot.js"></script>
+<div id="boot" role="status" aria-live="polite"><svg viewBox="0 0 80 80" aria-hidden="true"><path opacity=".25" d="M12 12H68V68H12ZM12 40H40V12M40 40V68M40 52H68"/><path class="progress" d="M12 12H68V68H12Z" pathLength="128"/></svg><strong>Loading your floorplan</strong><p>Restoring your scene and preview settings…</p><button hidden onclick="location.reload()">Try again</button></div>
+<noscript>This floorplan needs JavaScript to run.</noscript>
 <main><h1>Floorplan Card</h1><p>Fictional example · simulated entities and service calls</p><button id="theme">◐ Toggle theme</button> <button id="presence">Toggle presence</button> <button id="alloff">All lights off</button> <button id="allon">All lights on</button><details><summary>Demo tools</summary><button id="failure">Simulate service failure</button> <button id="restart">Start empty setup</button></details><section class="layout"><floorplan-card></floorplan-card><aside><details open><summary>Edit floorplans and assignments</summary><floorplan-card-editor></floorplan-card-editor></details><details><summary>Service calls</summary><pre id="events">Select a light to begin.</pre></details><details><summary>Demo configuration</summary><pre id="config"></pre></details></aside></section></main>
 <script type="module">
+import {restorePreview,savePreview,togglePreviewTheme} from '/src/demo-preview.js';
 import '../dist/hacs-floorplan.js';
 const entity=(name,modes,state='on',extra={})=>({state,attributes:{friendly_name:name,supported_color_modes:modes,brightness:180,rgb_color:[255,186,90],...extra}});
 const states={'light.diner':entity('Diner',['rgb']), 'light.kitchen':entity('Kitchen',['brightness']), 'light.lounge':entity('Lounge',['color_temp'],'off',{min_color_temp_kelvin:2200,max_color_temp_kelvin:5000,color_temp_kelvin:3000}), 'light.utility':entity('Utility',['onoff'],'off'), 'light.bedroom':entity('Bedroom',['rgb'],'unavailable'), 'sensor.temperature':{state:'21.4',attributes:{friendly_name:'Temperature',unit_of_measurement:'°C'}}};
@@ -15,6 +19,7 @@ config.floors[0].aspect_ratio=1;config.floors[0].width_m=10;
 config.floors[0].rooms.push({id:'utility',name:'Utility',points:[[50,45],[95,45],[95,95],[50,95]],lights:['light.utility'],presence:[]});
 config.floors[0].walls=[[[5,5],[95,5]],[[95,5],[95,95]],[[95,95],[5,95]],[[5,95],[5,5]],[[5,45],[95,45]],[[50,45],[50,95]]].map(([a,b],i)=>({id:`wall-${i}`,a,b,openings:i<2?[{id:`window-${i}`,type:'window',offset:.5,width:2,height:1.2,sill:.9}]:i>3?[{id:`door-${i}`,type:'door',offset:.5,width:1,height:2.1,sill:0}]:[]}));
 config.floors[0].objects=[['dining_table',26,25,1.7,.9],['chair',26,16,.45,.5],['chair',26,34,.45,.5],['chair',16,25,.45,.5],['chair',36,25,.45,.5],['kitchen_unit',67,10,3.3,.6],['sink',67,10,.55,.4],['fridge',90,11,.65,.7],['island',73,30,1.8,.8],['sofa',26,52,2.3,.9],['rug',26,70,2.2,1.8],['tv_bench',26,91,1.7,.4],['tv',26,91,1.2,.1],['plant',10,88,.5,.5],['side_table',43,53,.5,.5],['desk',75,88,1.6,.65],['office_chair',75,78,.65,.65],['bookshelf',91,67,.8,.35]].map(([type,x,y,width,depth],i)=>({id:`furniture-${i}`,type,x,y,width,depth,rotation:0}));
+await restorePreview(states);
 const hass={states,async callService(domain,service,data){
   document.querySelector('#events').textContent=JSON.stringify({domain,service,data},null,2)+'\n'+document.querySelector('#events').textContent;
   if(fail){fail=false;throw Error('Demo failure');}
@@ -26,15 +31,16 @@ const hass={states,async callService(domain,service,data){
       ...(data.color_temp_kelvin?{color_temp_kelvin:data.color_temp_kelvin}:{})
     }};
   }
-  card.hass={...hass};
+  await publish();
 }};
+async function publish(){await savePreview(states);card.hass={...hass};}
 function update(){card.setConfig(config);card.hass=hass;document.querySelector('#config').textContent=JSON.stringify(config,null,2);}
 editor.setConfig(config);editor.hass=hass;editor.addEventListener('config-changed',e=>{config=e.detail.config;update();});
 card.addEventListener('hass-more-info',e=>document.querySelector('#events').textContent=`Entity details requested: ${e.detail.entityId}`);
-document.querySelector('#theme').onclick=()=>document.body.classList.toggle('dark');document.querySelector('#failure').onclick=()=>{fail=true;document.querySelector('#events').textContent='Next service call will fail.';};update();
-document.querySelector('#presence').onclick=()=>{states['binary_sensor.motion'].state=states['binary_sensor.motion'].state==='on'?'off':'on';card.hass={...hass};};
-for(const [id,value] of [['alloff','off'],['allon','on']])document.querySelector('#'+id).onclick=()=>{for(const [key,state] of Object.entries(states))if(key.startsWith('light.')&&state.state!=='unavailable')state.state=value;card.hass={...hass};};
+document.querySelector('#theme').onclick=togglePreviewTheme;document.querySelector('#failure').onclick=()=>{fail=true;document.querySelector('#events').textContent='Next service call will fail.';};update();
+document.querySelector('#presence').onclick=()=>{states['binary_sensor.motion'].state=states['binary_sensor.motion'].state==='on'?'off':'on';publish();};
+for(const [id,value] of [['alloff','off'],['allon','on']])document.querySelector('#'+id).onclick=()=>{for(const [key,state] of Object.entries(states))if(key.startsWith('light.')&&state.state!=='unavailable')state.state=value;publish();};
 document.querySelector('#restart').onclick=()=>{config={type:'custom:floorplan-card',title:'Home',floors:[],groups:[]};editor.step=0;editor.setConfig(config);update();};
 
-const {mountWorkspace}=await import('/src/demo-workspace.js?revision=5');mountWorkspace(card,editor);
+const {mountWorkspace}=await import('/src/demo-workspace.js?revision=5');mountWorkspace(card,editor);await window.floorplanReady(card);
 </script></html>
