@@ -73,7 +73,7 @@ export function render3D(floor, states, options = {}) {
   const markerSpaces=new Map(),artworks=[];
   const camera=new THREE.OrthographicCamera(-span,span,span,-span,.1,span*10);
   let {azimuth,elevation,zoom}={...home,...options.viewState};let frame=0,disposed=false,visible=true,markers=[],pointer,fallback;
-  const transitions=new Map(),reducedMotion=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;let lastPaint=0,lastInteraction=performance.now(),lastOrbit=performance.now(),idleOffset=0;
+  const transitions=new Map(),reducedMotion=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;let lastPaint=0,lastInteraction=performance.now(),lastOrbit=performance.now(),idleOffset=0,canvasWidth=0,canvasHeight=0;
   let hovering=false,returnOrbit=null;
   plan.pauseIdle=()=>{
     lastInteraction=performance.now();
@@ -197,7 +197,12 @@ export function render3D(floor, states, options = {}) {
     lastOrbit=orbitTime;plan.dataset.idleAngle=String(idleOffset);
     plan.dataset.idleState=!idleEnabled?'disabled':returnOrbit?'returning':!hovering&&!pointer&&orbitTime-lastInteraction>8000?'rotating':'waiting';
     plan.dataset.viewAzimuth=String(azimuth+idleOffset);
-    const viewAzimuth=azimuth+idleOffset;if(disposed||!visible||document.hidden||!plan.isConnected)return;const rect=plan.getBoundingClientRect();if(!rect.width||!rect.height)return;renderer.setSize(rect.width,rect.height,false);camera.position.set(Math.sin(viewAzimuth)*Math.cos(elevation)*span*2,Math.sin(elevation)*span*2+centreY,Math.cos(viewAzimuth)*Math.cos(elevation)*span*2);camera.lookAt(0,centreY+.3,0);camera.updateMatrixWorld();
+    const viewAzimuth=azimuth+idleOffset;if(disposed||!visible||document.hidden||!plan.isConnected)return;
+    // CSS entrance transforms do not change the layout or WebGL buffer size.
+    const rect={width:plan.clientWidth,height:plan.clientHeight};if(!rect.width||!rect.height)return;
+    const now=performance.now();if(now-lastPaint<30){schedule();return;}lastPaint=now;
+    if(canvasWidth!==rect.width||canvasHeight!==rect.height){renderer.setSize(rect.width,rect.height,false);canvasWidth=rect.width;canvasHeight=rect.height;}
+    camera.position.set(Math.sin(viewAzimuth)*Math.cos(elevation)*span*2,Math.sin(elevation)*span*2+centreY,Math.cos(viewAzimuth)*Math.cos(elevation)*span*2);camera.lookAt(0,centreY+.3,0);camera.updateMatrixWorld();
     world.updateMatrixWorld(true);
     // Fit the projected building bounds to the actual canvas, at any orbit angle.
     const corners=[];
@@ -224,7 +229,6 @@ export function render3D(floor, states, options = {}) {
     plan.dataset.wallOpacities=JSON.stringify(wallMeshes.map(mesh=>mesh.material.opacity));
     for(const marker of markers){const space=markerSpaces.get(marker.floorId || floor.id);if(!space)continue;const height=marker.height ?? (marker.entity?.startsWith('light.')?sourceFor(space.floor,marker.entity)?.height ?? 2.1:.35);const p=space.position([marker.x,marker.y],height).applyMatrix4(space.group.matrixWorld).project(camera);marker.node.style.left=`${(p.x*.5+.5)*100}%`;marker.node.style.top=`${(-p.y*.5+.5)*100}%`;}
     for(const label of storeyLabels){label.node.hidden=!!options.hideOverlays;const p=label.point.clone().applyMatrix4(label.group.matrixWorld).project(camera);label.node.style.left=`${(p.x*.5+.5)*100}%`;label.node.style.top=`${(-p.y*.5+.5)*100}%`;}
-    const now=performance.now();if(now-lastPaint<30){schedule();return;}lastPaint=now;
     const blindsMoving=blinds.map(b=>b.update(now,reducedMotion)).some(Boolean);
     const animate=present(now);renderer.render(scene,camera);if(blindsMoving||animate||idleEnabled||returnOrbit||wallsAnimating)schedule();
   }
