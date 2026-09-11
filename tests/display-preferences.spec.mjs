@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 test('overlay preferences persist independently and rotation refits without editing geometry',async({page},info)=>{
- await page.goto('/demo/');const card=page.locator('floorplan-card');
+ await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));const card=page.locator('floorplan-card');
  await card.evaluate(el=>{const config=structuredClone(el.config);config.floors[0].aspect_ratio=.6;el.setConfig(config);});
  const before=await card.evaluate(el=>JSON.stringify(el.config.floors));
  await card.locator('.display-settings summary').click();

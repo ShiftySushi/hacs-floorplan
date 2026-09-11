@@ -6,7 +6,7 @@ export function roomLightSources(floor, room) {
     const object=(floor.objects || []).find(o=>o.light_entity===id);
     const height=lightHeight(floor,id),accent=!!object;
     const radius=accent?(object.type==='tv_lightstrip'?1.3:1.8):height*(marker?.fixture==='spot'?.65:.95);
-    return {id,x:marker?.x ?? object?.x ?? centre[0],y:marker?.y ?? object?.y ?? centre[1],height,radius,strength:accent?.6:Math.min(1,(2.4/Math.max(1,height))**2)};
+    return {id,x:object?.x ?? marker?.x ?? centre[0],y:object?.y ?? marker?.y ?? centre[1],height,radius,strength:accent?.6:Math.min(1,(2.4/Math.max(1,height))**2)};
   });
 }
 

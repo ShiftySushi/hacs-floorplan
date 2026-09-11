@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 test('furniture changes design with each custom style without changing placement',async({page})=>{
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   const card=page.locator('floorplan-card');
   const placements=()=>card.locator('[data-object-id]').evaluateAll(nodes=>nodes.map(n=>[n.dataset.objectId,n.getAttribute('transform')]));
   const before=await placements();

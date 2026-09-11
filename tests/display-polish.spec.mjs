@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 test('utility icons align and display settings fit both themes',async({page},info)=>{
- await page.goto('/demo/');const card=page.locator('floorplan-card');
+ await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));const card=page.locator('floorplan-card');
  await card.getByRole('button',{name:'3D',exact:true}).click();
  const tools=card.locator('.stage-tools'),utilities=card.getByRole('group',{name:'Floorplan tools',exact:true});
  if(info.project.name==='desktop'){

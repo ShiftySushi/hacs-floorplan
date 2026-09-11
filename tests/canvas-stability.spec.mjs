@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 test('unrelated HA messages retain hovered controls while light changes still render',async({page})=>{
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   const result=await page.locator('floorplan-card').evaluate(card=>{
     const button=card.shadowRoot.querySelector('.overlay-toggle'),hass=card._hass;
     for(let i=0;i<20;i++)card.hass={...hass,states:{...hass.states,'sensor.unrelated':{state:String(i),attributes:{}}}};
@@ -15,7 +15,7 @@ test('unrelated HA messages retain hovered controls while light changes still re
 });
 
 test('3D entrance and control hover do not repeatedly clear the drawing buffer',async({page})=>{
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   await page.evaluate(()=>{
     window.bufferResizes=0;
     for(const key of ['width','height']){

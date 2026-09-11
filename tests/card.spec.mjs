@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.beforeEach(async ({ page }) => { await page.goto('/demo/'); });
+test.beforeEach(async ({ page }) => { await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading')); });
 test('built card exposes only compatible controls and surfaces failed commands', async ({ page }) => {
   const card = page.locator('floorplan-card');
   { const panel=page.locator('floorplan-card'); if(await panel.getByRole('button',{name:'Lighting',exact:true}).count()) await panel.getByRole('button',{name:'Lighting',exact:true}).click(); }

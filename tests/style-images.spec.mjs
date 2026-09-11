@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 test('custom furniture sprites fit their footprint and are included in exports',async({page})=>{
-  await page.goto('/demo/');await page.getByRole('button',{name:'Edit layout',exact:true}).click();
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');
   await editor.getByRole('button',{name:'3. Furniture',exact:true}).click();
   await editor.getByRole('button',{name:'Unlock editing',exact:true}).click();
@@ -24,7 +24,7 @@ test('custom furniture sprites fit their footprint and are included in exports',
 });
 import {normaliseConfig} from '../src/lights.js';
 test('private style artwork uploads without moving geometry and exports portably',async({page})=>{
-  await page.goto('/demo/');await page.getByRole('button',{name:'Edit layout',exact:true}).click();
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');
   const before=normaliseConfig(JSON.parse(await page.locator('#config').textContent()));
   await editor.getByRole('button',{name:'6. Review',exact:true}).click();

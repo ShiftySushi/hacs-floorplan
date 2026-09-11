@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 test('mapped light can be rebound without moving it or breaking its group',async({page})=>{
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');
   await editor.getByRole('button',{name:'4. Lights & sensors',exact:true}).click();
@@ -14,7 +14,7 @@ test('mapped light can be rebound without moving it or breaking its group',async
   expect(config.floors[0].rooms[0].lights).not.toContain('light.diner');
 });
 
-test.beforeEach(async ({ page }) => { await page.goto('/demo/'); });
+test.beforeEach(async ({ page }) => { await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading')); });
 const scene = async page => JSON.parse(await page.locator('#config').textContent());
 
 test('furniture can be placed, resized, varied and restored with undo and redo', async ({ page }) => {

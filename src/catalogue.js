@@ -8,6 +8,9 @@ export function tvDimensions(inches) {
 const defaultTV=tvDimensions(65);
 
 export const CATALOGUE = [
+  ['pegboard','SKÅDIS-style pegboard',.76,.035,.56,'Storage'],
+  ['extractor_fan','Extractor fan',.2,.2,.06,'Bathroom'],
+  ['printer_3d','3D printer',.4,.4,.5,'Office'],
   ['sofa','Sofa',2.1,.9,.85,'Living'], ['piano','Piano',1.5,.65,1.2,'Living'],
   ['tv','TV',defaultTV.width,.15,defaultTV.height,'Living'], ['tv_bench','TV bench',1.6,.4,.5,'Living'],
   ['side_table','Side table',.5,.5,.55,'Living'], ['display_cabinet','Display cabinet',1,.4,1.8,'Storage'],
@@ -43,12 +46,13 @@ export function objectGlyph(item, mode='clean') {
   const line=(x1,y1,x2,y2,stroke=edge,width=2)=>g.append(svgElement('line',{x1,y1,x2,y2,stroke,'stroke-width':width}));
   const ellipse=(cx,cy,rx,ry,fill=white)=>g.append(svgElement('ellipse',{cx,cy,rx,ry,fill}));
   const colour=item.colour || fabric;
-  if(item.variant==='sword'){rect(0,43,25,14,'#e7d9b4');for(let x=2;x<25;x+=4){line(x,43,x+4,57,colour,2);line(x,57,x+4,43,colour,2);}g.append(svgElement('path',{d:'M25 50Q65 50 98 30',fill:'none',stroke:colour,'stroke-width':12}));line(25,35,25,65,colour,4);}
+  if(item.variant==='sword'){rect(0,43,25,14,'#e7d9b4');for(let x=2;x<25;x+=4){line(x,43,x+4,57,colour,2);line(x,57,x+4,43,colour,2);}g.append(svgElement('path',{d:'M25 50Q65 50 98 70',fill:'none',stroke:colour,'stroke-width':12}));line(25,35,25,65,colour,4);}
+  else if(item.variant==='malm'){rect(2,2,96,96,item.product_id==='malm-6-glass'?'#f4f5f2':colour,0);line(3,94,97,94,colour,4);}
   else if(item.type==='nanoleaf_panels') {for(const [x,y] of [[22,30],[50,30],[78,30],[36,55],[64,55]])g.append(svgElement('polygon',{points:Array.from({length:6},(_,i)=>`${x+15*Math.cos((30+i*60)*Math.PI/180)},${y+15*Math.sin((30+i*60)*Math.PI/180)}`).join(' '),fill:white}));}
   else if(item.type==='tv_lightstrip'){rect(4,10,92,75,edge);rect(10,16,80,63,item.colour || '#d1a4e5');rect(17,23,66,49,edge);}
   else if(item.type==='computer'){rect(15,5,70,90,edge);rect(23,14,54,70,colour);if(item.variant!=='ps5'){ellipse(50,32,14,14,white);ellipse(50,64,14,14,white);}}
   else if(item.type==='ultrawide_monitor'){rect(2,12,96,55,edge);rect(8,18,84,42,'#729daa');rect(46,68,8,18,edge);rect(24,86,52,7,edge);}
-  else if(item.type==='radiator') {rect(3,24,94,52,item.colour || white,3);for(let x=10;x<94;x+=8)line(x,29,x,71);rect(0,41,5,18,edge,1);rect(95,41,5,18,edge,1);}
+  else if(item.type==='radiator') {if(item.variant==='towel_rail'){for(const x of [17,83])line(x,5,x,95,'#aab8bf',6);for(let y=12;y<95;y+=9)line(17,y,83,y,'#c7d3da',4);}else{rect(3,24,94,52,item.colour || white,3);for(let x=10;x<94;x+=8)line(x,29,x,71);rect(0,41,5,18,edge,1);rect(95,41,5,18,edge,1);}}
   else if(item.type==='rug') {rect(2,2,96,96,wood);rect(10,10,80,80,colour);rect(20,20,60,60,wood);for(let i=8;i<96;i+=12){line(i,0,i,5);line(i,95,i,100);} }
   else if(item.type==='sofa') {rect(3,5,94,90,colour,12);rect(12,28,76,57,white,7);line(50,30,50,83);rect(2,23,13,65,colour);rect(85,23,13,65,colour);rect(15,6,70,22,colour);}
   else if(item.type==='bed') {rect(4,3,92,94,wood);rect(10,11,80,81,white,8);rect(10,37,80,55,colour);rect(16,14,29,19,white);rect(55,14,29,19,white);line(12,48,88,48);}

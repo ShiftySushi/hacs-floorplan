@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 test('3D TV advances its still after five minutes and goes dark when off',async({page})=>{
-  await page.goto('/demo/');
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   await page.clock.install();
   await page.evaluate(()=>{
     const image=colour=>{const c=document.createElement('canvas');c.width=160;c.height=90;const ctx=c.getContext('2d');ctx.fillStyle=colour;ctx.fillRect(0,0,160,90);return c.toDataURL();};
@@ -14,9 +14,18 @@ test('3D TV advances its still after five minutes and goes dark when off',async(
     card.hass={states:{'media_player.tv':{state:'playing',attributes:{}}}};
   });
   await expect.poll(()=>page.evaluate(()=>window.tvDraws.at(-1)===window.stills[0])).toBe(true);
-  await page.clock.fastForward(299000);
+  await page.clock.fastForward(290000);
   expect(await page.evaluate(()=>window.tvDraws.includes(window.stills[1]))).toBe(false);
-  await page.clock.fastForward(1100);
+  await page.clock.fastForward(10100);
+  await expect.poll(()=>page.evaluate(()=>window.tvDraws.at(-1)===window.stills[1])).toBe(true);
+  const canvas=page.locator('.plan-3d canvas').first(),png=(await canvas.screenshot()).toString('base64');
+  const point=await page.evaluate(async png=>{const image=new Image();image.src='data:image/png;base64,'+png;await image.decode();const c=document.createElement('canvas');c.width=image.width;c.height=image.height;const ctx=c.getContext('2d');ctx.drawImage(image,0,0);const d=ctx.getImageData(0,0,c.width,c.height).data;let n=0,x=0,y=0;for(let i=0;i<d.length;i+=4)if(d[i+2]>50&&d[i+2]>d[i]*2&&d[i+2]>d[i+1]*2){n++;x+=(i/4)%c.width;y+=Math.floor(i/4/c.width);}return {x:x/n/c.width,y:y/n/c.height,n};},png);
+  expect(point.n).toBeGreaterThan(30);const bounds=await canvas.boundingBox();
+  await canvas.click({position:{x:point.x*bounds.width,y:point.y*bounds.height}});
+  await expect.poll(()=>page.evaluate(()=>window.tvDraws.at(-1)===window.stills[0])).toBe(true);
+  await page.clock.fastForward(290000);
+  expect(await page.evaluate(()=>window.tvDraws.at(-1)===window.stills[0])).toBe(true);
+  await page.clock.fastForward(10100);
   await expect.poll(()=>page.evaluate(()=>window.tvDraws.at(-1)===window.stills[1])).toBe(true);
   await page.evaluate(()=>{window.tvFills=[];document.querySelector('floorplan-card').hass={states:{'media_player.tv':{state:'off',attributes:{}}}};});
   await expect.poll(()=>page.evaluate(()=>window.tvFills.at(-1))).toBe('#080e14');
