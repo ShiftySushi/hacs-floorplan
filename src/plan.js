@@ -6,6 +6,7 @@ import { objectArtwork } from './object-art.js';
 import { floorDimensions } from './scene.js';
 import { roomLightSources, lightAppearance, roomDarkness } from './illumination.js';
 import { heatingState } from './heating.js';
+import {radiatorEntity} from './live-data.js';
 import { pixelPattern, pixelRoomTrim } from './pixel-style.js';
 import { blendAppearance, panelFrame } from './light-animation.js';
 import { stageColour } from './daylight.js';
@@ -164,7 +165,7 @@ export function renderPlan(floor, states, options={}) {
     }
     overlays.forEach(node=>{node.style.pointerEvents='none';group.append(node);});
     solidFaces.forEach(node=>{node.style.pointerEvents='none';group.append(node);});
-    if(!options.edit)for(const item of floor.objects || [])if(!options.hideRadiators&&item.type==='radiator'&&heatingState(states[item.heating_entity])==='heating'){
+    if(!options.edit)for(const item of floor.objects || [])if(!options.hideRadiators&&item.type==='radiator'&&heatingState(states[radiatorEntity(item,floor)])==='heating'){
       const id=`${patternId}-heat-${defs.childNodes.length}`,gradient=svgElement('radialGradient',{id});
       gradient.append(svgElement('stop',{offset:0,'stop-color':'#ff5039','stop-opacity':.65}),svgElement('stop',{offset:1,'stop-color':'#ff5039','stop-opacity':0}));defs.append(gradient);
       const glow=svgElement('ellipse',{cx:item.x/100*w,cy:item.y/100*h,rx:(item.width/2+.35)/dims.width*w,ry:(item.depth/2+.45)/dims.depth*h,fill:`url(#${id})`,transform:`rotate(${item.rotation || 0} ${item.x/100*w} ${item.y/100*h})`,'data-heating-glow':item.id});glow.style.pointerEvents='none';group.append(glow);

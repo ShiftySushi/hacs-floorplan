@@ -1,6 +1,33 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 
+test('file upload replaces a populated card as one undoable change and resets the old editing session',async({page},info)=>{
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
+  await page.getByRole('button',{name:'Edit layout',exact:true}).click();const editor=page.locator('floorplan-card-editor');
+  await editor.evaluate(el=>{
+    const previous=structuredClone(el.config);previous.information={items:[{type:'entity',entity:'sensor.old_summary'}]};el.setConfig(previous);
+    window.beforeReplacement=structuredClone(el.config);window.replacementEvents=[];
+    el.addEventListener('config-changed',event=>{window.replacementEvents.push(structuredClone(event.detail.config));el.setConfig(structuredClone(event.detail.config));});
+    // The old scene has an active wall/calibration operation and cached furniture
+    // view. None of these references belongs to the replacement scene.
+    el.step=1;el.floorIndex=el.config.floors.length-1;el.wallDrawing=true;el.wallDraft=[[20,20]];el.calibrating=true;el.calibrationPoints=[[10,10]];el.placementRoom=el.config.floors[0].rooms[0].id;el.furnitureViews=new Map([['old',{zoom:3}]]);el.render();
+  });
+  await editor.getByRole('button',{name:'Import / export',exact:true}).click();
+  const incoming={type:'custom:floorplan-card',title:'Replacement layout',appearance:{mode:'clean'},floors:[{id:'replacement',name:'Replacement floor',width_m:5,depth_m:5,rooms:[{id:'replacement-room',name:'Replacement room',points:[[0,0],[100,0],[100,100],[0,100]],lights:['light.new']}],entities:[{entity:'light.new',x:40,y:40}],walls:[],objects:[{id:'replacement-chair',type:'chair',x:30,y:30}]}],groups:[{name:'Replacement group',entities:['light.new']}]};
+  const file={name:'replacement.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(incoming))};
+  await editor.getByLabel('Import configuration JSON',{exact:true}).setInputFiles(file);
+  await expect(editor.locator('#configuration-transfer').getByRole('status')).toContainText('Imported 1 floor and 1 group');
+  expect(await editor.evaluate(el=>({floor:el.config.floors[0].id,floors:el.config.floors.length,groups:el.config.groups.map(g=>g.name),objects:el.config.floors[0].objects.map(o=>o.id),step:el.step,wallDrawing:el.wallDrawing,calibrating:el.calibrating,placementRoom:el.placementRoom,views:el.furnitureViews?.size||0}))).toEqual({floor:'replacement',floors:1,groups:['Replacement group'],objects:['replacement-chair'],step:0,wallDrawing:false,calibrating:false,placementRoom:'',views:0});
+  await expect(editor.getByRole('alert')).toHaveCount(0);expect(await page.evaluate(()=>window.replacementEvents.length)).toBe(1);
+  expect(await editor.evaluate(el=>'information' in el.config)).toBe(false);
+  await page.screenshot({path:info.outputPath('replace-populated.png')});
+  await editor.getByRole('button',{name:'Undo',exact:true}).click();expect(await editor.evaluate(el=>JSON.stringify(el.config)===JSON.stringify(window.beforeReplacement))).toBe(true);
+  await editor.getByRole('button',{name:'Redo',exact:true}).click();await expect(editor.getByRole('textbox',{name:'Card title',exact:true})).toHaveValue('Replacement layout');
+  await editor.getByLabel('Import configuration JSON',{exact:true}).setInputFiles({...file,buffer:Buffer.from('{invalid')});await expect(editor.getByRole('alert')).toContainText('Configuration was not imported');
+  expect(await editor.evaluate(el=>el.config.floors[0].id)).toBe('replacement');
+  await editor.getByLabel('Import configuration JSON',{exact:true}).setInputFiles(file);await expect(editor.getByRole('alert')).toHaveCount(0);
+});
+
 test('HA import preserves newer catalogue objects and reports incompatible types without replacing the scene',async({page})=>{
   await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   const result=await page.locator('floorplan-card-editor').evaluate(async editor=>{

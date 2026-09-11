@@ -1,5 +1,7 @@
+import {calendarIds,calendarEvents} from './calendar-data.js';
+import {sensorNumber,energySummary,validateLiveFields} from './live-data.js';
 const unavailable=s=>!s||['unknown','unavailable'].includes(s.state);
-export const informationTypes={entity:'Entity',weather:'Weather',calendar:'Calendar',people:'Who’s at home',updates:'HA updates',low_battery:'Low batteries'};
+export const informationTypes={entity:'Entity',weather:'Weather',calendar:'Calendar',people:'Who’s at home',updates:'HA updates',low_battery:'Low batteries',energy:'Plug energy'};
 export function validateInformation(panel){
   if(panel===undefined)return;
   if(!panel||typeof panel!=='object'||!Array.isArray(panel.items)||panel.items.length>16)throw Error('Information panel needs up to 16 items');
@@ -7,17 +9,30 @@ export function validateInformation(panel){
   if(panel.position!==undefined&&!['top-left','top-right'].includes(panel.position))throw Error('Choose an information panel position');
   for(const item of panel.items){
     if(!item||!Object.hasOwn(informationTypes,item.type))throw Error('Choose an information item type');
+    validateLiveFields(item);
     if(item.label!==undefined&&(typeof item.label!=='string'||item.label.length>80))throw Error('Information labels must be under 80 characters');
-    if(['entity','weather','calendar'].includes(item.type)&&!new RegExp(item.type==='entity'?'^[a-z_]+\\.[a-z0-9_]+$':`^${item.type}\\.[a-z0-9_]+$`).test(item.entity || ''))throw Error('Choose an entity for the information item');
+    if(['entity','weather'].includes(item.type)&&!new RegExp(item.type==='entity'?'^[a-z_]+\\.[a-z0-9_]+$':`^${item.type}\\.[a-z0-9_]+$`).test(item.entity || ''))throw Error('Choose an entity for the information item');
+    if(item.type==='calendar'&&(!calendarIds(item).length||calendarIds(item).some(id=>!/^calendar\.[a-z0-9_]+$/.test(id))))throw Error('Choose calendar entities');
+    for(const key of ['count_entity','names_entity'])if(item[key]&&!/^sensor\.[a-z0-9_]+$/.test(item[key]))throw Error('Choose a battery summary sensor');
+    if(item.max_events!==undefined&&(!Number.isInteger(item.max_events)||item.max_events<1||item.max_events>50))throw Error('Choose between 1 and 50 events');
     if(item.entities!==undefined&&(!Array.isArray(item.entities)||item.entities.length>500||item.entities.some(id=>typeof id!=='string'||!/^[a-z_]+\.[a-z0-9_]+$/.test(id))))throw Error('Choose valid information entities');
     if(item.threshold!==undefined&&(!Number.isFinite(item.threshold)||item.threshold<0||item.threshold>100))throw Error('Battery threshold must be between 0 and 100');
   }
 }
-export function informationRows(panel,states,now=new Date(),locale='en-GB'){
+export function informationRows(panel,states,now=new Date(),locale='en-GB',calendarCache){
   if(!panel||panel.enabled===false)return [];
   return panel.items.map(item=>{
     const state=states[item.entity],a=state?.attributes || {},label=item.label || a.friendly_name || informationTypes[item.type];
     const row={label,entity:item.entity,value:'Unavailable',detail:'',unavailable:false};
+    if(item.type==='energy'){const summary=energySummary(item.energy,states);return {...row,entity:undefined,value:`${summary.power} now · ${summary.energy} today`,detail:[summary.partial?'Partial readings':'',...summary.rows.map(r=>`${r.label}: ${r.power} · ${r.energy}`)].filter(Boolean).join(' / '),unavailable:summary.power==='Unavailable'&&summary.energy==='Unavailable'};}
+    if(item.type==='calendar'&&(item.entities?.length||calendarCache?.[item.entity])){
+      const {events,failures}=calendarEvents(item,states,calendarCache,now,locale);
+      return {...row,entity:undefined,value:events.length?`${events.length} upcoming`:(failures.length?'Unavailable':'No upcoming events'),events,detail:failures.length?`Could not refresh: ${failures.join(', ')}${events.length?' · Showing last available events':''}`:'Next 7 days',unavailable:!events.length&&!!failures.length};
+    }
+    if(item.type==='low_battery'&&(item.count_entity||item.names_entity)){
+      const count=sensorNumber(states[item.count_entity]),names=states[item.names_entity];
+      return {...row,entity:item.count_entity,value:count===null||count<0?'Unavailable':`${count} low`,detail:unavailable(names)?'Device names unavailable':String(names.state).split(',').map(s=>s.trim()).filter(Boolean).join(', '),unavailable:count===null||count<0};
+    }
     if(['entity','weather','calendar'].includes(item.type)){
       if(unavailable(state))return {...row,unavailable:true};
       if(item.type==='weather')return {...row,value:[a.temperature===undefined?'':`${a.temperature}${a.temperature_unit || '°'}`,state.state.replaceAll('-',' ')].filter(Boolean).join(' · ')};

@@ -12,6 +12,7 @@ import { entitySelect } from './setup.js';
 import {isPresenceSensor} from './presence-sensors.js';
 import {sensorFields} from './sensor-editor.js';
 import {weatherEntity} from './weather.js';
+import {liveFields} from './live-fields.js';
 const LIBRARY=[...CATALOGUE.map(item=>({...item,id:item.type})),...PRODUCT_PRESETS];
 export function furnitureSetup(host, floor) {
   const preview=host.furniturePreview==='3d';
@@ -108,7 +109,8 @@ export function furnitureSetup(host, floor) {
       for(const size of TV_SIZES)screen.append(element('option',{value:size,text:`${size} inch · 16:9`,selected:current===size}));
       inspector.append(field('TV screen size',screen),element('p',{className:'muted',text:'Choosing a size sets screen width and height.'}));
     }
-    if(selected.type==='radiator')inspector.append(field('Radiator heating entity',entitySelect(host,/^(climate|switch|binary_sensor)\./,selected.heating_entity || '',id=>{selected.heating_entity=id;host.emit();})),element('p',{className:'muted',text:'Glows while heating or when the switch/sensor is on. Tap in live view for Home Assistant controls.'}));
+    if(selected.type==='radiator')inspector.append(field('Radiator heating entity',entitySelect(host,/^(climate|switch|binary_sensor)\./,selected.heating_entity || '',id=>{selected.heating_entity=id;host.emit();})),...liveFields(host,selected,[['heating_demand_entity','Heating demand override']]),element('p',{className:'muted',text:'Uses the room heating demand when set; this is a room-level proxy, not individual valve data.'}));
+    if(selected.type==='printer_3d')inspector.append(...liveFields(host,selected,[['status_entity','Printer status'],['progress_entity','Print progress'],['time_left_entity','Print time left'],['bed_temperature_entity','Bed temperature'],['job_entity','Print job'],['camera_entity','Printer camera','camera']]));
     if(selected.type==='picture')inspector.append(field('Artwork media player (HA-Meural)',entitySelect(host,/^media_player\./,selected.media_entity || '',id=>{selected.media_entity=id;host.emit();})),field('Fallback / landscape artwork URL or data image',element('input',{value:selected.artwork_image || '',onchange:e=>{selected.artwork_image=e.target.value;host.emit();}})),field('Portrait artwork URL or data image',element('input',{value:selected.artwork_portrait_image || '',onchange:e=>{selected.artwork_portrait_image=e.target.value;host.emit();}})),element('p',{className:'muted',text:'Tap to rotate in 3D. Uses orientation artwork if set, otherwise the media player image.'}));
     if(selected.type==='tv')inspector.append(field('TV media player',entitySelect(host,/^media_player\./,selected.media_entity || '',id=>{selected.media_entity=id;host.emit();})),element('p',{className:'muted',text:'Optional TV media player; lighting is linked separately.'}));
     if(selected.type==='tv_lightstrip')inspector.append(field('Hue Sync TV',entitySelect(host,/^media_player\./,selected.sync_media_entity || '',id=>{selected.sync_media_entity=id;host.emit();})));
