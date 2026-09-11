@@ -5,7 +5,7 @@ export function sceneEntities(config){
     else if(value&&typeof value==='object')Object.values(value).forEach(visit);
   }
   visit(config);
-  for(const item of config.information?.enabled===false?[]:config.information?.items || [])if(!item.entities?.length&&['people','updates','low_battery'].includes(item.type))ids.add('@'+item.type);
+  for(const item of config.information?.enabled===false?[]:config.information?.items || [])if(!item.entities?.length&&!item.count_entity&&!item.names_entity&&['people','updates','low_battery'].includes(item.type))ids.add('@'+item.type);
   return ids;
 }
 

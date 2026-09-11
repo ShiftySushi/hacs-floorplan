@@ -1,4 +1,13 @@
 import * as THREE from 'three';
+import {printerState} from './live-data.js';
+
+export function updatePrinter3D(model,object,states,now,reducedMotion=false){
+  const state=printerState(object,states),printing=state==='printing';
+  model.userData.printerStatus=state;
+  model.traverse(node=>{if(node.userData.printerPart){node.userData.printerRest ||= node.position.clone();node.position.copy(node.userData.printerRest);if(printing&&!reducedMotion){node.position.x+=Math.sin(now/700)*.18;node.position.z+=Math.cos(now/1100)*.16;}}
+    if(node.userData.printerIndicator){node.material.emissive.set(state==='error'?'#ff1515':printing?'#39d992':'#000000');node.material.emissiveIntensity=state==='error'?2:printing?1:0;}
+  });return printing&&!reducedMotion;
+}
 
 // Normalised printer architecture; the measured preset supplies the outside bounds.
 export function printer3D(object,box,group){
@@ -22,9 +31,9 @@ export function printer3D(object,box,group){
     const glass=b(.75,.7,.012,0,.53,.448,'#a6c3cc');glass.material=new THREE.MeshStandardMaterial({color:'#a6c3cc',transparent:true,opacity:.16,roughness:.12,depthWrite:false});glass.castShadow=false;
     b(.025,.18,.035,.33,.53,.465,'#171b1d');
   }
-  const head=b(.15,.12,.14,-.1,.62,0,accent);head.userData.printerPart='toolhead';b(.025,.035,.025,-.1,.545,.02,'#b99c61');
+  const head=b(.15,.12,.14,-.1,.62,0,accent);head.userData.printerPart='toolhead';const nozzle=b(.025,.035,.025,-.1,.545,.02,'#b99c61');nozzle.userData.printerPart='nozzle';
   const screenX=object.product_id==='bambu-x1c'?-.24:object.product_id==='prusa-mk4s'?0:.24,screenY=object.product_id?.startsWith('bambu-')&&!open?.88:.14;
-  const screen=b(.18,.11,.025,screenX,screenY,.47,'#15262d');screen.rotation.x=-.2;b(.125,.06,.027,screenX,screenY,.484,'#80b8c1');
+  const screen=b(.18,.11,.025,screenX,screenY,.47,'#15262d');screen.rotation.x=-.2;const indicator=b(.125,.06,.027,screenX,screenY,.484,'#80b8c1');indicator.material=indicator.material.clone();indicator.userData.printerIndicator=true;
   if(u1){
     // Four parked tools and four side spools distinguish the U1 toolchanger.
     for(let i=0;i<4;i++)b(.12,.1,.1,-.27+i*.18,.79,-.3,'#34383a');

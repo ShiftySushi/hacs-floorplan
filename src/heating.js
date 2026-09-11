@@ -4,6 +4,7 @@ export function heatingState(state) {
   if(action)return action==='heating'?'heating':['idle','off','cooling','drying','fan'].includes(action)?'idle':'unknown';
   if(state.state==='on')return 'heating';
   if(state.state==='off')return 'idle';
+  if(state.state.trim()!==''&&Number.isFinite(Number(state.state)))return Number(state.state)>0?'heating':'idle';
   return 'unknown';
 }
 

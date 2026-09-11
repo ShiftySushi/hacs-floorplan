@@ -5,6 +5,7 @@ import {isPresenceSensor,sensorPlacement} from './presence-sensors.js';
 import {validateInformation} from './information.js';
 import {validateExterior} from './exterior.js';
 import { CATALOGUE } from './catalogue.js';
+import {validateLiveFields} from './live-data.js';
 
 export function floorDimensions(floor) {
   const width = floor.width_m || 10;
@@ -34,6 +35,7 @@ export function normaliseScene(config) {
     for(const item of floor.entities || []) {if(item.fixture !== undefined && !['bulb','pendant','spot'].includes(item.fixture)) throw new Error('Choose a generic light, pendant or spot');if(item.height_m!==undefined&&(!Number.isFinite(item.height_m)||item.height_m<0||item.height_m>100))throw Error('Light height must be between zero and 100 metres');}
     if (!Array.isArray(floor.objects) || !Array.isArray(floor.walls)) throw new Error('Furniture and walls must be lists');
     for (const room of floor.rooms || []) {
+      validateLiveFields(room);
       if(room.daylight_group!==undefined&&(typeof room.daylight_group!=='string'||!room.daylight_group.trim()||room.daylight_group.length>80))throw new Error('Use a non-empty daylight group name up to 80 characters');
       if(room.temperature_entity && !/^(sensor|climate)\.[a-z0-9_]+$/.test(room.temperature_entity))throw new Error('Choose a temperature sensor or thermostat for the room');
       if (room.material !== undefined && !['wood','tile','carpet'].includes(room.material)) throw new Error('Choose wood, tile or carpet for the room floor');
@@ -50,6 +52,7 @@ export function normaliseScene(config) {
       if(Math.abs(area)<.001)throw new Error('Ceiling slopes must cover a floor area');
     }
     for (const item of floor.objects) {
+      validateLiveFields(item);
       identify(item);
       if(item.presence_entities!==undefined&&(!isPresenceSensor(item)||!Array.isArray(item.presence_entities)||item.presence_entities.length>16||item.presence_entities.some(id=>typeof id!=='string'||!/^binary_sensor\.[a-z0-9_]+$/.test(id))))throw Error('Choose up to 16 presence entities for a sensor');
       if(item.presence_room&&!floor.rooms.some(r=>r.id===item.presence_room))throw Error('Choose a room for sensor occupancy');
@@ -91,6 +94,7 @@ export function normaliseScene(config) {
       const dims = floorDimensions(floor);
       const length = Math.hypot((wall.b[0]-wall.a[0])/100*dims.width,(wall.b[1]-wall.a[1])/100*dims.depth);
       for (const opening of wall.openings) {
+        validateLiveFields(opening);
         if(opening.frame!==undefined&&!['fixed','casement','french','solid'].includes(opening.frame))throw Error('Choose fixed, casement or French-door framing');
         if(opening.blinds!==undefined&&typeof opening.blinds!=='boolean')throw new Error('Window blinds must be true or false');
         identify(opening);

@@ -1,4 +1,5 @@
 import {validateExteriorModels} from './exterior-model.js';
+import {validateLiveFields} from './live-data.js';
 export function validateExterior(exterior){
   if(exterior===undefined)return;
   if(!exterior||!Array.isArray(exterior.items)||exterior.items.length>2000)throw Error('Exterior needs a list of up to 2000 items');
@@ -7,6 +8,7 @@ export function validateExterior(exterior){
   for(const key of ['width_m','depth_m','height_m'])if(!finite(exterior[key])||exterior[key]<=0)throw Error('Exterior dimensions must be positive metres');
   const ids=new Set();
   for(const item of exterior.items){
+    validateLiveFields(item);
     if(!item||typeof item.id!=='string'||!item.id||ids.has(item.id))throw Error('Exterior items need unique ids');ids.add(item.id);
     if(!['box','surface','car','plant','light','charger','doorbell'].includes(item.type))throw Error('Choose a supported exterior item');
     if(item.glazing!==undefined&&typeof item.glazing!=='boolean')throw Error('Exterior glazing must be true or false');

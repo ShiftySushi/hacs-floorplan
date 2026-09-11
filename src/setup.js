@@ -4,6 +4,7 @@ import { icon } from './icons.js';
 import { validPolygon } from './rooms.js';
 import { floorDimensions } from './scene.js';
 import { reassignEntity } from './bindings.js';
+import {roomLiveFields,exteriorLiveFields} from './live-fields.js';
 // Keep the plan visible beside its controls throughout the setup steps.
 function layoutSetup(root, leading = 0) {
   const plan=root.querySelector(':scope > .plan');if(!plan)return root;
@@ -39,6 +40,7 @@ export function memberPicker(host, title, members, domain, change) {
 }
 export function floorSetup(host,floor) {
   const root=element('div');
+  const exteriorFields=exteriorLiveFields(host);if(exteriorFields)root.append(exteriorFields);
   const weather=host.config.weather || {},changeWeather=patch=>{host.config.weather={...weather,...patch};host.emit();};
   root.append(element('fieldset',{},[element('legend',{text:'Outdoor weather'}),field('Weather entity',entitySelect(host,/^weather\./,weather.entity || '',entity=>changeWeather({entity}),false)),element('p',{className:'muted',text:'Uses the At a glance weather entity when left blank. Rain, snow, clouds, fog and wind appear outside in 3D.'}),field('Show weather effects',element('input',{type:'checkbox',checked:weather.enabled!==false,onchange:e=>changeWeather({enabled:e.target.checked})})),field('Weather intensity',element('input',{type:'range',min:0,max:1,step:.1,value:weather.intensity??.7,onchange:e=>changeWeather({intensity:Number(e.target.value)})}))]));
   root.append(field('Outdoor temperature entity',entitySelect(host,/^(sensor|climate)\./,host.config.outdoor_temperature_entity || '',id=>{host.config.outdoor_temperature_entity=id;host.emit();})));
@@ -118,6 +120,7 @@ export function roomSetup(host,floor) {
     coords.append(field('Corner X (%)',x),field('Corner Y (%)',y),button('Add corner',()=>{const p=[Number(x.value),Number(y.value)];if(p.every(n=>Number.isFinite(n)&&n>=0&&n<=100)){host.draft.push(p);host.render();}}));root.append(coords);
   }
   if(room && !host.drawing){
+    root.append(roomLiveFields(host,room));
     root.append(field('Room name',element('input',{value:room.name,onchange:e=>{room.name=e.target.value;host.emit();}})));
     root.append(field('Room temperature entity',entitySelect(host,/^(sensor|climate)\./,room.temperature_entity || '',id=>{room.temperature_entity=id;host.emit();})),element('p',{className:'muted',text:'Choose a temperature sensor or thermostat. Its current reading appears subtly on the plan; unavailable readings are hidden.'}));
     const material=element('select',{onchange:e=>{room.material=e.target.value;host.emit();}});for(const [value,text] of [['wood','Wood'],['tile','Tile'],['carpet','Carpet']])material.append(element('option',{value,text,selected:(room.material || 'wood')===value}));root.append(field('Floor material',material),field('Floor colour',element('input',{type:'color',value:room.colour || '#cbb89a',onchange:e=>{room.colour=e.target.value;host.emit();}})));

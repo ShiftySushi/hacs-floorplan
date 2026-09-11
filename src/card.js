@@ -15,6 +15,9 @@ const collectionStyles='.collection-controls{display:grid;grid-template-columns:
 import {sceneEntities,sceneState} from './ha-updates.js';
 import {informationPanel,informationStyles} from './information-panel.js';
 import {lightToggleIds} from './light-targets.js';
+import {roomPanel,roomPanelStyles,openRoom,cameraThumbnail} from './room-panel.js';
+import {roomEnvironment,radiatorEntity,objectRoom,printerState,doorState,sensorText} from './live-data.js';
+import {refreshCalendars} from './calendar-data.js';
 
 export class FloorplanCard extends HTMLElement {
   constructor() {
@@ -26,7 +29,8 @@ export class FloorplanCard extends HTMLElement {
   }
   static getConfigElement() { return document.createElement('floorplan-card-editor'); }
   connectedCallback() { if (this.config) this.render();clearInterval(this.daylightTimer);this.daylightTimer=setInterval(()=>{if(!document.hidden&&this.config)this.render();},60000); }
-  disconnectedCallback() { clearInterval(this.daylightTimer);this.entranceObserver?.disconnect();this.plan?.dispose?.(); this.plan=null; this.planKey=null; this.stageObserver?.disconnect(); this.planObserver?.disconnect(); }
+  disconnectedCallback() { this.calendarGeneration=(this.calendarGeneration||0)+1;this.calendarRequestedAt=0;clearInterval(this.daylightTimer);this.entranceObserver?.disconnect();this.plan?.dispose?.(); this.plan=null; this.planKey=null; this.stageObserver?.disconnect(); this.planObserver?.disconnect(); }
+  renderRoomPanel(){this.planSlot?.querySelector('.room-panel')?.remove();if(!this.planSlot)return;const panel=roomPanel(this,this._hass?.states||{});if(panel)this.planSlot.append(panel);}
   fitPlan() {
     const tools=this.planSlot?.querySelector('.stage-tools');if(tools)this.planSlot.style.setProperty('--fp-info-top',`${tools.offsetTop+tools.offsetHeight+12}px`);
     if(!this.plan || !this.planSlot?.clientWidth)return;
@@ -40,6 +44,7 @@ export class FloorplanCard extends HTMLElement {
   }
   static getStubConfig() { return { type: 'custom:floorplan-card', title: 'Floorplan', floors: [], groups: [] }; }
   setConfig(config) {
+    this.calendarGeneration=(this.calendarGeneration||0)+1;this.calendarRequestedAt=0;this.calendarCache={};
     if (config.appearance?.mode !== this.config?.appearance?.mode) this.viewMode=null;
     this.config = normaliseConfig(config);
     this.watchedEntities=sceneEntities(this.config);
@@ -82,6 +87,7 @@ export class FloorplanCard extends HTMLElement {
   }
   render() {
     if (!this.config) return;
+    refreshCalendars(this);
     const restoreFocus=preserveFocus(this.shadowRoot);
     const states = {...this._hass?.states};
     for(const item of this.config.floors.flatMap(f=>f.entities))if(item.unbound)delete states[item.entity];
@@ -89,7 +95,7 @@ export class FloorplanCard extends HTMLElement {
       this.card=element('ha-card',{className:'floorplan-dashboard'});
       this.headerSlot=element('div');this.planSlot=element('div',{className:'plan-slot'});this.controlsSlot=element('div',{className:'inspector-slot'});
       this.card.append(this.headerSlot,element('div',{className:'card-workspace'},[this.planSlot,this.controlsSlot]));
-      this.shadowRoot.replaceChildren(element('style',{text:styles+collectionStyles+informationStyles}),this.card);
+      this.shadowRoot.replaceChildren(element('style',{text:styles+collectionStyles+informationStyles+roomPanelStyles}),this.card);
       this.entranceObserver=new IntersectionObserver(entries=>{if(entries.some(entry=>entry.isIntersecting)){this.card.classList.add('has-entered');this.entranceObserver.disconnect();}});this.entranceObserver.observe(this.card);
     }
     const display=displaySettings({...this.config.appearance?.display,...this.displayPreferences});
@@ -163,22 +169,35 @@ export class FloorplanCard extends HTMLElement {
       for(const room of floor.rooms || []) {
         const temperature=roomTemperature(room,states);
         const presence=roomState(room,states,floor);
-        if((!temperature&&!presence.occupied) || !room.points?.length)continue;
+        const environment=roomEnvironment(room,states);
+        if(!room.points?.length)continue;
         const centre=roomReadoutPoint(room,floor);
-        const entityId=room.temperature_entity || roomPresence(room,floor).find(id=>states[id]?.state==='on');
-        const label=[temperature?`${room.name} temperature: ${temperature}`:room.name,presence.occupied?'Presence detected':''].filter(Boolean).join(' · ');
-        const marker=button(temperature,()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId},bubbles:true,composed:true})),{className:`marker overlay-temperatures temperature-marker temp-${temperatureTone(room.temperature_entity,states[room.temperature_entity])}${presence.occupied?' occupied':''}`,title:label,'aria-label':label});
-        if(presence.occupied)marker.prepend(icon('presence'));
+        const label=[temperature?`${room.name} temperature: ${temperature}`:room.name,environment.humidity?`Humidity: ${environment.humidity}`:'',presence.occupied?'Presence detected · 1+':'',environment.warning?'Air quality warning':''].filter(Boolean).join(' · ');
+        const marker=button([temperature,environment.humidity].filter(Boolean).join(' · ')||room.name,()=>openRoom(this,floor.id,room.id),{className:`marker overlay-temperatures temperature-marker room-readout temp-${temperatureTone(room.temperature_entity,states[room.temperature_entity])}${presence.occupied?' occupied':''}${environment.warning?' air-warning':''}`,title:label,'aria-label':label,'data-room-id':room.id});
+        marker.addEventListener('pointerenter',e=>{if(e.pointerType==='mouse'&&!this.activeRoom)openRoom(this,floor.id,room.id);});
+        if(presence.occupied)marker.prepend(element('span',{className:'occupant-count',text:'1+'}),icon('presence'));
+        if(environment.warning)marker.append(element('span',{text:'⚠','aria-hidden':'true'}));
         markers.push({node:marker,x:centre[0],y:centre[1],floorId:floor.id});
       }
-      for(const radiator of (floor.objects || []).filter(item=>item.type==='radiator' && item.heating_entity)) {
-        const state=heatingState(states[radiator.heating_entity]);
-        const marker=button('♨',()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:radiator.heating_entity},bubbles:true,composed:true})),{className:`marker overlay-heating radiator-control ${state==='heating'?'heating':''}`,title:`Radiator: ${state}`,'aria-label':`Radiator: ${state}`});
+      for(const radiator of (floor.objects || []).filter(item=>item.type==='radiator' && radiatorEntity(item,floor))) {
+        const entityId=radiatorEntity(radiator,floor),state=heatingState(states[entityId]);
+        const marker=button('♨',()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId},bubbles:true,composed:true})),{className:`marker overlay-heating radiator-control ${state==='heating'?'heating':''}`,title:`Radiator: ${state}`,'aria-label':`Radiator: ${state}`});
         markers.push({node:marker,x:radiator.x,y:radiator.y,floorId:floor.id});
       }
+      for(const object of floor.objects.filter(o=>o.type==='printer_3d'&&o.status_entity)){
+        const status=printerState(object,states),room=objectRoom(object,floor),node=button(status==='error'?'⚠ Printer error':status==='printing'?`Printing · ${sensorText(object.progress_entity,states)}`:'Printer',()=>room&&openRoom(this,floor.id,room.id),{className:`marker device-marker${status==='error'?' device-error':''}`,'aria-label':`Printer: ${status}`});markers.push({node,x:object.x,y:object.y,floorId:floor.id});
       }
-      const options={...this.config.appearance,exterior,isolatedRoom,hideLightFixtures:display.hide_light_fixtures,hideRadiators:display.hide_radiators,hideExtractionFans:display.hide_extraction_fans,idleRotation:display.idle_rotation,labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays||exterior?[]:markers,daylight,building:!!this.building&&!isolatedRoom,allFloors:this.config.floors};
+      for(const wall of floor.walls||[])for(const door of wall.openings||[])if(door.contact_entity){const status=doorState(door,states),node=button(`${status==='Open'?'▯':'▣'} ${status}${door.lock_entity?' · '+sensorText(door.lock_entity,states):''}`,()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:door.lock_entity||door.contact_entity},bubbles:true,composed:true})),{className:'marker device-marker','aria-label':`${door.name||'Door'}: ${status}`});markers.push({node,x:wall.a[0]+(wall.b[0]-wall.a[0])*door.offset,y:wall.a[1]+(wall.b[1]-wall.a[1])*door.offset,floorId:floor.id});}
+      }
+      const exteriorMarkers=(exterior?.items||[]).filter(item=>item.camera_entity||item.contact_entity).map(item=>{
+        const node=element('div',{className:'marker exterior-camera',style:'width:112px;height:auto;min-height:44px;display:block;padding:4px;white-space:normal;transform:translate(-50%,-50%)','aria-label':item.name||'Exterior camera'});
+        if(item.camera_entity)node.append(cameraThumbnail(this,item.camera_entity,states));
+        if(item.contact_entity)node.append(element('small',{text:`${doorState(item,states)}${item.lock_entity?' · '+sensorText(item.lock_entity,states):''}`}));
+        return {node,world:[item.x||0,(item.y||0)+(item.height||1),item.z||0]};
+      });
+      const options={...this.config.appearance,exterior,isolatedRoom,hideLightFixtures:display.hide_light_fixtures,hideRadiators:display.hide_radiators,hideExtractionFans:display.hide_extraction_fans,idleRotation:display.idle_rotation,labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays?[]:exterior?exteriorMarkers:markers,daylight,building:!!this.building&&!isolatedRoom,allFloors:this.config.floors};
       options.onLightClick=(floorId,id)=>this.activateLight(floorId,id);
+      options.onEntityClick=entityId=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId},bubbles:true,composed:true}));
       options.weather=weather;
       options.blindStates=this.blindStates;
       const baseCameraKey=`${floor.id}:${mode}:${!!this.building}`+(exterior?':exterior':''),cameraKey=baseCameraKey+(isolatedRoom?`:${isolatedRoom}`:'');this.viewStates ||= {};
@@ -200,6 +219,7 @@ export class FloorplanCard extends HTMLElement {
     this.planSlot.querySelector('.stage-tools')?.remove();this.planSlot.append(stageTools);
     this.planSlot.querySelector('.information-panel')?.remove();
     const information=informationPanel(this,states);if(information)this.planSlot.append(information);
+    this.renderRoomPanel();
     this.fitPlan();
     const navigation=this.planSlot.querySelector('.plan-navigation,.three-toolbar');
     if(navigation && !navigation.classList.contains('docked-navigation')) {
