@@ -1,4 +1,6 @@
 import {artwork3D} from './artwork3d.js';
+import {exterior3D} from './exterior3d.js';
+import {stripAppearance,updateStrip} from './strip-pattern.js';
 import { windowBlinds,windowRoom } from './window-blinds3d.js';
 import {openingFrame} from './opening-frame3d.js';
 import { ceilingMeshes } from './ceilings3d.js';
@@ -17,6 +19,9 @@ import { roomLightSources, lightAppearance } from './illumination.js';
 import { heatingState } from './heating.js';
 import { blendAppearance, panelFrame } from './light-animation.js';
 import { daylightLevel } from './daylight.js';
+import {weather3D} from './weather3d.js';
+import {isPresenceSensor} from './presence-sensors.js';
+import {roomPresence} from './rooms.js';
 import { tvIsOn, drawTVFrame, tvSlideshow, tvSceneIndex } from './tv-animation.js';
 import { createSimsStyle } from './sims-style.js';
 
@@ -71,15 +76,16 @@ export function render3D(floor, states, options = {}) {
   catch {const fallback=renderPlan(floor,states,{...options,mode:'clean'});fallback.prepend(element('p',{className:'hint',text:'3D is unavailable on this device. Showing the 2D floorplan.'}));fallback.update ||= ()=>{};fallback.dispose ||= ()=>{};return fallback;}
   const scene=new THREE.Scene(), world=new THREE.Group();scene.add(world);
   const sims=options.mode==='sims'?createSimsStyle():null,home=sims?{azimuth:Math.PI/4,elevation:.615,zoom:1.25}:{azimuth:.4,elevation:1,zoom:1.35};
-  const floors=options.building&&options.allFloors?.length?options.allFloors:[floor];
+  if(options.exterior)Object.assign(home,{azimuth:-1,elevation:.75,zoom:1.35});
+  const floors=options.exterior?[]:options.building&&options.allFloors?.length?options.allFloors:[floor];
   if(floors.length>1)home.zoom=.95;
   const gpuLights=selectSceneLights(floors,floor.id,options.quality);
   const assignedIds=[...new Set(floors.flatMap(f=>[...(f.entities || []).filter(e=>e.entity.startsWith('light.')).map(e=>e.entity),...(f.objects || []).map(o=>o.light_entity).filter(Boolean),...(f.rooms || []).flatMap(r=>r.lights || [])]))];
   const sourceFor=(f,id)=>roomLightSources(f,(f.rooms || []).find(r=>r.lights?.includes(id)) || {lights:[id],points:[[0,0],[100,0],[100,100],[0,100]]}).find(source=>source.id===id);
   const placements=floors.map((f,i)=>floors.length>1?storeyPlacement(f,i):{x:0,y:0,z:0});
-  const centreY=(Math.min(...placements.map(p=>p.y))+Math.max(...placements.map(p=>p.y)))/2;
-  const {width,depth}=floorDimensions(floor), span=Math.max(...floors.map((f,i)=>{const d=floorDimensions(f);return Math.max(d.width+Math.abs(placements[i].x)*2,d.depth+Math.abs(placements[i].z)*2);}),centreY*2+4);
-  const markerSpaces=new Map(),artworks=[];
+  const centreY=options.exterior?options.exterior.height_m/3:(Math.min(...placements.map(p=>p.y))+Math.max(...placements.map(p=>p.y)))/2;
+  const {width,depth}=floorDimensions(floor), span=options.exterior?Math.max(options.exterior.width_m,options.exterior.depth_m,options.exterior.height_m):Math.max(...floors.map((f,i)=>{const d=floorDimensions(f);return Math.max(d.width+Math.abs(placements[i].x)*2,d.depth+Math.abs(placements[i].z)*2);}),centreY*2+4);
+  const markerSpaces=new Map(),artworks=[],presenceModels=[];
   const camera=new THREE.OrthographicCamera(-span,span,span,-span,.1,span*10);
   let {azimuth,elevation,zoom}={...home,...options.viewState};let wakeTimer=0,shadowDirty=true;let frame=0,disposed=false,visible=true,markers=[],pointer,fallback;
   const transitions=new Map(),reducedMotion=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;let lastPaint=0,lastInteraction=performance.now(),lastOrbit=performance.now(),idleOffset=0,canvasWidth=0,canvasHeight=0;
@@ -140,7 +146,7 @@ export function render3D(floor, states, options = {}) {
     const edges=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:'#9c8d79'}));mesh.add(edges);
     const centre=room.points.reduce((a,p)=>[a[0]+p[0]/room.points.length,a[1]+p[1]/room.points.length],[0,0]);
     const presence=sims?.presence(localWorld,position(centre,Math.max(2.4,...(floor.walls || []).map(w=>w.height || 2.4))+.35));
-    roomMeshes.push({room,mesh,edges,presence,base:new THREE.Color(colour)});
+    roomMeshes.push({room,floor,mesh,edges,presence,base:new THREE.Color(colour)});
   }
     for(const marker of (floor.entities || []).filter(e=>e.entity.startsWith('light.'))){
       if((floor.objects || []).some(o=>o.light_entity===marker.entity))continue;
@@ -169,6 +175,7 @@ export function render3D(floor, states, options = {}) {
       const key=JSON.stringify([floor.id,wall.sourceWallId||wall.id,opening.id]);options.viewState ||= {};options.viewState.doors ||= {};
       const framed=openingFrame(group,opening,length,{open:options.viewState.doors[key],onChange:open=>{options.viewState.doors[key]=open;options.onViewChange?.();schedule();}});pieces.push(...framed);
       if(framed.door){doors.push(framed.door);windows.push({floor,room:windowRoom(opening,wall,floor),area:opening.width*opening.height,get transmission(){return framed.door.transmission;}});}
+      if(framed.door&&opening.outside_lights?.length){const glow=new THREE.PointLight('#ffe7be',0,3,2);glow.position.set(length*opening.offset,1.1,0);group.add(glow);framed.door.outside={glow,ids:opening.outside_lights};}
     }
     // A doorway/window splits geometry, not the wall's cutaway decision.
     for(const mesh of pieces)mesh.userData.cutawayAnchor={group,point:new THREE.Vector3(length/2,height/2,0)};
@@ -195,21 +202,33 @@ export function render3D(floor, states, options = {}) {
     const mesh=new THREE.Mesh(new THREE.CylinderGeometry(join.radius,join.radius,join.height,16),material(sims?.wallColour || '#ece8dc'));mesh.position.set(join.x,join.height/2,join.z);mesh.castShadow=true;mesh.receiveShadow=true;localWorld.add(mesh);wallMeshes.push(mesh);
   }
   for(const object of floor.objects || []) {const model=(sims?kenneyFurniture(object):null) || furniture3D(object);model.position.copy(position([object.x,object.y],.025+(object.elevation_m || 0)));localWorld.add(model);
+    if(isPresenceSensor(object))presenceModels.push({object,model});
     sims?.furniture(model);
     if(options.hideLightFixtures&&['lamp','wall_light','nanoleaf_panels','tv_lightstrip'].includes(object.type))model.visible=false;
     if(options.hideExtractionFans&&object.type==='extractor_fan')model.visible=false;
-    if(!object.light_entity&&!['tv','picture','radiator'].includes(object.type))batchStaticModel(model);
+    if(!isPresenceSensor(object)&&!object.light_entity&&!object.pattern_entity&&!['tv','picture','radiator'].includes(object.type))batchStaticModel(model);
     if(object.type==='picture')artworks.push(artwork3D(object,model,options.viewState ||= {},`${floor.id}:${object.id}`,schedule));
     if(object.type==='tv'&&object.media_entity){const canvas=document.createElement('canvas');canvas.width=480;canvas.height=270;const context=canvas.getContext('2d',{willReadFrequently:true}),texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.generateMipmaps=false;texture.minFilter=THREE.LinearFilter;
       const screens=[];model.traverse(node=>{if(node.userData.tvScreen){node.material.map=texture;node.material.emissiveMap=texture;node.material.color.set('#ffffff');node.material.emissive.set('#ffffff');screens.push(node);}});const tv={object,canvas,context,texture,screens,lastFrame:-1,started:performance.now()};tv.slides=tvSlideshow(object.tv_scenes,()=>{tv.lastFrame=-1;schedule();});if(tv.slides.count)tv.timer=setInterval(schedule,300000);televisions.push(tv);
     }
-    if(object.light_entity){reactiveObjects.push({object,model});model.userData.lightTarget={floorId:floor.id,id:object.light_entity};}
+    if(object.light_entity||object.pattern_entity){reactiveObjects.push({object,model});if(object.light_entity)model.userData.lightTarget={floorId:floor.id,id:object.light_entity};}
     if(object.type==='radiator'){
       const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:textures.heat,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));glow.position.set(0,(object.height || .6)/2,0);glow.scale.set((object.width || 1)*1.5,(object.height || .6)*2,1);model.add(glow);radiators.push({object,model,glow});
     }
   }
   }
   floors.forEach(buildStorey);
+  const exteriorScene=options.exterior?exterior3D(options.exterior,states):null;
+  if(exteriorScene)world.add(exteriorScene);
+  const exteriorBounds=options.exterior?new THREE.Box3().setFromObject(world):null;
+  world.updateMatrixWorld(true);
+  const weatherBounds=new THREE.Box3().setFromObject(world),shelters=[];
+  if(options.exterior)world.traverse(node=>{if(node.isMesh){const b=new THREE.Box3().setFromObject(node);if(b.max.y>1.7&&(b.min.y>1.7||b.max.y-b.min.y>1.5))shelters.push(b);}});
+  else for(const space of markerSpaces.values()){
+    const points=[...(space.floor.rooms || []).flatMap(r=>r.points),...(space.floor.walls || []).flatMap(w=>[w.a,w.b])];
+    const b=new THREE.Box3();for(const p of points.length?points:[[0,0],[100,100]])b.expandByPoint(space.position(p,0).applyMatrix4(space.group.matrixWorld));shelters.push(b);
+  }
+  const weatherScene=weather3D(world,weatherBounds,shelters);
   for(const space of markerSpaces.values()){
     const relevant=windows.filter(b=>b.floor===space.floor),rooms=space.floor.rooms || [];
     space.group.updateMatrixWorld(true);
@@ -228,6 +247,7 @@ export function render3D(floor, states, options = {}) {
   const cameraPose={azimuth,elevation,zoom};let lastCamera=performance.now();
   toolbar.append(control('↶','Orbit left',()=>{azimuth-=.25;schedule();}),control('↷','Orbit right',()=>{azimuth+=.25;schedule();}),control('−','Zoom out',()=>{zoom=Math.max(.5,zoom/1.2);schedule();}),control('+','Zoom in',()=>{zoom=Math.min(3,zoom*1.2);schedule();}),control('⌂','Reset 3D view',()=>{({azimuth,elevation,zoom}=home);schedule();}),control('▱','Toggle cutaway walls',()=>{cutaway=!cutaway;schedule();}));const hideWallButton=control('Hide all walls','Hide all walls',()=>{hideWalls=!hideWalls;schedule();});toolbar.append(hideWallButton);for(const art of artworks)toolbar.append(control('▣','Rotate artwork',()=>art.toggle()));plan.append(toolbar);
   const blindsButton=control('Close all blinds','Close all blinds',()=>{const close=blinds.some(b=>!b.closed);for(const blind of blinds)blind.setClosed(close);schedule();});
+  if(options.exterior)for(const label of ['Toggle cutaway walls','Hide all walls'])toolbar.querySelector(`[aria-label="${label}"]`)?.remove();
   if(blinds.length)toolbar.append(blindsButton);
   // Rotation is disabled by default and explicitly opted into via Display settings.
   // Honour that choice even when decorative animations are reduced by the OS.
@@ -251,6 +271,7 @@ export function render3D(floor, states, options = {}) {
     world.updateMatrixWorld(true);
     // Fit the projected building bounds to the actual canvas, at any orbit angle.
     const corners=[];
+    if(exteriorBounds)for(const x of [exteriorBounds.min.x,exteriorBounds.max.x])for(const y of [exteriorBounds.min.y,exteriorBounds.max.y])for(const z of [exteriorBounds.min.z,exteriorBounds.max.z])corners.push(new THREE.Vector3(x,y,z).applyMatrix4(camera.matrixWorldInverse));
     for(const space of markerSpaces.values()){
       const top=Math.max(2.4,...(space.floor.walls || []).map(w=>w.height || 2.4));
       const region=options.isolatedRoom?space.floor.rooms[0].points:[[0,0],[100,100]],xs=region.map(p=>p[0]),ys=region.map(p=>p[1]);
@@ -287,7 +308,10 @@ export function render3D(floor, states, options = {}) {
   function schedule(delay=0){clearTimeout(wakeTimer);wakeTimer=0;if(delay>0){if(!disposed&&visible&&!document.hidden)wakeTimer=setTimeout(()=>schedule(),delay);return;}if(options.viewState){const next={azimuth,elevation,zoom,cutaway,hideWalls};if(Object.entries(next).some(([key,value])=>options.viewState[key]!==value)){Object.assign(options.viewState,next);options.onViewChange?.();}}if(!frame&&!disposed&&visible&&!document.hidden)frame=requestAnimationFrame(draw);}
   function sample(id,now){const entry=transitions.get(id);if(!entry)return lightAppearance(states[id]);return blendAppearance(entry.from,entry.to,reducedMotion?1:(now-entry.start)/600);}
   function present(now){
-    let animate=false;const visualStates={...states};
+    exteriorScene?.updateStates(states);
+    for(const {object,model} of presenceModels){const active=object.presence_entities?.some(id=>states[id]?.state==='on');model.traverse(node=>{if(node.userData.presenceLED){node.material.color.set(active?'#57c7a0':'#576873');node.material.emissive.set(active?'#269f72':'#000000');}});}
+    for(const door of doors)if(door.outside){const {glow,ids}=door.outside;let level=0;glow.color.setRGB(0,0,0);for(const id of ids){const a=lightAppearance(states[id]);level+=a.level;glow.color.add(new THREE.Color().setRGB(...a.colour.map(v=>v/255)).multiplyScalar(a.level));}if(level)glow.color.multiplyScalar(1/level);glow.intensity=Math.min(4,level*2)*door.transmission;}
+    let animate=weatherScene.update(states,options.weather || {enabled:false},now,reducedMotion);const visualStates={...states};
     for(const id of assignedIds){const appearance=sample(id,now),entry=transitions.get(id);if(entry&&!reducedMotion&&now-entry.start<600)animate=true;visualStates[id]={...states[id],state:appearance.level>0?'on':states[id]?.state || 'off',attributes:{...states[id]?.attributes,brightness:appearance.level*255,color_mode:'rgb',rgb_color:appearance.colour}};}
     for(const {object,model,glow} of radiators){model.visible=!options.hideRadiators;const active=heatingState(states[object.heating_entity])==='heating';glow.visible=active;model.traverse(node=>{if(node.material?.emissive){node.material.emissive.set(active?'#f34b24':'#000000');node.material.emissiveIntensity=active?.7:0;}});}
     for(const tv of televisions){const on=tvIsOn(states[tv.object.media_entity]),time=tv.slides.count?now-tv.started:(reducedMotion?0:now)+(tv.manualTime||0),fade=reducedMotion?1:Math.min(1,(now-(tv.fadeStart||0))/1400),bucket=on?(tv.slides.count&&fade===1?tvSceneIndex(time,tv.slides.count):Math.floor(time/100)):-2;if(on&&!reducedMotion&&(!tv.slides.count||fade<1))animate=true;
@@ -297,7 +321,8 @@ export function render3D(floor, states, options = {}) {
       }
       for(const screen of tv.screens){screen.material.emissive.set('#ffffff');screen.material.emissiveIntensity=on?.7:0;}
     }
-    for(const {object,model} of reactiveObjects){model.visible=!options.hideLightFixtures&&!(options.hideExtractionFans&&object.type==='extractor_fan');const lava=object.product_id?.startsWith('mathmos-')?lavaAppearance(object):null;if(lava){const state=visualStates[object.light_entity];visualStates[object.light_entity]={...state,attributes:{...state?.attributes,rgb_color:lava.light}};}const appearance=lightAppearance(visualStates[object.light_entity]),effect=reducedMotion?'static':object.panel_effect || 'static',panels=model.children.filter(node=>node.userData.panelIndex!==undefined),count=panels.length || 1,tv=televisions.find(t=>t.object.media_entity===object.sync_media_entity);if(appearance.level>0&&effect!=='static')animate=true;
+    for(const {object} of reactiveObjects)if(object.pattern_entity&&object.light_entity){const a=stripAppearance(object,states);visualStates[object.light_entity]={state:a.level?'on':'off',attributes:{brightness:255*a.level*a.fraction,rgb_color:a.colour}};}
+    for(const {object,model} of reactiveObjects){if(object.pattern_entity){model.visible=!options.hideLightFixtures;updateStrip(model,object,states);continue;}model.visible=!options.hideLightFixtures&&!(options.hideExtractionFans&&object.type==='extractor_fan');const lava=object.product_id?.startsWith('mathmos-')?lavaAppearance(object):null;if(lava){const state=visualStates[object.light_entity];visualStates[object.light_entity]={...state,attributes:{...state?.attributes,rgb_color:lava.light}};}const appearance=lightAppearance(visualStates[object.light_entity]),effect=reducedMotion?'static':object.panel_effect || 'static',panels=model.children.filter(node=>node.userData.panelIndex!==undefined),count=panels.length || 1,tv=televisions.find(t=>t.object.media_entity===object.sync_media_entity);if(appearance.level>0&&effect!=='static')animate=true;
       if(tv?.colours){const colour=tv.colours.reduce((a,c)=>a.map((v,i)=>v+c[i]/4),[0,0,0]);visualStates[object.light_entity]={...visualStates[object.light_entity],attributes:{...visualStates[object.light_entity]?.attributes,rgb_color:colour}};}
       model.traverse(node=>{if(node.material?.emissive&&(!['wall_light','lamp'].includes(object.type)||node.userData.lightEmitter)){
         let {level,colour}=panelFrame(effect,node.userData.panelIndex || 0,count,now,appearance);
@@ -307,8 +332,8 @@ export function render3D(floor, states, options = {}) {
       }});}
     const daylight=Math.max(0,Math.min(1,Number.isFinite(options.daylight)?options.daylight:daylightLevel(states)));
     ambient.intensity=.18+daylight*1.22;sun.intensity=daylight*1.5;
-    for(const {room,mesh,edges,base,illumination,presence} of roomMeshes){mesh.material.color.copy(base).multiplyScalar(.85);
-      const occupied=(room.presence || []).some(id=>states[id]?.state==='on');if(presence)presence.visible=occupied&&!options.hideOverlays;
+    for(const {room,floor,mesh,edges,base,illumination,presence} of roomMeshes){mesh.material.color.copy(base).multiplyScalar(.85);
+      const occupied=roomPresence(room,floor).some(id=>states[id]?.state==='on');if(presence)presence.visible=occupied&&!options.hideOverlays;
       edges.material.color.set(occupied?'#00b58b':'#9c8d79');}
     for(const {id,glow,accent} of lightMeshes){const {level,colour}=lightAppearance(visualStates[id]);glow.color.setRGB(colour[0]/255,colour[1]/255,colour[2]/255,THREE.SRGBColorSpace);glow.intensity=level*(accent?4:32);}
     for(const {id,lens,shade,fitting} of fixtures){fitting.visible=!options.hideLightFixtures;const {level,colour}=lightAppearance(visualStates[id]);lens.material.emissive.setRGB(colour[0]/255,colour[1]/255,colour[2]/255,THREE.SRGBColorSpace);lens.material.emissiveIntensity=level*.8;shade.material.emissive.copy(lens.material.emissive);shade.material.emissiveIntensity=level*.2;}

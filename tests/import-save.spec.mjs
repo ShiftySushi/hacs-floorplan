@@ -1,6 +1,26 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 
+test('HA import preserves newer catalogue objects and reports incompatible types without replacing the scene',async({page})=>{
+  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
+  const result=await page.locator('floorplan-card-editor').evaluate(async editor=>{
+    const raw=structuredClone(editor.config);
+    raw.floors[0].objects=['extractor_fan','pegboard','printer_3d'].map((type,i)=>({id:`fixture-${i}`,type,x:20+i*20,y:50}));
+    let emitted;
+    editor.addEventListener('config-changed',event=>emitted=event.detail.config);
+    editor.hass={states:{}};
+    await editor.importScene(new File([JSON.stringify(raw)],'scene.json',{type:'application/json'}));
+    const types=emitted?.floors[0].objects.map(o=>o.type),saved=JSON.stringify(editor.config);
+    raw.floors[0].objects[0].type='future-fixture';emitted=undefined;
+    await editor.importScene(new File([JSON.stringify(raw)],'future.json',{type:'application/json'}));
+    return {types,error:editor.error,preserved:JSON.stringify(editor.config)===saved,emitted:!!emitted};
+  });
+  expect(result.types).toEqual(['extractor_fan','pegboard','printer_3d']);
+  expect(result.error).toContain('Unsupported furniture type "future-fixture"');
+  expect(result.error).toContain('Update the Home Assistant floorplan card');
+  expect(result.preserved).toBe(true);expect(result.emitted).toBe(false);
+});
+
 test('large TV stills and framed artwork store compactly and re-export with their images',async({page})=>{
   await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));await page.getByRole('button',{name:'Edit layout',exact:true}).click();
   const editor=page.locator('floorplan-card-editor');

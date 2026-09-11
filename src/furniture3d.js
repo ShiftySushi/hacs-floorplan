@@ -8,6 +8,8 @@ import {edifier3D} from './edifier3d.js';
 import {shaker3D} from './shaker3d.js';
 import {lava3D} from './lava3d.js';
 import {iaito3D} from './iaito3d.js';
+import {isPresenceSensor} from './presence-sensors.js';
+import {presenceSensor3D} from './presence-sensors3d.js';
 
 /** Original, procedural furniture: dimensions in metres, front faces positive Z. */
 export function furniture3D(object) {
@@ -40,7 +42,9 @@ export function furniture3D(object) {
     }
   }
   function chair(office=false) { legs(h*.45,object.leg_colour || (office?palette.dark:palette.wood));box(w,h*.13,d,0,h*.48,0,palette.fabric);box(w,h*.48,.09,0,h*.76,-d*.44,palette.fabric); if(office)for(const x of [-w*.48,w*.48])box(.05,.06,d*.65,x,h*.7,0,palette.dark); }
-  if(object.variant==='sword'){
+  if(isPresenceSensor(object)){
+    presenceSensor3D(group,object);
+  }else if(object.variant==='sword'){
     iaito3D(group,object);
   }else if(!shaker3D(object,box)&&!productStorage3D(object,box,ball))switch(object.type) {
     case 'pegboard':{
@@ -116,6 +120,15 @@ export function furniture3D(object) {
       }break;
     }
     case 'tv_lightstrip':{
+      if(object.pattern_entity){
+        box(w,.018,Math.min(d,.035),0,h/2,0,'#34383b');
+        const emitter=box(w,.022,Math.min(d,.04),0,h/2,.004,'#ffffff');
+        emitter.material=emitter.material.clone();emitter.userData.stripEmitter=true;
+        const pixels=new Uint8Array(32*32*4);
+        for(let y=0;y<32;y++)for(let x=0;x<32;x++)pixels.set([255,255,255,Math.round(140*Math.max(0,1-Math.hypot((x-15.5)/16,(y-15.5)/16))**2)],(y*32+x)*4);
+        const texture=new THREE.DataTexture(pixels,32,32);texture.needsUpdate=true;texture.magFilter=THREE.LinearFilter;
+        for(const horizontal of [false,true]){const glow=new THREE.Mesh(new THREE.PlaneGeometry(w,.22),new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending}));glow.position.set(0,h/2,.027);if(horizontal)glow.rotation.x=-Math.PI/2;glow.userData.stripEmitter=true;group.add(glow);}break;
+      }
       const colour=object.colour || '#eee6fc',thickness=.025;
       box(w,thickness,.025,0,h-thickness/2,0,colour);box(w,thickness,.025,0,thickness/2,0,colour);
       for(const x of [-w/2+thickness/2,w/2-thickness/2])box(thickness,h,.025,x,h/2,0,colour);if(object.sync_media_entity)for(const child of group.children)child.material=child.material.clone();break;

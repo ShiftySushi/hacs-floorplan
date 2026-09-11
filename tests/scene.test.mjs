@@ -32,6 +32,9 @@ test('unsupported versions and duplicate scene ids fail before silent data loss'
   assert.throws(()=>normaliseScene({scene_version:2}),/version/);
   assert.throws(()=>normaliseScene({floors:[{objects:[{id:'same',type:'bed',x:20,y:30},{id:'same',type:'tv',x:30,y:40}]}]}),/unique/);
 });
+test('unknown furniture identifies the incompatible object and explains how to update the card',()=>{
+  assert.throws(()=>normaliseScene({floors:[{objects:[{id:'future-object',type:'future-fixture',x:50,y:50}]}]}),/Unsupported furniture type "future-fixture" for object "future-object".*Update the Home Assistant floorplan card/);
+});
 test('room materials and colours round trip and reject unsupported artwork inputs',()=>{
   const config={floors:[{rooms:[{material:'carpet',colour:'#bdc4a3'}]}]};
   assert.equal(normaliseScene(config).floors[0].rooms[0].colour,'#bdc4a3');

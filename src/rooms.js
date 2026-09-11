@@ -1,10 +1,11 @@
 import { available } from './lights.js';
-export function roomState(room, states) {
+export function roomPresence(room,floor){return [...(room.presence || []),...(floor?.objects || []).filter(o=>o.presence_room===room.id).flatMap(o=>o.presence_entities || [])];}
+export function roomState(room, states, floor) {
   const lights = room.lights || [];
   const active = lights.map(id => states[id]).filter(s => available(s) && s.state === 'on');
   const known = lights.filter(id => available(states[id]));
   const lightState = active.length ? 'Lit' : !lights.length ? 'No lights assigned' : known.length !== lights.length ? 'Lighting unknown' : 'Dark';
-  const sensors = room.presence || [];
+  const sensors = roomPresence(room,floor);
   const occupied = sensors.some(id => available(states[id]) && states[id].state === 'on');
   const presence = !sensors.length ? '' : occupied ? 'Presence detected' : sensors.some(id => !available(states[id])) ? 'Presence unknown' : 'No presence';
   return { lightState, presence, occupied, fill: active.length ? '#ffe5a0' : lightState === 'Dark' ? '#263746' : '#929ca4', opacity: active.length ? .28 + .32 * Math.max(...active.map(s => (s.attributes.brightness ?? 255) / 255)) : .66 };
