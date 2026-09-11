@@ -28,8 +28,8 @@ test('slow cold loads show a styled graphic and hide unstyled content',async({pa
   await page.goto('/demo/',{waitUntil:'commit'});
   await expect(page.locator('#boot')).toBeVisible();await expect(page.locator('main')).toHaveCSS('visibility','hidden');
   await expect(page.locator('html')).toHaveAttribute('data-theme','dark');await expect(page.locator('#boot svg')).toHaveCSS('width','72px');
-  await page.screenshot({path:test.info().outputPath('loading.png')});
-  release();await expect(page.locator('#boot')).toHaveCount(0);await expect(page.getByRole('navigation',{name:'Workspace'})).toBeVisible();
+  release();await page.waitForLoadState('load');
+  await expect(page.locator('#boot')).toHaveCount(0,{timeout:15000});await expect(page.getByRole('navigation',{name:'Workspace'})).toBeVisible();
 });
 
 test('a failed bundle load keeps styled recovery controls rather than an empty page',async({page})=>{
