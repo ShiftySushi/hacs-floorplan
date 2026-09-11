@@ -1,4 +1,7 @@
 import { displayFields } from './display-settings.js';
+import {informationSetup} from './information-panel.js';
+import {labelSetup} from './label-editor.js';
+import {weatherEntity} from './weather.js';
 import { prepareImportedConfig } from './import-images.js';
 import { imageReferences } from './image-references.js';
 import { styles } from './styles.js';
@@ -85,9 +88,13 @@ export class FloorplanEditor extends HTMLElement {
     if(this.step===0) root.append(floorSetup(this,floor));
     if(this.step===1) { if(floor) root.append(roomSetup(this,floor),structureSetup(this,floor)); else root.append(element('p',{text:'Add a floor in step 1 before drawing rooms.'})); }
     if(this.step===2) root.append(floor?furnitureSetup(this,floor):element('p',{text:'Add a floor in step 1 before placing furniture.'}));
-    if(this.step===3) root.append(floor?entitySetup(this,floor):element('p',{text:'Add a floor in step 1 before placing entities.'}));
+    if(this.step===3){
+      root.append(element('div',{className:'row'},[button('Lights & sensors',()=>{this.labelEditing=false;this.render();},{'aria-pressed':String(!this.labelEditing)}),button('Entity & room labels',()=>{this.labelEditing=true;this.render();},{'aria-pressed':String(!!this.labelEditing)})]));
+      root.append(floor?(this.labelEditing?labelSetup(this,floor):entitySetup(this,floor)):element('p',{text:'Add a floor in step 1 before placing entities.'}));
+    }
     if(this.step===4) root.append(groupSetup(this));
     if(this.step===5) {
+      root.append(informationSetup(this));
       const mode = element('select',{onchange:e=>{this.config.appearance.mode=e.target.value;this.emit();}});
       for(const [value,text] of [['clean','2D'],['pokemon','Pokémon'],['zelda','Zelda'],['3d','3D'],['sims','Sims-like']]) mode.append(element('option',{value,text,selected:this.config.appearance?.mode===value}));
       root.append(element('fieldset',{},[element('legend',{text:'Display defaults'}),...displayFields(this.config.appearance.display,next=>{this.config.appearance.display=next;this.emit();})]));
@@ -99,7 +106,7 @@ export class FloorplanEditor extends HTMLElement {
       for(const f of this.config.floors){const section=element('fieldset',{},[element('legend',{text:f.name || f.id})]);for(const [key,name] of [['pokemon','Pokémon'],['zelda','Zelda']]){section.append(field(`${name} background`,element('input',{type:'file',accept:'image/png,image/jpeg,image/webp,image/svg+xml',disabled:!!this.uploadingStyle,onchange:e=>this.uploadStyleImage(f.id,key,e.target.files?.[0])})));if(f.style_images?.[key])section.append(button(`Remove ${name} background`,()=>{delete f.style_images[key];this.emit();}));}artwork.append(section);}root.append(artwork);
       for(const f of this.config.floors) {
         const preview=element('section',{className:'review-floor'},[element('h3',{text:f.name || f.id}),element('p',{text:`${f.entities.length} entities · ${f.rooms.length} rooms · ${f.objects?.length || 0} objects · ${f.walls?.length || 0} walls · ${f.rotation}° rotation`})]);
-        preview.append((['3d','sims'].includes(this.config.appearance.mode)?render3D:renderPlan)(f,this._hass?.states || {},this.config.appearance));root.append(preview);
+        preview.append((['3d','sims'].includes(this.config.appearance.mode)?render3D:renderPlan)(f,this._hass?.states || {},{...this.config.appearance,weather:{...this.config.weather,entity:weatherEntity(this.config)}}));root.append(preview);
       }
       if(!this.config.floors.length) root.append(element('p',{text:'Start by adding a floor in step 1.'}));
       for(const f of this.config.floors) for(const r of f.rooms) if(!r.lights.length || !r.presence.length) root.append(element('p',{className:'muted',text:`${r.name}: ${!r.lights.length?'assign lights to show lit/dark state. ':''}${!r.presence.length?'Presence is optional and has not been assigned.':''}`}));

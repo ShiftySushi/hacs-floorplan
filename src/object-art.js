@@ -34,7 +34,7 @@ export function objectArtwork(item, mode, width, depth) {
     for(const [index,[x,y]] of centres.entries())g.append(svgElement('polygon',{'data-panel-index':index,points:Array.from({length:6},(_,i)=>{const angle=(30+i*60)*Math.PI/180;return `${width/2+x+Math.cos(angle)*radius*.96},${depth/2+(y+Math.sin(angle)*radius*.96)*depth/faceHeight}`;}).join(' '),fill:item.colour || white,'stroke-width':Math.min(depth*.15,radius*.08)}));
   } else if(item.type==='tv_lightstrip') {
     // Top-down strip: a narrow bar behind the screen, within its physical footprint.
-    rect(inset,depth*.25,width-inset*2,depth*.5,item.colour || '#d7b7ec',inset);
+    rect(inset,depth*.25,width-inset*2,depth*.5,item.pattern_entity?'#34383b':item.colour || '#d7b7ec',inset);
   } else if(item.type==='ultrawide_monitor') {
     rect(inset,inset,width-inset*2,depth*.6,edge);line(inset*3,depth*.2,width-inset*3,depth*.2,'#94b8bd');rect(width/2-unit*.06,depth*.6,unit*.12,depth*.25,edge);rect(width*.3,depth*.83,width*.4,depth*.1,edge);
   } else if(item.type==='computer') {

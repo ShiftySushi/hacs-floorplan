@@ -1,7 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Group,Box3} from 'three';
+import {Group,Box3,Raycaster,Vector3} from 'three';
 import {openingFrame} from '../src/opening-frame3d.js';
+test('centre door glass and a fixed fanlight transmit light through actual openings',()=>{
+  const group=new Group(),o={type:'door',frame:'solid',width:1,height:2.38,offset:.5,transom_height:.28,glazing:{width:.29,height:1.28,sill:.46}};
+  const parts=openingFrame(group,o,2);group.updateMatrixWorld(true);
+  for(const y of [1.1,2.23]){const ray=new Raycaster(new Vector3(1,y,1),new Vector3(0,0,-1));const hits=ray.intersectObject(group,true);assert.ok(hits.length);assert.ok(hits.every(hit=>hit.object.userData.glazing));}
+  assert.ok(parts.door.transmission>.15&&parts.door.transmission<.3);
+  const transom=parts.find(m=>m.userData.glazing);const position=transom.position.clone();parts.door.toggle();parts.door.update(performance.now()+1500,false);
+  assert.ok(parts.door.transmission>.9);assert.deepEqual(transom.position,position);
+});
 import {furniture3D} from '../src/furniture3d.js';
 import {normaliseScene} from '../src/scene.js';
 

@@ -92,6 +92,37 @@ Search the furniture catalogue by product name for measured presets from Kawai, 
 
 Power works for all available selected lights. Brightness, RGB colour and white temperature appear only for compatible selections, with an eligible count shown. Colour is available for RGB, RGBW, RGBWW, HS and XY colour-capable lights, not plain dimmers or tunable-white-only lights. Temperature is clamped to each light's supported range. Mixed selections apply each setting only to compatible lights. Initial control values represent the first compatible light, not a group average.
 
+## At a glance and exterior
+
+**Floors → Outdoor weather** selects a Home Assistant weather entity and controls effect intensity. If left blank, it uses the At a glance weather entity, then an available weather integration. Rain, downpours, snow, sleet, hail, clouds, fog, wind and storms appear outside the building in both 3D styles, including the exterior and all-storey views. Sunny and clear-night conditions use the existing daylight background. Precipitation avoids building footprints; effects pause with the page and respect reduced motion. These are visual weather effects, not a forecast or snow-accumulation simulation. The separate outdoor-temperature chip hides when At a glance already contains weather.
+
+**Lights & sensors → Entity & room labels** creates movable labels for any Home Assistant entity domain. Add a title, associate a room, and combine up to 16 readings. Each row supports a custom name, an optional attribute and a unit override. Drag or enter coordinates to position the label; its height controls the anchor in 3D. Tap a live reading for Home Assistant's normal entity controls. Missing values say “Unavailable”. Labels travel with scene imports and exports.
+
+The furniture catalogue includes **Hue Motion Sensor**, **Everything Presence Pro**, **Everything Presence One** and **Everything Presence Lite**. These are original procedural representations with editable dimensions. Assign presence entities, optionally select a room whose occupancy they report, and choose free placement, a wall/side/offset or a room top corner. Attached models follow geometry edits; detach with **Free placement** before dragging elsewhere. Top-corner placement sets height and points into the room. Model appearance references are in [CREDITS.md](CREDITS.md).
+
+In **Review → At a glance**, enable the translucent information panel, choose a corner and add or reorder items. It stays visible when floorplan markers are hidden and can be collapsed. Weather and calendar items use selected entities; each calendar shows its next exposed event. Use **Entity** for pollen, household energy, car battery percentage or another sensor. Selecting a readout opens Home Assistant's entity details.
+
+**Who’s at home**, **HA updates** and **Low batteries** summarise people, update entities and battery-class sensors. They use all matching entities by default, or an explicitly selected list. The low-battery threshold defaults to 20%; unavailable entities are reported separately. These readouts do not install updates or control devices. Settings are stored in `information: {enabled, position, items}` and included in scene imports and exports.
+
+A scene with `exterior` data exposes an **Exterior** button in 3D. It has its own saved camera; choosing a floor returns to the interior. The exterior contains metre-based `box`, `surface`, `plant` and `car` items: boxes/plants/cars use `x`, `y`, `z`, `width`, `height`, `depth` and optional `rotation`/`colour`; surfaces use three or four `[x,y,z]` vertices. The root specifies `width_m`, `depth_m`, `height_m` and `items`. Exterior geometry is supplied through the scene configuration; the furniture editor does not edit it. Personal site geometry belongs only in a private scene, not the card bundle.
+
+Exterior items can select a `finish` of `grass`, `asphalt`, `paving` or `brick`. These finishes use repeating procedural textures at metre scale; plants use textured leaf geometry. Imported meshes can be embedded in `exterior.models` and referenced by an item's `model` key. Model data and attribution stay in the portable scene; model credits are documented in [CREDITS.md](CREDITS.md). Rendering requires no external model or texture requests.
+
+Exterior `light` items accept `light_entity` and follow its on/off state, brightness and colour. A `charger` item accepts `charging_entity` and optionally `connected_entity`; its cable is docked by default and extends along `plugged_cable` (an array of local `[x, y, z]` metre points) while charging or connected. Without a connected sensor, a paused charge appears docked. Unavailable states show an unlit fixture and a docked cable unless another supplied sensor confirms a connection.
+
+Solid framed door openings can include `glazing: {width, height, sill}` in metres and a `transom_height` within the opening's total height. The glass remains transparent when the leaf is closed, and its area contributes to interior daylight. An optional `outside_lights` list models light entering through the opening from those HA lights. Exterior items support `glazing: true` for reflective panes, `light_style: spot` for a spotlight, and `type: doorbell` for a compact camera doorbell.
+
+## Addressable strip displays
+
+Select a **TV light strip** in the furniture inspector and assign its pattern, colour and fill sensors. `pattern_entity` enables the addressable renderer; `colour_entity` reads a six-digit hex colour and `fill_entity` reads 0–100. Existing strips without a pattern sensor retain their light/TV-sync behaviour.
+
+- `off` (also an unknown or unavailable pattern): no emission.
+- `center-dot`: an 8 cm glow centred within the full fixture width, ignoring fill percentage.
+- `full-fill`: the entire configured width, regardless of the fill sensor.
+- `progressive-fill`: the supplied percentage, clamped to 0–100; missing or invalid fill is dark.
+
+Keep the full physical strip width. `fill_direction` can be `left-to-right` (default) or `right-to-left`, along the object's local width before rotation. Reverse it after comparing a partial fill with the physical plug end. A pattern sensor takes precedence over `light_entity`; the light binding remains optional for control and ambient illumination. Missing/invalid colour falls back to the light's colour or warm white.
+
 ## Floorplan assets
 
 When importing a portable configuration into Home Assistant, wait for the import to finish before pressing **Save**. Embedded floor images and custom artwork are uploaded to Home Assistant’s image storage, and the dashboard stores their URLs instead of large base64 payloads. SVG and WebP artwork is converted to PNG for HA compatibility. Duplicate images are uploaded once per import. Failed uploads leave the previous card configuration unchanged. Exports still include the stored images so the configuration remains portable.
@@ -133,7 +164,7 @@ node scripts/models.mjs  # regenerate SVG outlines and OBJ models
 npm run demo
 ```
 
-Open `http://127.0.0.1:8124/demo/` for the fictional demo. **Live view** fits the floorplan into the available screen, with compatible lighting controls beside it on wider screens. **Edit layout** opens the layout studio. Simulated presence and service failures are available in the demo toolbar. The optional model command requires private `floorplans/models/geometry.json` and is not part of the plugin build. The demos never connect to a live Home Assistant server. The public demo resets its fictional layout on reload while retaining simulated device and display preferences. The optional private house demo shares layout edits through its LAN development server, with browser storage retained for recovery. Export a portable scene for a separate backup or transfer to Home Assistant.
+Open `http://127.0.0.1:8124/demo/` for the fictional demo. **Live view** fits the floorplan into the available screen, with compatible lighting controls beside it on wider screens. **Edit layout** opens the layout studio. Simulated presence and service failures are available in the demo toolbar. The optional model command requires private `floorplans/models/geometry.json` and is not part of the plugin build. The demos never connect to a live Home Assistant server. The public demo resets on reload; the optional private house demo saves edits in that browser's local storage. Export a portable scene for a separate backup or transfer to Home Assistant.
 
 The `src/` modules separate light service rules, scene geometry, 2D/3D rendering and guided setup. `scripts/build.mjs` uses esbuild to bundle a single self-contained `dist/hacs-floorplan.js`, including licence notices. The packaging check requires a reproducible build below 900,000 bytes. Run the build after changing source; do not edit the distribution directly.
 

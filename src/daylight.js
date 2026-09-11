@@ -1,6 +1,7 @@
+import {weatherAppearance} from './weather.js';
 // Sun elevation follows the home's configured location. The clock is only a
 // preview fallback when the Sun integration is unavailable.
-export function daylightLevel(states={},now=new Date(),location={}) {
+export function daylightLevel(states={},now=new Date(),location={},weatherEntity='') {
   const sun=states['sun.sun'],elevation=sun?.attributes?.elevation;
   let level;
   if(Number.isFinite(elevation)&&!['unknown','unavailable'].includes(sun.state))level=Math.max(0,Math.min(1,(elevation+6)/26));
@@ -8,8 +9,8 @@ export function daylightLevel(states={},now=new Date(),location={}) {
   else if(sun?.state==='below_horizon')level=0;
   else if(Number.isFinite(location.latitude ?? states['zone.home']?.attributes?.latitude)&&Number.isFinite(location.longitude ?? states['zone.home']?.attributes?.longitude))level=Math.max(0,Math.min(1,(solarElevation(now,location.latitude ?? states['zone.home'].attributes.latitude,location.longitude ?? states['zone.home'].attributes.longitude)+6)/26));
   else level=Math.max(0,Math.sin((now.getHours()+now.getMinutes()/60-6)*Math.PI/12));
-  const weather=Object.entries(states).find(([id,state])=>id.startsWith('weather.')&&!['unknown','unavailable'].includes(state?.state))?.[1];
-  const cloud=weather?.attributes?.cloud_coverage;
+  const weather=weatherEntity?states[weatherEntity]:Object.entries(states).find(([id,state])=>id.startsWith('weather.')&&!['unknown','unavailable'].includes(state?.state))?.[1];
+  const cloud=weather?.attributes?.cloud_coverage ?? weatherAppearance({'weather.selected':weather}).clouds*100;
   if(Number.isFinite(cloud))level*=1-.35*Math.max(0,Math.min(100,cloud))/100;
   return level;
 }

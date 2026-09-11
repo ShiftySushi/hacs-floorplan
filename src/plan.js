@@ -1,6 +1,7 @@
 import { element, svgElement } from './dom.js';
 import { roomState, orientation, orientPoint } from './rooms.js';
 import { CATALOGUE } from './catalogue.js';
+import {stripAppearance,stripLightStates} from './strip-pattern.js';
 import { objectArtwork } from './object-art.js';
 import { floorDimensions } from './scene.js';
 import { roomLightSources, lightAppearance, roomDarkness } from './illumination.js';
@@ -62,6 +63,7 @@ export function renderPlan(floor, states, options={}) {
   for(const [label,text,action] of [['Zoom in','+',()=>{zoom=Math.min(3,zoom+.25);}],['Zoom out','−',()=>{zoom=Math.max(.5,zoom-.25);}],['Pan left','←',()=>{panX=Math.min(75,panX+10);}],['Pan right','→',()=>{panX=Math.max(-75,panX-10);}],['Pan up','↑',()=>{panY=Math.min(75,panY+10);}],['Pan down','↓',()=>{panY=Math.max(-75,panY-10);}],['Fit floorplan','Fit',()=>{zoom=1;panX=0;panY=0;}],...(!options.edit? [['Rotate floorplan left','↶',()=>{viewRotation=(viewRotation+270)%360;zoom=1;panX=panY=0;layout();}],['Rotate floorplan right','↷',()=>{viewRotation=(viewRotation+90)%360;zoom=1;panX=panY=0;layout();}]]:[])]) {const control=element('button',{type:'button',text,'aria-label':label,title:label,onclick:e=>{e.stopPropagation();action();camera();}});control.style.cssText='pointer-events:auto;min-width:32px;min-height:36px;padding:4px 7px';toolbar.append(control);}plan.append(toolbar);
   const pointAt=e=>{const r=content.getBoundingClientRect();return orientPoint([(e.clientX-r.left)/r.width*100,(e.clientY-r.top)/r.height*100],transform,true).map(n=>Math.round(Math.max(0,Math.min(100,n))*10)/10);};
   function layout() {
+    const lightingStates=stripLightStates(floor.objects || [],states);
     const mode=options.mode || 'clean', pixel=['pokemon','zelda'].includes(mode),styleImage=pixel?floor.style_images?.[mode]:null;
     transform=orientation(ratio,(floor.rotation || 0)+viewRotation);
     const {w,h,width,height}=transform,dims=floorDimensions({...floor,aspect_ratio:ratio});
@@ -89,7 +91,7 @@ export function renderPlan(floor, states, options={}) {
         for(let y=4;y<48;y+=8)for(let x=4;x<48;x+=8)pattern.append(svgElement('path',{d:mode==='zelda'?`M${x-2} ${y}h4v4h-4Z`:`M${x} ${y}h2`,fill:'none',stroke:'#ffffff','stroke-opacity':pixel?.22:.14,'stroke-width':pixel?2:1}));
       }
       defs.append(pixel?pixelPattern(id,mode,material,room.colour):pattern);
-      const state=roomState(room,states),attrs={points:points(room.points),'vector-effect':'non-scaling-stroke'};
+      const state=roomState(room,states,floor),attrs={points:points(room.points),'vector-effect':'non-scaling-stroke'};
       if(!styleImage)group.append(svgElement('polygon',{...attrs,fill:`url(#${id})`,'fill-opacity':options.edit?.55:1,stroke:pixel?(mode==='pokemon'?'#765647':'#4a5946'):'#7a8788','stroke-width':pixel?5:1.5}));
       if(pixel&&!styleImage)group.append(pixelRoomTrim(room.points.map(([x,y])=>[x/100*w,y/100*h]),mode));
       const clipId=`${id}-clip`,maskId=`${id}-shade`;
@@ -98,7 +100,7 @@ export function renderPlan(floor, states, options={}) {
       mask.append(svgElement('rect',{width:w,height:h,fill:'white'}));defs.append(mask);
       const pools=svgElement('g',{'clip-path':`url(#${clipId})`,'data-room-lighting':room.id || room.name});
       if(!options.edit)for(const [index,source] of roomLightSources(floor,room).entries()) {
-        const {level,colour}=lightAppearance(states[source.id]);if(!level)continue;
+        const {level,colour}=lightAppearance(lightingStates[source.id]);if(!level)continue;
         const cx=source.x/100*w,cy=source.y/100*h,rx=source.radius/dims.width*w,ry=source.radius/dims.depth*h;
         const ellipse={cx,cy,rx,ry,'data-light-zone':source.id};
         const gradientId=`${id}-light-${index}`,revealId=`${gradientId}-reveal`;
@@ -132,7 +134,7 @@ export function renderPlan(floor, states, options={}) {
       if(!options.edit&&options.hideExtractionFans&&item.type==='extractor_fan')continue;
       if(!options.edit&&((options.hideRadiators&&item.type==='radiator')||(options.hideLightFixtures&&(item.light_entity||['lamp','wall_light','nanoleaf_panels','tv_lightstrip'].includes(item.type)))))continue;
       const ow=item.width/dims.width*w,oh=item.depth/dims.depth*h,object=svgElement('g',{transform:`translate(${item.x/100*w} ${item.y/100*h}) rotate(${item.rotation || 0})`,'data-object-id':item.id,opacity:options.edit?1:(options.furniture_opacity ?? (pixel?.9:.55))});
-      if(item.light_entity){const light=lightAppearance(states[item.light_entity]);if(light.level){
+      if(item.light_entity&&!item.pattern_entity){const light=lightAppearance(states[item.light_entity]);if(light.level){
         const strip=item.type==='tv_lightstrip',glowId=`${patternId}-object-${defs.childNodes.length}`;
         const gradient=svgElement('radialGradient',{id:glowId});gradient.append(svgElement('stop',{offset:0,'stop-color':`rgb(${light.colour.join(',')})`,'stop-opacity':.45*light.level}),svgElement('stop',{offset:1,'stop-color':`rgb(${light.colour.join(',')})`,'stop-opacity':0}));defs.append(gradient);
         object.append(svgElement('ellipse',{cx:0,cy:0,rx:ow*(strip?.55:.85),ry:strip?Math.max(oh,ow*.06):oh*.85,fill:`url(#${glowId})`,'data-object-glow':item.id}));
@@ -140,6 +142,7 @@ export function renderPlan(floor, states, options={}) {
       const art=svgElement('g',{transform:`translate(${-ow/2} ${-oh/2})`});
       if(pixel&&item.style_images?.[mode]){const spriteHeight=['tv','bookshelf','display_cabinet','computer','ultrawide_monitor'].includes(item.type)?Math.max(oh,ow*.75):oh;art.append(svgElement('rect',{width:ow,height:oh,fill:'transparent'}),svgElement('image',{href:item.style_images[mode],x:0,y:(oh-spriteHeight)/2,width:ow,height:spriteHeight,preserveAspectRatio:'xMidYMid meet',style:'image-rendering:pixelated','data-private-sprite':item.id}));}
       else art.append(objectArtwork(item,mode,ow,oh));object.append(art);
+      if(item.pattern_entity){const a=stripAppearance(item,states);if(a.level)object.append(svgElement('rect',{x:ow*(a.centre-a.fraction/2),y:-Math.max(oh,3)/2,width:ow*a.fraction,height:Math.max(oh,3),rx:1,fill:`rgb(${a.colour.join(',')})`,'data-strip-pattern':a.pattern,'data-strip-fill':a.fraction,style:`filter:drop-shadow(0 0 4px rgb(${a.colour.join(',')}))` }));}
       // Furniture fronts face local +Y in the plan (local +Z in 3D).
       // Keep the marker inside the rotating object group and out of hit testing.
       if(options.edit)object.append(svgElement('path',{d:`M-8 ${oh/2-8}L0 ${oh/2+4}L8 ${oh/2-8}Z`,fill:'#007c91',stroke:'#fff','stroke-width':1.5,'vector-effect':'non-scaling-stroke','pointer-events':'none','data-furniture-front':'',role:'img','aria-label':'Front'}));

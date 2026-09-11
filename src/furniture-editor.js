@@ -9,13 +9,16 @@ import { floorDimensions } from './scene.js';
 import { furnitureStyles } from './furniture-styles.js';
 import { iconButton } from './icons.js';
 import { entitySelect } from './setup.js';
+import {isPresenceSensor} from './presence-sensors.js';
+import {sensorFields} from './sensor-editor.js';
+import {weatherEntity} from './weather.js';
 const LIBRARY=[...CATALOGUE.map(item=>({...item,id:item.type})),...PRODUCT_PRESETS];
 export function furnitureSetup(host, floor) {
   const preview=host.furniturePreview==='3d';
   function renderPlan(floor,states,options){
     if(!preview)return render2D(floor,states,{...options,mode:'clean'});
     host.furniture3DViews??=new Map();if(!host.furniture3DViews.has(floor.id))host.furniture3DViews.set(floor.id,{});
-    return render3D(floor,states,{mode:'3d',edit:true,viewState:host.furniture3DViews.get(floor.id)});
+    return render3D(floor,states,{mode:'3d',edit:true,weather:{...host.config.weather,entity:weatherEntity(host.config)},viewState:host.furniture3DViews.get(floor.id)});
   }
   floor.objects ??= [];
   const root = element('div', { className: 'scene-editor furniture-editor' });
@@ -86,6 +89,7 @@ export function furnitureSetup(host, floor) {
     if(selected.support_id)panel.append(element('p',{text:'On '+(floor.objects.find(o=>o.id===selected.support_id)?.name||'furniture surface')}));
     const inspector = element('fieldset', { className: 'object-inspector',disabled:!unlocked }, [element('legend', { text: 'Furniture position and size' })]);
     if(selected.product_id?.startsWith('mathmos-'))inspector.append(field('Lava bottle colour',element('select',{onchange:e=>{selected.lava_colour=Number(e.target.value);host.emit();}},lavaColours.map(([name],i)=>element('option',{value:i,text:name,selected:i===(selected.lava_colour??9)})))));
+    if(isPresenceSensor(selected))sensorFields(host,floor,selected,inspector);
     const presets=PRODUCT_PRESETS.filter(p=>p.type===selected.type),product=productPreset(selected);
     if(presets.length){
       const picker=element('select',{disabled:!unlocked,onchange:e=>{const preset=PRODUCT_PRESETS.find(p=>p.id===e.target.value);if(preset)updateFurniture(floor,selected,applyProductPreset(selected,preset));else {delete selected.product_id;delete selected.name;}host.emit();}},[element('option',{value:'',text:'Custom / generic dimensions',selected:!product})]);
@@ -108,6 +112,10 @@ export function furnitureSetup(host, floor) {
     if(selected.type==='picture')inspector.append(field('Artwork media player (HA-Meural)',entitySelect(host,/^media_player\./,selected.media_entity || '',id=>{selected.media_entity=id;host.emit();})),field('Fallback / landscape artwork URL or data image',element('input',{value:selected.artwork_image || '',onchange:e=>{selected.artwork_image=e.target.value;host.emit();}})),field('Portrait artwork URL or data image',element('input',{value:selected.artwork_portrait_image || '',onchange:e=>{selected.artwork_portrait_image=e.target.value;host.emit();}})),element('p',{className:'muted',text:'Tap to rotate in 3D. Uses orientation artwork if set, otherwise the media player image.'}));
     if(selected.type==='tv')inspector.append(field('TV media player',entitySelect(host,/^media_player\./,selected.media_entity || '',id=>{selected.media_entity=id;host.emit();})),element('p',{className:'muted',text:'Optional TV media player; lighting is linked separately.'}));
     if(selected.type==='tv_lightstrip')inspector.append(field('Hue Sync TV',entitySelect(host,/^media_player\./,selected.sync_media_entity || '',id=>{selected.sync_media_entity=id;host.emit();})));
+    if(selected.type==='tv_lightstrip'){
+      for(const [key,label] of [['pattern_entity','Strip pattern sensor'],['colour_entity','Strip colour sensor'],['fill_entity','Strip fill percentage sensor']])inspector.append(field(label,entitySelect(host,/^sensor\./,selected[key] || '',id=>{selected[key]=id;host.emit();})));
+      inspector.append(field('Strip fill direction',element('select',{onchange:e=>{selected.fill_direction=e.target.value;host.emit();}},['left-to-right','right-to-left'].map(value=>element('option',{value,text:value==='left-to-right'?'Local left to right':'Local right to left',selected:(selected.fill_direction || 'left-to-right')===value})))),element('p',{className:'muted',text:'Pattern overrides the light state. Keep the full strip width; the centre dot stays 8 cm wide. Direction follows the object before rotation; reverse it to match the plug end.'}));
+    }
     inspector.append(field('Reactive light entity',entitySelect(host,/^light\./,selected.light_entity || '',id=>{selected.light_entity=id;host.emit();})),field('Height above floor (metres)',element('input',{type:'number',min:0,max:100,step:.01,value:selected.elevation_m || 0,onchange:e=>{const value=Number(e.target.value);if(!Number.isFinite(value)||value<0||value>100){host.error='Height above floor must be between zero and 100 metres.';host.render();return;}updateFurniture(floor,selected,{elevation_m:value});host.emit();}})),element('p',{className:'muted',text:'Drop equipment onto a table or desk to set its height automatically. Moving the table carries it; moving equipment off returns it to the floor. Manual height detaches it.'}));
     for (const [key, label, min, max, step] of [['width','Width (metres)',.001,30,'any'],['depth','Depth (metres)',.001,30,'any'],['rotation','Object rotation (degrees)',0,359,1],['height','Height (metres)',.001,10,'any'],['x','X position (%)',0,100,.1],['y','Y position (%)',0,100,.1]]) inspector.append(field(label, element('input', { type: 'number', value: selected[key], min, max, step, onchange: e => { const value = Number(e.target.value); if (!Number.isFinite(value) || value < min || value > max) { host.error = `${label} must be between ${min} and ${max}.`; host.render(); return; } updateFurniture(floor,selected,{[key]:value}); host.emit(); } })));
     inspector.append(field('Furniture colour', element('input', { type: 'color', value: selected.colour || '#b58b65', onchange: e => { selected.colour = e.target.value; host.emit(); } })));
