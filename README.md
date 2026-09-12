@@ -184,7 +184,7 @@ Open `http://127.0.0.1:8124/demo/` for the fictional demo. **Live view** fits th
 
 The `src/` modules separate light service rules, scene geometry, 2D/3D rendering and guided setup. `scripts/build.mjs` uses esbuild to bundle a single self-contained `dist/hacs-floorplan.js`, including licence notices. The packaging check requires a reproducible build below 900,000 bytes. Run the build after changing source; do not edit the distribution directly.
 
-Project delivery publishes the same reviewed commit and branch to Forgejo and GitHub and creates or updates a PR on both hosts in the same session. Both hosts' required CI checks must pass for that commit before delivery is ready for review. See [Delivery to both hosts](AGENTS.md#delivery-to-both-hosts) for the authoritative workflow, partial-delivery handling and authorisation boundaries.
+Project delivery publishes the same reviewed commit and branch to Forgejo and GitHub and creates or updates a PR on both hosts in the same session. **Push for review** stops once both hosts' required checks pass. **Push and finalise** also includes merging both PRs, post-merge validation and safe task-branch cleanup. See [Delivery to both hosts](AGENTS.md#delivery-to-both-hosts) for the authoritative workflow, partial-delivery handling and authorisation boundaries.
 
 ## References
 
