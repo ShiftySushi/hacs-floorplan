@@ -10,6 +10,26 @@ async function setup(page){
     card.setConfig(config);card.hass=hass;
   });
 }
+test('information readouts remain legible with dark theme and unavailable devices',async({page},info)=>{
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await setup(page);
+  await page.locator('floorplan-card').evaluate(card=>{
+    card.style.setProperty('--primary-text-color','#eee');card.style.setProperty('--secondary-text-color','#999');card.style.setProperty('--card-background-color','#343638');
+    const config=structuredClone(card.config);config.information.items=[{type:'updates'},{type:'entity',label:'Solar now',entity:'sensor.power'},{type:'entity',label:'Solar today',entity:'sensor.energy'},{type:'calendar',entities:['calendar.a','calendar.b']},{type:'energy',label:'Network / infrastructure',energy:[{label:'Router',power_entity:'sensor.offline'},{label:'Home server',power_entity:'sensor.power',energy_entity:'sensor.energy'}]}];card.setConfig(config);
+    card.hass={...card._hass,states:{...card._hass.states,'sensor.temperature':{state:'26',attributes:{unit_of_measurement:'°C'}},'binary_sensor.door':{state:'unavailable'},'update.core':{state:'on',attributes:{friendly_name:'Core Update'}},'calendar.a':{state:'off',attributes:{friendly_name:'Webcal://example.test/racing.ics'}}}};
+  });
+  const card=page.locator('floorplan-card'),panel=card.locator('.information-panel');
+  await expect(panel).not.toContainText('Webcal');await expect(panel).toContainText('Core');await expect(panel).not.toContainText('Core Update');await expect(panel.locator('.information-energy-row')).toHaveCount(2);
+  await expect(card.locator('.device-marker').filter({hasText:'Contact unavailable'}).first()).toContainText('Locked');
+  await expect(card.locator('.room-readout')).toHaveCSS('color','rgb(112, 67, 38)');
+  await expect(panel.locator('.information-date').first()).toBeVisible();
+  await page.screenshot({path:info.outputPath('information-cleanup.png')});
+  await panel.evaluate(node=>node.scrollTop=node.scrollHeight);
+  await page.screenshot({path:info.outputPath('information-energy.png')});
+  await panel.locator('summary').evaluate(node=>node.parentElement.open=false);
+  await card.locator('.room-readout').hover();
+  await page.screenshot({path:info.outputPath('room-contrast.png')});
+});
 test('room cards expose current readings, controls, errors and energy on desktop and mobile',async({page},info)=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));await setup(page);const card=page.locator('floorplan-card');
   await expect(card.locator('.information-panel')).toContainText('1 low');await expect(card.locator('.information-panel')).not.toContainText('unavailable');
