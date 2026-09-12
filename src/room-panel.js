@@ -1,9 +1,10 @@
 import {element,button} from './dom.js';
 import {roomState} from './rooms.js';
 import {roomTemperature} from './heating.js';
-import {knownState,sensorText,roomEnvironment,objectRoom,printerState,energySummary,doorState} from './live-data.js';
+import {knownState,sensorText,roomEnvironment,objectRoom,printerState,energySummary,doorDescription} from './live-data.js';
 
 export const roomPanelStyles=`
+.floorplan-dashboard .marker.room-readout.temp-warm{color:#704326;background:#faeadd}.floorplan-dashboard .marker.room-readout.temp-cool{color:#315d76;background:#e6f1f3}
 .floorplan-dashboard .marker.room-readout{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:5px 7px;color:var(--fp-text,var(--primary-text-color,#26343d));white-space:nowrap}.room-readout-name{font-size:10px;opacity:.85}.room-readout-values{font-size:13px;font-variant-numeric:tabular-nums;line-height:1.3}.room-readout-alert{font-size:10px;color:var(--warning-color,#b66b00)}
 .floorplan-dashboard .marker.exterior-camera{border-radius:8px;opacity:1;background:var(--fp-surface,#fff)}.floorplan-dashboard .marker.device-error{opacity:1}
 .room-panel header{padding:0}.floorplan-dashboard .marker.device-marker{width:max-content;height:auto;max-width:160px;border-radius:6px;white-space:normal;padding:5px 7px;font-size:11px}
@@ -63,7 +64,7 @@ export function roomPanel(host,states){
     const strip=floor.objects.find(o=>o.pattern_entity&&objectRoom(o,floor)?.id===room.id);if(strip)line('Printer light display',sensorText(strip.pattern_entity,states),section);
     if(object.camera_entity)section.append(cameraThumbnail(host,object.camera_entity,states));section.append(button('Printer details',()=>more(host,object.status_entity)));panel.append(section);
   }
-  for(const wall of floor.walls||[])for(const door of wall.openings||[])if(door.room_id===room.id&&door.contact_entity)line(door.name||'Door',[doorState(door,states),door.lock_entity?sensorText(door.lock_entity,states):''].filter(Boolean).join(' · '));
+  for(const wall of floor.walls||[])for(const door of wall.openings||[])if(door.room_id===room.id&&door.contact_entity)line(door.name||'Door',doorDescription(door,states));
   if(room.energy?.length){const summary=energySummary(room.energy,states),section=element('section',{},[element('h4',{text:'Plug energy'}),element('p',{text:`${summary.power} now · ${summary.energy} today${summary.partial?' · Partial readings':''}`})]);
     for(const row of summary.rows)section.append(element('div',{className:'energy-device'},[element('strong',{text:row.label}),element('small',{text:`${row.power} now · ${row.energy} today`})]));panel.append(section);}
   panel.append(element('div',{className:'room-feedback',role:'status',text:host.roomBusy?'Sending command…':host.roomFeedback||''}));return panel;

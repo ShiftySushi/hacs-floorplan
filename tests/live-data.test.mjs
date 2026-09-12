@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {roomEnvironment,energySummary,radiatorEntity,validateLiveFields,doorState} from '../src/live-data.js';
+import {roomEnvironment,energySummary,radiatorEntity,validateLiveFields,doorState,doorDescription} from '../src/live-data.js';
 import {heatingState} from '../src/heating.js';
 import {informationRows} from '../src/information.js';
 import {sceneEntities} from '../src/ha-updates.js';
@@ -8,6 +8,22 @@ import {calendarEvents,refreshCalendars} from '../src/calendar-data.js';
 import {furniture3D} from '../src/furniture3d.js';
 import {updatePrinter3D} from '../src/printers3d.js';
 const s=(state,attributes={})=>({state:String(state),attributes});
+test('door descriptions distinguish contact availability from lock state',()=>{
+  const door={contact_entity:'binary_sensor.door',lock_entity:'lock.door'};
+  assert.equal(doorDescription(door,{'lock.door':s('locked')}),'Contact unavailable · Locked');
+  assert.equal(doorDescription(door,{'binary_sensor.door':s('off'),'lock.door':s('unlocked')}),'Closed · Unlocked');
+  assert.equal(doorDescription({lock_entity:'lock.door'},{'lock.door':s('locked')}),'Locked');
+});
+test('calendar feed URLs never appear in event metadata or refresh failures',()=>{
+  for(const name of ['Webcal://example.test/feed.ics','https://example.test/events','example.test/feed.ics']){
+    const result=calendarEvents({entities:['calendar.racing']},{'calendar.racing':s('off',{friendly_name:name})},{'calendar.racing':{error:true,events:[{summary:'Qualifying',start:{date:'2026-09-12'},end:{date:'2026-09-13'}}]}},new Date('2026-09-11'));
+    assert.equal(result.events[0].source,'');assert.equal(result.events[0].time,'All day');assert.doesNotMatch(result.events[0].detail,/example|webcal|ics/i);assert.deepEqual(result.failures,['Calendar']);
+  }
+});
+test('information energy uses device rows and update names remove only trailing suffixes',()=>{
+  const rows=informationRows({items:[{type:'energy',energy:[{label:'Router',power_entity:'sensor.missing'}]},{type:'updates'}]},{'update.core':s('on',{friendly_name:'Core Update'}),'update.tool':s('on',{friendly_name:'Update Manager'})});
+  assert.equal(rows[0].value,'Readings unavailable');assert.equal(rows[0].energyRows[0].label,'Router');assert.doesNotMatch(rows[0].detail,/Router/);assert.equal(rows[1].detail,'Core, Update Manager');
+});
 test('room environment treats unavailable readings as unknown and uses configurable warning levels',()=>{
   const room={humidity_entity:'sensor.h',pm25_entity:'sensor.p',voc_entity:'sensor.v'};
   assert.deepEqual(roomEnvironment(room,{'sensor.h':s(52),'sensor.p':s('unavailable'),'sensor.v':s(151)}),{humidity:'52%',pm25:null,voc:151,warning:true});

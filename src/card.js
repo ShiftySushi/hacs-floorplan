@@ -16,8 +16,9 @@ import {sceneEntities,sceneState} from './ha-updates.js';
 import {informationPanel,informationStyles} from './information-panel.js';
 import {lightToggleIds} from './light-targets.js';
 import {roomPanel,roomPanelStyles,openRoom,cameraThumbnail} from './room-panel.js';
-import {roomEnvironment,radiatorEntity,objectRoom,printerState,doorState,sensorText} from './live-data.js';
+import {roomEnvironment,radiatorEntity,objectRoom,printerState,doorState,doorDescription,sensorText} from './live-data.js';
 import {refreshCalendars} from './calendar-data.js';
+import {refreshInformationHistory,resetInformationHistory} from './information-history.js';
 
 export class FloorplanCard extends HTMLElement {
   constructor() {
@@ -29,7 +30,7 @@ export class FloorplanCard extends HTMLElement {
   }
   static getConfigElement() { return document.createElement('floorplan-card-editor'); }
   connectedCallback() { if (this.config) this.render();clearInterval(this.daylightTimer);this.daylightTimer=setInterval(()=>{if(!document.hidden&&this.config)this.render();},60000); }
-  disconnectedCallback() { this.calendarGeneration=(this.calendarGeneration||0)+1;this.calendarRequestedAt=0;clearInterval(this.daylightTimer);this.entranceObserver?.disconnect();this.plan?.dispose?.(); this.plan=null; this.planKey=null; this.stageObserver?.disconnect(); this.planObserver?.disconnect(); }
+  disconnectedCallback() { resetInformationHistory(this);this.calendarGeneration=(this.calendarGeneration||0)+1;this.calendarRequestedAt=0;clearInterval(this.daylightTimer);this.entranceObserver?.disconnect();this.plan?.dispose?.(); this.plan=null; this.planKey=null; this.stageObserver?.disconnect(); this.planObserver?.disconnect(); }
   renderRoomPanel(){if(this.planSlot)updatePanel(this.planSlot,'.room-panel',roomPanel(this,this._hass?.states||{}));}
   fitPlan() {
     const tools=this.planSlot?.querySelector('.stage-tools');if(tools)this.planSlot.style.setProperty('--fp-info-top',`${tools.offsetTop+tools.offsetHeight+12}px`);
@@ -44,6 +45,7 @@ export class FloorplanCard extends HTMLElement {
   }
   static getStubConfig() { return { type: 'custom:floorplan-card', title: 'Floorplan', floors: [], groups: [] }; }
   setConfig(config) {
+    resetInformationHistory(this);
     this.calendarGeneration=(this.calendarGeneration||0)+1;this.calendarRequestedAt=0;this.calendarCache={};
     if (config.appearance?.mode !== this.config?.appearance?.mode) this.viewMode=null;
     this.config = normaliseConfig(config);
@@ -187,12 +189,12 @@ export class FloorplanCard extends HTMLElement {
       for(const object of floor.objects.filter(o=>o.type==='printer_3d'&&o.status_entity)){
         const status=printerState(object,states),room=objectRoom(object,floor),node=button(status==='error'?'⚠ Printer error':status==='printing'?`Printing · ${sensorText(object.progress_entity,states)}`:'Printer',()=>room&&openRoom(this,floor.id,room.id),{className:`marker device-marker${status==='error'?' device-error':''}`,'aria-label':`Printer: ${status}`});markers.push({node,x:object.x,y:object.y,floorId:floor.id});
       }
-      for(const wall of floor.walls||[])for(const door of wall.openings||[])if(door.contact_entity){const status=doorState(door,states),node=button(`${status==='Open'?'▯':'▣'} ${status}${door.lock_entity?' · '+sensorText(door.lock_entity,states):''}`,()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:door.lock_entity||door.contact_entity},bubbles:true,composed:true})),{className:'marker device-marker','aria-label':`${door.name||'Door'}: ${status}`});markers.push({node,x:wall.a[0]+(wall.b[0]-wall.a[0])*door.offset,y:wall.a[1]+(wall.b[1]-wall.a[1])*door.offset,floorId:floor.id});}
+      for(const wall of floor.walls||[])for(const door of wall.openings||[])if(door.contact_entity){const status=doorState(door,states),node=button(`${status==='Open'?'▯':'▣'} ${doorDescription(door,states)}`,()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:door.lock_entity||door.contact_entity},bubbles:true,composed:true})),{className:'marker device-marker','aria-label':`${door.name||'Door'}: ${status}`});markers.push({node,x:wall.a[0]+(wall.b[0]-wall.a[0])*door.offset,y:wall.a[1]+(wall.b[1]-wall.a[1])*door.offset,floorId:floor.id});}
       }
       const exteriorMarkers=(exterior?.items||[]).filter(item=>item.camera_entity||item.contact_entity).map(item=>{
         const node=element('div',{className:'marker exterior-camera',style:'width:112px;height:auto;min-height:44px;display:block;padding:4px;white-space:normal;transform:translate(-50%,-50%)','aria-label':item.name||'Exterior camera'});
         if(item.camera_entity)node.append(cameraThumbnail(this,item.camera_entity,states));
-        if(item.contact_entity)node.append(element('small',{text:`${doorState(item,states)}${item.lock_entity?' · '+sensorText(item.lock_entity,states):''}`}));
+        if(item.contact_entity)node.append(element('small',{text:doorDescription(item,states)}));
         return {node,world:[item.x||0,(item.y||0)+(item.height||1),item.z||0]};
       });
       const options={...this.config.appearance,exterior,isolatedRoom,hideLightFixtures:display.hide_light_fixtures,hideRadiators:display.hide_radiators,hideExtractionFans:display.hide_extraction_fans,idleRotation:display.idle_rotation,labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays?[]:exterior?exteriorMarkers:markers,daylight,building:!!this.building&&!isolatedRoom,allFloors:this.config.floors};
@@ -217,6 +219,7 @@ export class FloorplanCard extends HTMLElement {
       if(outdoor&&!this.hideOverlays&&!(this.config.information?.enabled!==false&&this.config.information?.items?.some(i=>i.type==='weather'))){const readout=button(`Outside ${outdoor}`,()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:outdoorId},bubbles:true,composed:true})),{className:`outdoor-temperature temp-${temperatureTone(outdoorId,states[outdoorId])}`,'aria-label':`Outdoor temperature: ${outdoor}`});this.planSlot.append(readout);}
     }
     this.planSlot.querySelector('.stage-tools')?.remove();this.planSlot.append(stageTools);
+    refreshInformationHistory(this);
     updatePanel(this.planSlot,'.information-panel',informationPanel(this,states));
     this.renderRoomPanel();
     this.fitPlan();

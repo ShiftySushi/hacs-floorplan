@@ -1,14 +1,17 @@
 export const calendarIds=item=>[...new Set(item.entities?.length?item.entities:item.entity?[item.entity]:[])];
 const eventDate=value=>{const raw=value?.dateTime||value?.date||value;if(typeof raw!=='string')return null;const d=new Date(/^\d{4}-\d{2}-\d{2}$/.test(raw)?raw+'T00:00:00':raw);return Number.isFinite(d.getTime())?d:null;};
+const calendarName=(id,a)=>/webcals?:|https?:|\.ics(?:\b|$)/i.test(a.friendly_name||'')?'':a.friendly_name||id;
 export function calendarEvents(item,states,cache,now=new Date(),locale='en-GB'){
   const events=[],failures=[];
   for(const id of calendarIds(item)){
     const entry=cache?.[id],a=states[id]?.attributes||{};
-    if(entry?.error)failures.push(a.friendly_name||id);
+    const source=calendarName(id,a);
+    if(entry?.error)failures.push(source||'Calendar');
     const list=entry?.events??(a.message?[{summary:a.message,start:a.start_time,end:a.end_time,all_day:a.all_day}]:[]);
     for(const event of list){const start=eventDate(event.start),end=eventDate(event.end);if(!start||!end||end<=now)continue;
       const allDay=event.all_day||!!event.start?.date;
-      events.push({entity:id,title:event.summary||'Untitled event',start:start.getTime(),detail:`${allDay?'All day · ':''}${start.toLocaleString(locale,{day:'numeric',month:'short',...(allDay?{}:{hour:'2-digit',minute:'2-digit'})})} · ${a.friendly_name||id}`});
+      const date=start.toLocaleDateString(locale,{weekday:'short',day:'numeric',month:'short'}),time=allDay?'All day':start.toLocaleTimeString(locale,{hour:'2-digit',minute:'2-digit'});
+      events.push({entity:id,title:event.summary||'Untitled event',start:start.getTime(),date,time,source,detail:[date,time,source].filter(Boolean).join(' · ')});
     }
   }
   events.sort((a,b)=>a.start-b.start||a.entity.localeCompare(b.entity)||a.title.localeCompare(b.title));

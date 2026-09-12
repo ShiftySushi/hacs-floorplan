@@ -11,6 +11,11 @@ export function objectRoom(object,floor){return floor.rooms?.find(r=>r.id===obje
 export function radiatorEntity(object,floor){return object.heating_demand_entity||objectRoom(object,floor)?.heating_demand_entity||object.heating_entity;}
 export function printerState(object,states){const s=states[object.status_entity];return knownState(s)?String(s.state).toLowerCase():'unavailable';}
 export function doorState(object,states){const s=states[object.contact_entity];return !knownState(s)?'Unknown':s.state==='on'?'Open':s.state==='off'?'Closed':'Unknown';}
+export function doorDescription(object,states){
+  const contact=doorState(object,states),lock=states[object.lock_entity];
+  const locking=knownState(lock)?lock.state.replace(/^./,c=>c.toUpperCase()):'';
+  return [contact==='Unknown'?(object.contact_entity?'Contact unavailable':''):contact,locking|| (object.lock_entity?'Lock unavailable':'')].filter(Boolean).join(' · ') || 'Unavailable';
+}
 export function energySummary(items,states){
   let watts=0,kwh=0,powerKnown=0,energyKnown=0;
   const rows=(items||[]).map(item=>{const p=states[item.power_entity],e=states[item.energy_entity],pv=sensorNumber(p),ev=sensorNumber(e),pu=p?.attributes?.unit_of_measurement,eu=e?.attributes?.unit_of_measurement;
