@@ -4,7 +4,7 @@ import {labelMarkers} from './entity-labels.js';
 import {weatherEntity} from './weather.js';
 import { displaySettings, displayFields } from './display-settings.js';
 import { styles } from './styles.js';
-import { element, button, field, preserveFocus } from './dom.js';
+import { element, button, field, preserveFocus, updatePanel } from './dom.js';
 import { renderPlan } from './plan.js';
 import { roomState,roomPresence } from './rooms.js';
 import { icon, iconButton } from './icons.js';
@@ -30,7 +30,7 @@ export class FloorplanCard extends HTMLElement {
   static getConfigElement() { return document.createElement('floorplan-card-editor'); }
   connectedCallback() { if (this.config) this.render();clearInterval(this.daylightTimer);this.daylightTimer=setInterval(()=>{if(!document.hidden&&this.config)this.render();},60000); }
   disconnectedCallback() { this.calendarGeneration=(this.calendarGeneration||0)+1;this.calendarRequestedAt=0;clearInterval(this.daylightTimer);this.entranceObserver?.disconnect();this.plan?.dispose?.(); this.plan=null; this.planKey=null; this.stageObserver?.disconnect(); this.planObserver?.disconnect(); }
-  renderRoomPanel(){this.planSlot?.querySelector('.room-panel')?.remove();if(!this.planSlot)return;const panel=roomPanel(this,this._hass?.states||{});if(panel)this.planSlot.append(panel);}
+  renderRoomPanel(){if(this.planSlot)updatePanel(this.planSlot,'.room-panel',roomPanel(this,this._hass?.states||{}));}
   fitPlan() {
     const tools=this.planSlot?.querySelector('.stage-tools');if(tools)this.planSlot.style.setProperty('--fp-info-top',`${tools.offsetTop+tools.offsetHeight+12}px`);
     if(!this.plan || !this.planSlot?.clientWidth)return;
@@ -174,9 +174,9 @@ export class FloorplanCard extends HTMLElement {
         const centre=roomReadoutPoint(room,floor);
         const label=[temperature?`${room.name} temperature: ${temperature}`:room.name,environment.humidity?`Humidity: ${environment.humidity}`:'',presence.occupied?'Presence detected · 1+':'',environment.warning?'Air quality warning':''].filter(Boolean).join(' · ');
         const marker=button([temperature,environment.humidity].filter(Boolean).join(' · ')||room.name,()=>openRoom(this,floor.id,room.id),{className:`marker overlay-temperatures temperature-marker room-readout temp-${temperatureTone(room.temperature_entity,states[room.temperature_entity])}${presence.occupied?' occupied':''}${environment.warning?' air-warning':''}`,title:label,'aria-label':label,'data-room-id':room.id});
-        marker.addEventListener('pointerenter',e=>{if(e.pointerType==='mouse'&&!this.activeRoom)openRoom(this,floor.id,room.id);});
-        if(presence.occupied)marker.prepend(element('span',{className:'occupant-count',text:'1+'}),icon('presence'));
-        if(environment.warning)marker.append(element('span',{text:'⚠','aria-hidden':'true'}));
+        marker.replaceChildren(element('span',{className:'room-readout-name',text:room.name}));
+        if(temperature||environment.humidity)marker.append(element('strong',{className:'room-readout-values',text:[temperature,environment.humidity].filter(Boolean).join(' · ')}));
+        if(environment.warning)marker.append(element('span',{className:'room-readout-alert',text:'Air quality'}));
         markers.push({node:marker,x:centre[0],y:centre[1],floorId:floor.id});
       }
       for(const radiator of (floor.objects || []).filter(item=>item.type==='radiator' && radiatorEntity(item,floor))) {
@@ -217,8 +217,7 @@ export class FloorplanCard extends HTMLElement {
       if(outdoor&&!this.hideOverlays&&!(this.config.information?.enabled!==false&&this.config.information?.items?.some(i=>i.type==='weather'))){const readout=button(`Outside ${outdoor}`,()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:outdoorId},bubbles:true,composed:true})),{className:`outdoor-temperature temp-${temperatureTone(outdoorId,states[outdoorId])}`,'aria-label':`Outdoor temperature: ${outdoor}`});this.planSlot.append(readout);}
     }
     this.planSlot.querySelector('.stage-tools')?.remove();this.planSlot.append(stageTools);
-    this.planSlot.querySelector('.information-panel')?.remove();
-    const information=informationPanel(this,states);if(information)this.planSlot.append(information);
+    updatePanel(this.planSlot,'.information-panel',informationPanel(this,states));
     this.renderRoomPanel();
     this.fitPlan();
     const navigation=this.planSlot.querySelector('.plan-navigation,.three-toolbar');

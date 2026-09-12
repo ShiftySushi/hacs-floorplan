@@ -15,9 +15,10 @@ test('room cards expose current readings, controls, errors and energy on desktop
   await expect(card.locator('.information-panel')).toContainText('1 low');await expect(card.locator('.information-panel')).not.toContainText('unavailable');
   await expect.poll(()=>page.evaluate(()=>window.calendarCalls.length)).toBe(2);
   const titles=card.locator('.information-item').last().locator('button .information-value');await expect(titles).toHaveText(['Earlier event','Later event']);
-  await expect(card.locator('.room-readout')).toContainText('54%');await expect(card.locator('.occupant-count')).toHaveText('1+');
+  await expect(card.locator('.room-readout-values')).toHaveText('21.0 °C · 54%');await expect(card.locator('.room-readout')).toHaveClass(/occupied/);
   if(info.project.name==='mobile')await card.locator('.information-panel summary').click();
-  if(info.project.name==='desktop')await card.locator('.room-readout').hover();else await card.locator('.room-readout').tap();
+  if(info.project.name==='desktop'){await card.locator('.room-readout').hover();await expect(card.getByRole('dialog')).toHaveCount(0);}
+  await card.locator('.room-readout').click();
   const panel=card.getByRole('dialog');await expect(panel).toContainText('Air quality above');await expect(panel).toContainText('120 W now · 0.50 kWh today');
   await panel.getByRole('button',{name:'Sleep Mode: Turn on',exact:true}).click();await expect(panel).toContainText('Sleep Mode: on');
   await panel.getByRole('button',{name:'Vacuum: Dock',exact:true}).click();expect(await page.evaluate(()=>window.liveCalls.at(-1))).toEqual({domain:'vacuum',service:'return_to_base',data:{entity_id:'vacuum.example'}});
@@ -25,6 +26,9 @@ test('room cards expose current readings, controls, errors and energy on desktop
   await card.evaluate(el=>{el.hass={...el._hass,states:{...el._hass.states,'sensor.printer':{state:'error',attributes:{}}}};});
   await expect(panel.locator('.device-error')).toContainText('Printer error');await expect(card.getByRole('button',{name:'Printer: error',exact:true})).toBeAttached();
   await panel.getByRole('button',{name:'Open Example camera',exact:true}).scrollIntoViewIfNeeded();await expect(panel.locator('img')).toBeVisible();
+  const scroll=await panel.evaluate(el=>el.scrollTop);
+  await card.evaluate(el=>{el.hass={...el._hass,states:{...el._hass.states,'sensor.humidity':{state:'55',attributes:{}}}};});
+  expect(await panel.evaluate(el=>el.scrollTop)).toBe(scroll);await expect(panel).toContainText('55%');
   const bounds=await panel.boundingBox();expect(bounds.x).toBeGreaterThanOrEqual(0);expect(bounds.x+bounds.width).toBeLessThanOrEqual(page.viewportSize().width);
   await panel.evaluate(el=>el.scrollTop=0);await page.screenshot({path:info.outputPath('room-controls.png')});
   await panel.getByRole('button',{name:'Close room controls',exact:true}).click();await expect(panel).toHaveCount(0);expect(errors).toEqual([]);
