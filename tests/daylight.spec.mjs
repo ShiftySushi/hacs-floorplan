@@ -5,6 +5,8 @@ test('stage fills the viewport with the selected palette and follows daylight in
   const sun=async elevation=>page.evaluate(e=>{const c=document.querySelector('floorplan-card');c.hass={...c._hass,states:{...c._hass.states,'sun.sun':{state:e>0?'above_horizon':'below_horizon',attributes:{elevation:e}}}};},elevation);
   await card.getByRole('button',{name:'2D',exact:true}).click();await sun(-10);
   const stage=card.locator('.plan-slot'),shade=card.locator('[data-room-shade]').first();
+  // The stage transitions its background; capture the settled night baseline.
+  await expect(stage).toHaveCSS('background-color','rgb(27, 38, 52)');
   const night=await stage.evaluate(n=>getComputedStyle(n).backgroundColor),dark=Number(await shade.getAttribute('fill-opacity'));
   await sun(40);
   await expect.poll(()=>shade.getAttribute('fill-opacity')).not.toBe(String(dark));
@@ -14,6 +16,7 @@ test('stage fills the viewport with the selected palette and follows daylight in
   await expect(stage).toHaveCSS('background-color','rgb(137, 173, 131)');
   await expect(card.locator('.plan')).toHaveCSS('background-color','rgb(137, 173, 131)');
   await card.getByRole('button',{name:'3D',exact:true}).click();await sun(-10);
+  await expect(stage).toHaveCSS('background-color','rgb(27, 38, 52)');
   const canvas=card.locator('canvas');await expect(canvas).toBeVisible();
   const before=await canvas.screenshot();await sun(40);
   await expect(stage).toHaveCSS('background-color','rgb(220, 231, 224)');
