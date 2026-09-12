@@ -15,3 +15,11 @@
 - `npm run check` validates the full approved MIT licence by digest at the exact checkout revision. This replaces only the HACS validator's default-branch licence metadata check; all other HACS checks remain enabled. Review the complete licence before changing its expected digest.
 - Trivy is REPORT-ONLY. Scanner/download/report failures fail CI; findings do not. Raw secret reports stay in a temporary private directory and are deleted; only counts are logged or uploaded. The scanner uses a job-local cache; no shared runner configuration is required.
 - CI tests never contact live Home Assistant or use personal plans. No release, mirror push or deployment occurs in CI. Publish only the checked public commit explicitly to each remote.
+
+## Delivery to both hosts
+
+- For this project, a request to push, open a PR or finalise changes means delivery to both Forgejo (`origin`) and GitHub (`github`) in the same delivery session, unless the user explicitly limits the destination. Do not wait for a separate GitHub request or for one host's CI to finish before delivering to the other.
+- Push the identical reviewed public commit and branch name to both remotes. Create or update a PR on each host against its default branch, reusing an open PR where appropriate. Check each host independently: a PR merged on one host may still be open on the other.
+- Verify both remote branch heads match the full local commit SHA. Observe terminal successful checks for that SHA on both hosts: Forgejo `CI / pr-gate (pull_request)` and GitHub `pr-gate`, including quality, browser, security and GitHub HACS validation. Apply any CI repair to both hosts as the same new commit.
+- If either host rejects delivery or its checks are unavailable or incomplete, report partial delivery and the specific blocker; do not call finalisation complete. Report both PR links and the shared commit when ready for review.
+- Keep private assets out of both remotes and preserve unrelated local work. Delivery ends ready for review; merging, releasing and deploying require separate explicit authorisation.
