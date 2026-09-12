@@ -1,24 +1,32 @@
 import {element,button,field} from './dom.js';
 import {entitySelect,memberPicker} from './setup.js';
-import {informationRows,informationTypes} from './information.js';
+import {informationRows,informationTypes,informationIcons} from './information.js';
+import {icon} from './icons.js';
 import {energyFields} from './live-fields.js';
 
 export const informationStyles=`
 .information-panel{position:absolute;top:var(--fp-info-top,64px);left:14px;width:min(280px,calc(100% - 28px));max-height:calc(100% - var(--fp-info-top,64px) - 80px);overflow:auto;z-index:4;padding:5px 12px;border:1px solid color-mix(in srgb,var(--fp-line,#cad5d0) 60%,transparent);border-radius:14px;background:color-mix(in srgb,var(--fp-surface,#fff) 78%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 4px 20px #172e3610;color:var(--fp-text,var(--primary-text-color,#26343d));font-size:12px;overscroll-behavior:contain}
 .information-panel[data-position=top-right]{left:auto;right:14px}.information-panel summary{cursor:pointer;min-height:34px;display:flex;align-items:center;font-weight:600}.information-panel summary::after{content:'⌄';margin-left:auto}.information-panel[open] summary::after{transform:rotate(180deg)}.information-panel summary:focus-visible{outline:2px solid var(--fp-accent,#007c91);border-radius:4px}.information-item{padding:8px 0;display:grid;gap:3px;border-top:1px solid #80958c25;min-width:0}.information-item button{display:block;text-align:left;border:0;box-shadow:none;background:transparent;color:inherit;padding:3px 0;min-height:36px;width:100%;white-space:normal}.information-label{display:block;font-size:10px;color:var(--secondary-text-color,#63776e);font-weight:500}.information-value{display:block;font-size:13px;font-weight:600;overflow-wrap:anywhere;line-height:1.4}.information-detail{font-size:11px;opacity:.8;overflow-wrap:anywhere}.information-item[data-unavailable=true] .information-value{font-weight:400;opacity:.7}
-@container(max-width:600px){.information-panel{left:8px;width:min(220px,calc(100% - 16px));max-height:min(38%,calc(100% - var(--fp-info-top,150px) - 80px));padding:3px 10px}.information-panel[data-position=top-right]{right:8px}.information-item{padding:6px 0}}
+.information-panel{width:min(340px,calc(100% - 28px))}.information-grid{display:grid;grid-template-columns:repeat(var(--information-columns,2),minmax(0,1fr));column-gap:12px}.information-item{align-content:start;border-top-color:var(--information-colour,#80958c25)}.information-item[data-full-width=true]{grid-column:1/-1}.information-label{display:flex;align-items:center;gap:5px}.information-label .icon{width:16px;height:16px;flex:none;color:var(--information-colour,inherit)}
+@container(max-width:600px){.information-panel{left:8px;width:min(300px,calc(100% - 16px));max-height:min(38%,calc(100% - var(--fp-info-top,150px) - 80px));padding:3px 10px}.information-panel[data-position=top-right]{right:8px}.information-item{padding:6px 0}}
 `;
 export function informationPanel(host,states){
   const config=host.config.information,rows=informationRows(config,states,new Date(),host._hass?.locale?.language || 'en-GB',host.calendarCache);
   if(!rows.length)return null;
-  const panel=element('details',{className:'information-panel',open:host.informationOpen!==false,'data-position':config.position || 'top-left'},[element('summary',{text:'At a glance'})]);
+  // Read the live disclosure state: the native toggle event is asynchronous.
+  const open=host.planSlot?.querySelector('.information-panel')?.open??host.informationOpen!==false;
+  const panel=element('details',{className:'information-panel',open,'data-position':config.position || 'top-left'},[element('summary',{text:'At a glance'})]);
   panel.addEventListener('toggle',()=>{if(panel.isConnected)host.informationOpen=panel.open;});
+  const grid=element('div',{className:'information-grid'});grid.style.setProperty('--information-columns',config.columns || 2);panel.append(grid);
   for(const row of rows){
     const content=[element('span',{className:'information-label',text:row.label}),element('span',{className:'information-value',text:row.value})];
     const node=element('div',{className:'information-item','data-unavailable':String(row.unavailable)});
+    node.dataset.fullWidth=String(row.fullWidth);node.dataset.entity=row.entity || '';
+    if(row.colour)node.style.setProperty('--information-colour',row.colour);
+    if(row.icon&&row.icon!=='none')content[0].prepend(icon(row.icon));
     if(row.entity){const action=button('',()=>host.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:row.entity},bubbles:true,composed:true})),{'aria-label':`${row.label}: ${row.value}`});action.append(...content);node.append(action);}else node.append(...content);
-    for(const event of row.events||[]){const action=button('',()=>host.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:event.entity},bubbles:true,composed:true})),{'aria-label':`${event.title} · ${event.detail}`});action.append(element('span',{className:'information-value',text:event.title}),element('span',{className:'information-detail',text:event.detail}));node.append(action);}
-    if(row.detail)node.append(element('span',{className:'information-detail',text:row.detail}));panel.append(node);
+    for(const event of row.showDetails?row.events||[]:[]){const action=button('',()=>host.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:event.entity},bubbles:true,composed:true})),{'data-entity':event.entity,'aria-label':`${event.title} · ${event.detail}`});action.append(element('span',{className:'information-value',text:event.title}),element('span',{className:'information-detail',text:event.detail}));node.append(action);}
+    if(row.detail&&row.showDetails)node.append(element('span',{className:'information-detail',text:row.detail}));grid.append(node);
   }
   return panel;
 }
@@ -27,8 +35,11 @@ export function informationSetup(host){
   const save=()=>{host.config.information=config;host.emit();};
   const root=element('fieldset',{},[element('legend',{text:'At a glance'}),field('Show information panel',element('input',{type:'checkbox',checked:config.enabled!==false,onchange:e=>{config.enabled=e.target.checked;save();}})),element('p',{className:'muted',text:'Add weather, the next event from each calendar, household summaries or any sensor (energy, pollen, car charge). The panel stays visible when markers are hidden.'})]);
   root.append(field('Panel position',element('select',{onchange:e=>{config.position=e.target.value;save();}},['top-left','top-right'].map(value=>element('option',{value,text:value==='top-left'?'Top left':'Top right',selected:(config.position || 'top-left')===value})))));
+  root.append(field('Columns',element('select',{onchange:e=>{config.columns=Number(e.target.value);save();}},[1,2,3].map(value=>element('option',{value,text:String(value),selected:(config.columns||2)===value})))));
   config.items.forEach((item,i)=>{
     const group=element('fieldset',{},[element('legend',{text:`Item ${i+1}`}),field('Label',element('input',{value:item.label || '',maxLength:80,onchange:e=>{item.label=e.target.value;save();}}))]);
+    group.append(field('Icon',element('select',{onchange:e=>{item.icon=e.target.value;save();}},Object.entries(informationIcons).map(([value,text])=>element('option',{value,text,selected:(item.icon||'none')===value})))),field('Accent colour',element('input',{type:'color',value:item.colour||'#007c91',onchange:e=>{item.colour=e.target.value;save();}})),button('Reset colour',()=>{delete item.colour;save();}));
+    for(const [key,label,fallback] of [['show_details','Show details',true],['show_unavailable','Show unavailable summary counts',!!item.entities?.length],['full_width','Full width',['calendar','energy'].includes(item.type)]])group.append(field(label,element('input',{type:'checkbox',checked:item[key]??fallback,onchange:e=>{item[key]=e.target.checked;save();}})));
     if(item.type==='energy')group.append(energyFields(host,item));
     else if(item.type==='calendar')group.append(memberPicker(host,'Calendars',item.entities||[item.entity].filter(Boolean),/^calendar\./,ids=>{item.entities=ids;delete item.entity;save();}));
     else if(['entity','weather'].includes(item.type))group.append(field('Information entity',entitySelect(host,item.type==='entity'?/^[a-z_]+\./:new RegExp(`^${item.type}\\.`),item.entity || '',value=>{item.entity=value;save();})));

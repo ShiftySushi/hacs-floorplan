@@ -4,6 +4,7 @@ import {roomTemperature} from './heating.js';
 import {knownState,sensorText,roomEnvironment,objectRoom,printerState,energySummary,doorState} from './live-data.js';
 
 export const roomPanelStyles=`
+.floorplan-dashboard .marker.room-readout{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:5px 7px;color:var(--fp-text,var(--primary-text-color,#26343d));white-space:nowrap}.room-readout-name{font-size:10px;opacity:.85}.room-readout-values{font-size:13px;font-variant-numeric:tabular-nums;line-height:1.3}.room-readout-alert{font-size:10px;color:var(--warning-color,#b66b00)}
 .floorplan-dashboard .marker.exterior-camera{border-radius:8px;opacity:1;background:var(--fp-surface,#fff)}.floorplan-dashboard .marker.device-error{opacity:1}
 .room-panel header{padding:0}.floorplan-dashboard .marker.device-marker{width:max-content;height:auto;max-width:160px;border-radius:6px;white-space:normal;padding:5px 7px;font-size:11px}
 .floorplan-dashboard .marker.overlay-lights::after,.floorplan-dashboard .marker.room-readout::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:max(100%,calc(44px / var(--fp-marker-scale,.8)));height:max(100%,calc(44px / var(--fp-marker-scale,.8)))}.exterior-camera .room-camera{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#17262b}.exterior-camera button{min-height:44px}.exterior-camera .camera-unavailable{font-size:11px}
@@ -37,22 +38,24 @@ export function openRoom(host,floorId,roomId){host.activeRoom={floorId,roomId};h
 export function roomPanel(host,states){
   const floor=host.config.floors.find(f=>f.id===host.activeRoom?.floorId),room=floor?.rooms.find(r=>r.id===host.activeRoom?.roomId);if(!room)return null;
   const panel=element('section',{className:'room-panel',role:'dialog','aria-label':`${room.name} status and controls`});
+  // Equal labels and readings do not imply equal command targets.
+  panel.panelIdentity=JSON.stringify([floor.id,room]);
   const close=()=>{host.activeRoom=null;host.renderRoomPanel();host.shadowRoot.querySelector(`[data-room-id="${CSS.escape(room.id)}"]`)?.focus();};
   panel.addEventListener('keydown',e=>{if(e.key==='Escape'){e.stopPropagation();close();}});
   panel.append(element('header',{},[element('h3',{text:room.name}),button('Close',close,{'aria-label':'Close room controls'})]));
   const environment=roomEnvironment(room,states),presence=roomState(room,states,floor);
-  panel.append(element('p',{text:[roomTemperature(room,states),environment.humidity,presence.occupied?'1+ · Presence detected':presence.presence].filter(Boolean).join(' · ')}));
+  panel.append(element('p',{text:[roomTemperature(room,states)||(room.temperature_entity?'Temperature unavailable':''),environment.humidity||(room.humidity_entity?'Humidity unavailable':''),presence.presence].filter(Boolean).join(' · ')}));
   const line=(label,text,container=panel)=>container.append(element('div',{className:'room-status-line'},[element('span',{text:label}),element('strong',{text})]));
   if(room.pm25_entity)line('PM2.5',sensorText(room.pm25_entity,states));if(room.voc_entity)line('VOC index',sensorText(room.voc_entity,states));
   if(environment.warning)panel.append(element('p',{className:'room-air-warning',text:'⚠ Air quality above your warning threshold'}));
   const controls=element('section',{},[element('h4',{text:'Controls and status'})]);
-  if(room.lights?.length){const online=room.lights.filter(id=>knownState(states[id]));controls.append(button(online.some(id=>states[id].state==='on')?'Lights off':'Lights on',()=>host.control(online.some(id=>states[id].state==='on')?'off':'on',undefined,online),{disabled:host.busy||!online.length}));}
+  if(room.lights?.length){const online=room.lights.filter(id=>knownState(states[id]));controls.append(button(online.some(id=>states[id].state==='on')?'Lights off':'Lights on',()=>{const current=host._hass?.states||{},ids=room.lights.filter(id=>knownState(current[id]));host.control(ids.some(id=>current[id].state==='on')?'off':'on',undefined,ids);},{disabled:host.busy||!online.length||!host._hass?.callService}));line('Lights',presence.lightState,controls);}
   for(const c of room.controls||[]){const s=states[c.entity],label=c.label||s?.attributes?.friendly_name||c.entity;
     const block=element('div');block.append(button(`${label}: ${sensorText(c.entity,states)}`,()=>more(host,c.entity),{'aria-label':`${label} details`}));
     if(c.entity.startsWith('camera.'))block.append(cameraThumbnail(host,c.entity,states));
     const actions=element('div',{className:'room-actions'});for(const a of deviceActions(c.entity,s))actions.append(button(a.label,()=>command(host,c.entity,a.service,label),{disabled:host.roomBusy||!knownState(s)||!host._hass?.callService,'aria-label':`${label}: ${a.label}`}));block.append(actions);controls.append(block);
   }
-  panel.append(controls);
+  if(room.lights?.length||room.controls?.length)panel.append(controls);
   for(const object of floor.objects.filter(o=>o.type==='printer_3d'&&o.status_entity&&objectRoom(o,floor)?.id===room.id)){
     const status=printerState(object,states),section=element('section',{'data-printer-status':status},[element('h4',{text:object.name||'3D printer'})]);
     section.append(element('p',{className:status==='error'?'device-error':'',text:status==='error'?'⚠ Printer error — check the printer':`Printer: ${status}`}));
