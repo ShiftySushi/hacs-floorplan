@@ -17,7 +17,7 @@ test('information presentation validates and survives row generation',()=>{
   const row=informationRows({items:[item]},{'sensor.power':state('12')})[0];
   assert.equal(row.colour,item.colour);assert.equal(row.icon,'power');assert.equal(row.fullWidth,true);assert.equal(row.showDetails,false);
   for(const patch of [{icon:'invalid'},{colour:'red;display:none'},{show_details:'false'}])assert.throws(()=>validateInformation({items:[{...item,...patch}]}));
-  assert.throws(()=>validateInformation({columns:4,items:[]}));
+  assert.throws(()=>validateInformation({columns:5,items:[]}));
 });
 test('information summaries distinguish unavailable devices, people away, updates and low batteries',()=>{
   const panel={items:[{type:'people'},{type:'updates'},{type:'low_battery',show_unavailable:true}]};
