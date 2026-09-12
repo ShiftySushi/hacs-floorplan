@@ -82,9 +82,11 @@ The full floorplan background follows the selected style and daylight. Ambient r
 
 In **Rooms**, choose a **Room temperature entity** to show its current temperature as a compact readout on the plan. Add radiators through **Furniture**, then choose each **Radiator heating entity** in its inspector. Thermostats glow red only when reporting active heating; heating switches and activity sensors glow when on. Idle and unavailable devices do not glow. Tap a radiator to open its Home Assistant controls. Temperature and heating bindings are included in private scene exports.
 
-Occupied rooms show a presence icon beside their readout and a highlighted outline. Temperatures below 18°C use a cool tint; above 24°C use a warm tint (Fahrenheit readings are converted for this comparison). Choose **Outdoor temperature entity** in **Floors** to show an outdoor reading to the left of the house. Missing readings are hidden.
+Occupied rooms show a coloured edge on their readout and a highlighted outline. Temperatures below 18°C use a cool tint; above 24°C use a warm tint (Fahrenheit readings are converted for this comparison). Choose **Outdoor temperature entity** in **Floors** to show an outdoor reading to the left of the house. Missing readings are hidden.
 
 Tap or click a room readout to open its status and controls; use **Close** or Escape to dismiss it. **Rooms → Room status, controls and energy** adds humidity beside temperature, PM2.5/VOC readings with configurable warning thresholds, switches, Sleep Mode, media players, scenes, vacuum actions and per-plug power/daily energy. Room readouts put temperature and humidity below the room name. A coloured edge indicates presence; the popup explains presence and air quality. Binary presence sensors cannot determine a person count or position. Unbound energy devices remain editable and totals label missing readings as partial. On narrow screens, collapse **At a glance** if it covers a room marker.
+
+Hovering over a room does not open its popup. Live updates preserve panel scrolling and the expanded or collapsed state of **At a glance**. Room controls stay bound to the selected room, including when two rooms share a name. The popup shows a controls section only when lights or controls are assigned.
 
 A room's **Room heating demand sensor** drives its radiators when no object demand override is set. This is a room-level heating proxy. Printer furniture accepts status, progress, time-left, bed-temperature, job and camera bindings: `printing` animates the nozzle, `error` shows a persistent red warning, and reduced motion stops nozzle movement. The room card groups these readings with the printer light display. Light markers have a minimum 44-pixel invisible target; 3D fittings also accept nearby taps without enlarging their models.
 
@@ -178,9 +180,11 @@ node scripts/models.mjs  # regenerate SVG outlines and OBJ models
 npm run demo
 ```
 
-Open `http://127.0.0.1:8124/demo/` for the fictional demo. **Live view** fits the floorplan into the available screen, with compatible lighting controls beside it on wider screens. **Edit layout** opens the layout studio. Simulated presence and service failures are available in the demo toolbar. The optional model command requires private `floorplans/models/geometry.json` and is not part of the plugin build. The demos never connect to a live Home Assistant server. The public demo resets on reload; the optional private house demo saves edits in that browser's local storage. Export a portable scene for a separate backup or transfer to Home Assistant.
+Open `http://127.0.0.1:8124/demo/` for the fictional demo. **Live view** fits the floorplan into the available screen, with compatible lighting controls beside it on wider screens. **Edit layout** opens the layout studio. Simulated presence and service failures are available in the demo toolbar. The optional model command requires private `floorplans/models/geometry.json` and is not part of the plugin build. The public demo never connects to a live Home Assistant server and resets on reload. The optional private editor uses a shared scene file through its development server; browser storage is a recovery copy. See [AGENTS.md](AGENTS.md) for the private editor's persistence contract. Export a portable scene for a separate backup or transfer to Home Assistant.
 
 The `src/` modules separate light service rules, scene geometry, 2D/3D rendering and guided setup. `scripts/build.mjs` uses esbuild to bundle a single self-contained `dist/hacs-floorplan.js`, including licence notices. The packaging check requires a reproducible build below 900,000 bytes. Run the build after changing source; do not edit the distribution directly.
+
+Project delivery publishes the same reviewed commit and branch to Forgejo and GitHub and creates or updates a PR on both hosts in the same session. Both hosts' required CI checks must pass for that commit before delivery is ready for review. See [Delivery to both hosts](AGENTS.md#delivery-to-both-hosts) for the authoritative workflow, partial-delivery handling and authorisation boundaries.
 
 ## References
 
