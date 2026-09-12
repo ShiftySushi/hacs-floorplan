@@ -2,14 +2,19 @@ import {calendarIds,calendarEvents} from './calendar-data.js';
 import {sensorNumber,energySummary,validateLiveFields} from './live-data.js';
 const unavailable=s=>!s||['unknown','unavailable'].includes(s.state);
 export const informationTypes={entity:'Entity',weather:'Weather',calendar:'Calendar',people:'Who’s at home',updates:'HA updates',low_battery:'Low batteries',energy:'Plug energy'};
+export const informationIcons={none:'None',temperature:'Temperature',presence:'Person',power:'Power',bulb:'Light',floor:'Home',colour:'Droplet',grid:'Grid',check:'Check'};
 export function validateInformation(panel){
   if(panel===undefined)return;
   if(!panel||typeof panel!=='object'||!Array.isArray(panel.items)||panel.items.length>16)throw Error('Information panel needs up to 16 items');
   if(panel.enabled!==undefined&&typeof panel.enabled!=='boolean')throw Error('Information visibility must be true or false');
   if(panel.position!==undefined&&!['top-left','top-right'].includes(panel.position))throw Error('Choose an information panel position');
+  if(panel.columns!==undefined&&![1,2,3].includes(panel.columns))throw Error('Choose 1, 2 or 3 information columns');
   for(const item of panel.items){
     if(!item||!Object.hasOwn(informationTypes,item.type))throw Error('Choose an information item type');
     validateLiveFields(item);
+    if(item.icon!==undefined&&!Object.hasOwn(informationIcons,item.icon))throw Error('Choose an information icon');
+    if(item.colour!==undefined&&!/^#[0-9a-f]{6}$/i.test(item.colour))throw Error('Choose a six-digit information colour');
+    for(const key of ['show_details','show_unavailable','full_width'])if(item[key]!==undefined&&typeof item[key]!=='boolean')throw Error('Information display options must be true or false');
     if(item.label!==undefined&&(typeof item.label!=='string'||item.label.length>80))throw Error('Information labels must be under 80 characters');
     if(['entity','weather'].includes(item.type)&&!new RegExp(item.type==='entity'?'^[a-z_]+\\.[a-z0-9_]+$':`^${item.type}\\.[a-z0-9_]+$`).test(item.entity || ''))throw Error('Choose an entity for the information item');
     if(item.type==='calendar'&&(!calendarIds(item).length||calendarIds(item).some(id=>!/^calendar\.[a-z0-9_]+$/.test(id))))throw Error('Choose calendar entities');
@@ -23,7 +28,7 @@ export function informationRows(panel,states,now=new Date(),locale='en-GB',calen
   if(!panel||panel.enabled===false)return [];
   return panel.items.map(item=>{
     const state=states[item.entity],a=state?.attributes || {},label=item.label || a.friendly_name || informationTypes[item.type];
-    const row={label,entity:item.entity,value:'Unavailable',detail:'',unavailable:false};
+    const row={label,entity:item.entity,value:'Unavailable',detail:'',unavailable:false,icon:item.icon,colour:item.colour,showDetails:item.show_details!==false,fullWidth:item.full_width??['calendar','energy'].includes(item.type)};
     if(item.type==='energy'){const summary=energySummary(item.energy,states);return {...row,entity:undefined,value:`${summary.power} now · ${summary.energy} today`,detail:[summary.partial?'Partial readings':'',...summary.rows.map(r=>`${r.label}: ${r.power} · ${r.energy}`)].filter(Boolean).join(' / '),unavailable:summary.power==='Unavailable'&&summary.energy==='Unavailable'};}
     if(item.type==='calendar'&&(item.entities?.length||calendarCache?.[item.entity])){
       const {events,failures}=calendarEvents(item,states,calendarCache,now,locale);
@@ -49,6 +54,6 @@ export function informationRows(panel,states,now=new Date(),locale='en-GB',calen
     const known=ids.filter(id=>!unavailable(states[id])),missing=ids.length-known.length;
     const matches=known.filter(id=>item.type==='people'?states[id].state==='home':item.type==='updates'?states[id].state==='on':states[id].state==='on'||(states[id].state.trim()!==''&&Number.isFinite(Number(states[id].state))&&Number(states[id].state)<=(item.threshold??20)));
     const names=matches.map(id=>states[id].attributes?.friendly_name || id);
-    return {...row,entity:undefined,entities:matches,value:!known.length?'Unavailable':item.type==='people'?(names.join(', ') || 'Nobody home'):`${matches.length} ${item.type==='updates'?'available':'low'}`,detail:[item.type==='people'?'':names.join(', '),missing?`${missing} unavailable`:''].filter(Boolean).join(' · '),unavailable:!known.length};
+    return {...row,entity:undefined,entities:matches,value:!known.length?'Unavailable':item.type==='people'?(names.join(', ') || 'Nobody home'):`${matches.length} ${item.type==='updates'?'available':'low'}`,detail:[item.type==='people'?'':names.join(', '),missing&&(item.show_unavailable??!!item.entities?.length)?`${missing} unavailable`:''].filter(Boolean).join(' · '),unavailable:!known.length};
   });
 }

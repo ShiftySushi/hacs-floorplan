@@ -11,6 +11,16 @@ export function element(tag, props = {}, children = []) {
   node.append(...children); return node;
 }
 export const button = (text, onclick, props = {}) => element('button', { text, onclick, type: 'button', ...props });
+// Keep unchanged panels mounted; changed content retains its scroll and focus.
+export function updatePanel(parent, selector, next) {
+  const previous=parent.querySelector(selector);
+  if(previous && next && previous.panelIdentity===next.panelIdentity && previous.outerHTML===next.outerHTML)return previous;
+  const scroll=previous?.scrollTop || 0,restore=preserveFocus(parent.getRootNode());
+  if(previous)next?previous.replaceWith(next):previous.remove();
+  else if(next)parent.append(next);
+  if(next)next.scrollTop=scroll;
+  restore();return next;
+}
 export const field = (text, input) => element('label', { className: input.type === 'checkbox' ? 'check' : '' }, [document.createTextNode(text), input]);
 export function svgElement(tag, props = {}) {
   const node = document.createElementNS('http://www.w3.org/2000/svg', tag);

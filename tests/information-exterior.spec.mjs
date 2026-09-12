@@ -33,6 +33,11 @@ test('review editor saves and reorders chosen information entities',async({page}
   const editor=page.locator('floorplan-card-editor');
   await editor.getByLabel('Information type',{exact:true}).selectOption('entity');await editor.getByRole('button',{name:'Add information',exact:true}).click();
   await editor.getByLabel('Label',{exact:true}).fill('Energy');await editor.getByLabel('Label',{exact:true}).blur();
+  await editor.getByRole('combobox',{name:'Columns',exact:true}).selectOption('3');
+  await editor.getByRole('combobox',{name:'Icon',exact:true}).selectOption('power');
+  await editor.getByLabel('Accent colour',{exact:true}).fill('#336699');await editor.getByLabel('Accent colour',{exact:true}).blur();
+  await editor.getByLabel('Show details',{exact:true}).uncheck();
+  expect(await editor.evaluate(el=>({columns:el.config.information.columns,...el.config.information.items[0]}))).toMatchObject({columns:3,icon:'power',colour:'#336699',show_details:false});
   await editor.getByLabel('Information type',{exact:true}).selectOption('low_battery');await editor.getByRole('button',{name:'Add information',exact:true}).click();
   await editor.getByRole('button',{name:'Move up',exact:true}).last().click();
   expect(await editor.evaluate(el=>el.config.information.items.map(i=>i.type))).toEqual(['low_battery','entity']);

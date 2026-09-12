@@ -346,7 +346,20 @@ export function render3D(floor, states, options = {}) {
     for(const {id,lens,shade,fitting} of fixtures){fitting.visible=!options.hideLightFixtures;const {level,colour}=lightAppearance(visualStates[id]);lens.material.emissive.setRGB(colour[0]/255,colour[1]/255,colour[2]/255,THREE.SRGBColorSpace);lens.material.emissiveIntensity=level*.8;shade.material.emissive.copy(lens.material.emissive);shade.material.emissiveIntensity=level*.2;}
     return animate;
   }
-  function update(nextStates,nextOptions={}){shadowDirty=true;for(const art of artworks)art.update(nextStates);const now=performance.now();for(const id of assignedIds){const to=lightAppearance(nextStates[id]),entry=transitions.get(id);if(!entry)transitions.set(id,{from:to,to,start:now-600});else if(JSON.stringify(entry.to)!==JSON.stringify(to))transitions.set(id,{from:sample(id,now),to,start:now});}states=nextStates;options={...options,...nextOptions};if(fallback){fallback.update?.(states,options);return;}for(const marker of markers)marker.node.remove();markers=options.markers || [];for(const marker of markers)plan.append(marker.node);
+  function update(nextStates,nextOptions={}){shadowDirty=true;for(const art of artworks)art.update(nextStates);const now=performance.now();for(const id of assignedIds){const to=lightAppearance(nextStates[id]),entry=transitions.get(id);if(!entry)transitions.set(id,{from:to,to,start:now-600});else if(JSON.stringify(entry.to)!==JSON.stringify(to))transitions.set(id,{from:sample(id,now),to,start:now});}states=nextStates;options={...options,...nextOptions};if(fallback){fallback.update?.(states,options);return;}
+    const previous=new Map(markers.filter(m=>m.node.matches('.room-readout')).map(m=>[`${m.floorId}:${m.node.dataset.roomId}`,m]));
+    const next=options.markers || [],retained=new Set();
+    for(const marker of next){
+      if(!marker.node.matches('.room-readout'))continue;
+      const signature=marker.node.outerHTML,old=previous.get(`${marker.floorId}:${marker.node.dataset.roomId}`);
+      if(old?.signature===signature){marker.node=old.node;retained.add(old.node);}
+      marker.signature=signature;
+    }
+    for(const marker of markers)if(!retained.has(marker.node))marker.node.remove();
+    // Insert replacements around retained nodes without moving those nodes or
+    // changing paint/hit-test order for overlapping room and sensor markers.
+    markers=next;let anchor=null;
+    for(let i=markers.length-1;i>=0;i--){const node=markers[i].node;if(!retained.has(node))plan.insertBefore(node,anchor);anchor=node;}
     schedule();}
   const down=e=>{if(e.button!==0)return;manualOrbit();pointer={id:e.pointerId,x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY};renderer.domElement.setPointerCapture(e.pointerId);};
   function lightAt(ray){
