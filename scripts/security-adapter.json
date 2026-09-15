@@ -1,0 +1,19 @@
+{
+  "repository": "shiftysushi/hacs-floorplan",
+  "owner": "shiftysushi",
+  "required_targets": [
+    "package-lock.json"
+  ],
+  "skip_dirs": [
+    ".git",
+    ".trivy-reports",
+    "node_modules",
+    "floorplans",
+    "ci-reports",
+    "test-results",
+    "playwright-report"
+  ],
+  "coverage_gaps": [
+    "Source lockfile and committed distribution scanning does not establish live Home Assistant or private floorplan security; no container deliverable"
+  ]
+}

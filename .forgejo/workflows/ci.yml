@@ -64,6 +64,13 @@ jobs:
           node-version: '22'
       - name: Trivy REPORT-ONLY source and distribution scan
         run: bash scripts/security.sh
+      - name: Retain complete consumed security evidence
+        uses: https://data.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: security-source-${{ github.event.pull_request.head.sha || github.sha }}
+          path: .trivy-reports/source/
+          if-no-files-found: error
+          retention-days: 30
 
   pr-gate:
     if: ${{ always() }}
