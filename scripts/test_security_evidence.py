@@ -23,6 +23,11 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(row['applicability'], 'unknown')
         self.assertEqual(state['remediation']['root_causes'], ['dependency:example'])
 
+    def test_nested_lockfile_cannot_impersonate_root_target(self):
+        self.report['Results'][0]['Target'] = 'client/package-lock.json'
+        with self.assertRaises(ValueError):
+            e.consume(self.report, self.adapter, self.provenance, [], [])
+
     def test_missing_target_is_not_clean(self):
         self.report['Results'] = []
         with self.assertRaises(ValueError):

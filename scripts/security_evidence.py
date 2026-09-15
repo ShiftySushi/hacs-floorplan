@@ -52,7 +52,7 @@ def consume(report, adapter, provenance, secrets, configs):
     state = summary.summarise(report)
     targets = [r.get('Target', '') for r in report.get('Results') or []]
     expected = adapter.get('required_targets', []) if provenance['kind'] == 'source' else []
-    if any(not any(t.endswith(e) for t in targets) for e in expected):
+    if any(e not in {t.removeprefix('./') for t in targets} for e in expected):
         raise ValueError('expected dependency target was not analysed')
     if provenance['kind'] == 'image' and not any(r.get('Class') == 'os-pkgs' for r in report.get('Results') or []):
         raise ValueError('expected image OS packages were not analysed')
