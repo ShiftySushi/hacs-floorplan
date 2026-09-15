@@ -9,3 +9,6 @@ floorplans/
 floorplan-configuration*.json
 floorplan-scene*.json
 .codegraph/
+
+.trivy-reports/
+__pycache__/
