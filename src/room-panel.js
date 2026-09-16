@@ -1,6 +1,7 @@
 import {element,button} from './dom.js';
 import {roomState} from './rooms.js';
 import {roomTemperature} from './heating.js';
+import {displaySettings} from './display-settings.js';
 import {knownState,sensorText,roomEnvironment,objectRoom,printerState,energySummary,doorDescription} from './live-data.js';
 
 export const roomPanelStyles=`
@@ -37,6 +38,7 @@ async function command(host,id,service,label){
 }
 export function openRoom(host,floorId,roomId){host.activeRoom={floorId,roomId};host.roomFeedback='';host.renderRoomPanel();}
 export function roomPanel(host,states){
+  const display=displaySettings({...host.config.appearance?.display,...host.displayPreferences});
   const floor=host.config.floors.find(f=>f.id===host.activeRoom?.floorId),room=floor?.rooms.find(r=>r.id===host.activeRoom?.roomId);if(!room)return null;
   const panel=element('section',{className:'room-panel',role:'dialog','aria-label':`${room.name} status and controls`});
   // Equal labels and readings do not imply equal command targets.
@@ -52,17 +54,18 @@ export function roomPanel(host,states){
   const controls=element('section',{},[element('h4',{text:'Controls and status'})]);
   if(room.lights?.length){const online=room.lights.filter(id=>knownState(states[id]));controls.append(button(online.some(id=>states[id].state==='on')?'Lights off':'Lights on',()=>{const current=host._hass?.states||{},ids=room.lights.filter(id=>knownState(current[id]));host.control(ids.some(id=>current[id].state==='on')?'off':'on',undefined,ids);},{disabled:host.busy||!online.length||!host._hass?.callService}));line('Lights',presence.lightState,controls);}
   for(const c of room.controls||[]){const s=states[c.entity],label=c.label||s?.attributes?.friendly_name||c.entity;
+    if(display.hide_cameras&&c.entity.startsWith('camera.'))continue;
     const block=element('div');block.append(button(`${label}: ${sensorText(c.entity,states)}`,()=>more(host,c.entity),{'aria-label':`${label} details`}));
     if(c.entity.startsWith('camera.'))block.append(cameraThumbnail(host,c.entity,states));
     const actions=element('div',{className:'room-actions'});for(const a of deviceActions(c.entity,s))actions.append(button(a.label,()=>command(host,c.entity,a.service,label),{disabled:host.roomBusy||!knownState(s)||!host._hass?.callService,'aria-label':`${label}: ${a.label}`}));block.append(actions);controls.append(block);
   }
-  if(room.lights?.length||room.controls?.length)panel.append(controls);
+  if(controls.children.length>1)panel.append(controls);
   for(const object of floor.objects.filter(o=>o.type==='printer_3d'&&o.status_entity&&objectRoom(o,floor)?.id===room.id)){
     const status=printerState(object,states),section=element('section',{'data-printer-status':status},[element('h4',{text:object.name||'3D printer'})]);
     section.append(element('p',{className:status==='error'?'device-error':'',text:status==='error'?'⚠ Printer error — check the printer':`Printer: ${status}`}));
     for(const [key,label] of [['progress_entity','Progress'],['time_left_entity','Time left'],['bed_temperature_entity','Bed temperature'],['job_entity','Job']])if(object[key])line(label,sensorText(object[key],states),section);
     const strip=floor.objects.find(o=>o.pattern_entity&&objectRoom(o,floor)?.id===room.id);if(strip)line('Printer light display',sensorText(strip.pattern_entity,states),section);
-    if(object.camera_entity)section.append(cameraThumbnail(host,object.camera_entity,states));section.append(button('Printer details',()=>more(host,object.status_entity)));panel.append(section);
+    if(object.camera_entity&&!display.hide_cameras)section.append(cameraThumbnail(host,object.camera_entity,states));section.append(button('Printer details',()=>more(host,object.status_entity)));panel.append(section);
   }
   for(const wall of floor.walls||[])for(const door of wall.openings||[])if(door.room_id===room.id&&door.contact_entity)line(door.name||'Door',doorDescription(door,states));
   if(room.energy?.length){const summary=energySummary(room.energy,states),section=element('section',{},[element('h4',{text:'Plug energy'}),element('p',{text:`${summary.power} now · ${summary.energy} today${summary.partial?' · Partial readings':''}`})]);

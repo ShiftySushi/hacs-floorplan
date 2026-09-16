@@ -37,6 +37,16 @@ test('precipitation stays outside shelters and freezes for reduced motion',()=>{
   assert.equal(weather.update(states,settings,3000,false),true);
   weather.update({},settings,4000,false);assert.equal(weather.group.visible,false);
 });
+test('cloud coverage fills the sky faintly instead of forming a perimeter ring',()=>{
+  const weather=weather3D(new Group(),new Box3(new Vector3(-5,0,-5),new Vector3(5,3,5)));
+  weather.update({'weather.home':{state:'cloudy'}},{entity:'weather.home',intensity:1},1000,true);
+  const clouds=weather.group.children.find(n=>n.children.some(c=>c.isSprite)),distances=clouds.children.map(c=>Math.hypot(c.position.x,c.position.z));
+  assert(Math.min(...distances)<2);assert(Math.max(...distances)>6);
+  assert(clouds.children.every(c=>c.material.opacity<=.2));
+  weather.update({'weather.home':{state:'cloudy'}},{entity:'weather.home',intensity:.5},2000,true);
+  assert.equal(clouds.children[0].material.opacity,.1);
+  weather.update({'weather.home':{state:'sunny'}},{entity:'weather.home'},3000,true);assert.equal(clouds.visible,false);
+});
 test('sensor models have distinct lenses and mounts follow wall and room geometry',()=>{
   const config=scene(),floor=config.floors[0];
   for(const type of sensorTypes){
