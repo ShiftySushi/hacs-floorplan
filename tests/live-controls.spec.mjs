@@ -10,6 +10,25 @@ async function setup(page){
     card.setConfig(config);card.hass=hass;
   });
 }
+test('parked car stays aligned with the drive when GPS heading changes',async({page},info)=>{
+  await page.emulateMedia({reducedMotion:'reduce'});await setup(page);
+  const card=page.locator('floorplan-card');
+  await card.evaluate(el=>{
+    const config=structuredClone(el.config),car=config.exterior.items.find(i=>i.type==='car');
+    car.rotation=0;car.x=0;
+    config.exterior.items=config.exterior.items.filter(i=>i.type!=='doorbell');
+    Object.assign(config.exterior.items[0],{width:3,depth:8,colour:'#a2a2a2'});
+    config.information={enabled:false,items:[]};el.setConfig(config);
+    el.hass={...el._hass,states:{...el._hass.states,'sun.sun':{state:'above_horizon',attributes:{elevation:45}}}};
+  });
+  await card.getByRole('button',{name:'Exterior',exact:true}).click();
+  const plan=card.locator('.plan-3d');await expect(plan).toHaveAttribute('data-fitted-bounds',/.+/);
+  for(const heading of [90,180,270]){
+    await card.evaluate((el,heading)=>{el.hass={...el._hass,states:{...el._hass.states,'device_tracker.car':{state:'home',attributes:{heading}}}};},heading);
+    await expect.poll(()=>plan.getAttribute('data-vehicle-states')).toBe('[{"visible":true,"charging":true,"heading":0}]');
+  }
+  await page.screenshot({path:`/tmp/parked-car-${info.project.name}.png`});
+});
 test('information readouts remain legible with dark theme and unavailable devices',async({page},info)=>{
   await page.emulateMedia({reducedMotion:'reduce'});
   await setup(page);

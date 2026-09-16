@@ -107,9 +107,10 @@ export class FloorplanCard extends HTMLElement {
     this.planSlot.classList.toggle('has-outdoor',!!roomTemperature({temperature_entity:this.config.outdoor_temperature_entity},states));
     const header = element('div', {className:'card-header stage-style'});
     const tabs = element('div', { className: 'row floor-tabs', role: 'group', 'aria-label': 'Floors' });
-    this.config.floors.forEach(floor => tabs.append(iconButton(floor.name || floor.id,'floor', () => { this.floorId = floor.id; this.exterior=false; this.render(); }, { 'aria-pressed': String(floor.id === this.floorId) })));
     const mode=this.viewMode || this.config.appearance?.mode || 'clean';
     const exterior=['3d','sims'].includes(mode)&&this.exterior?this.config.exterior:undefined;
+    const allFloors=['3d','sims'].includes(mode)&&this.building&&!exterior&&!this.isolatedRooms?.[this.floorId];
+    this.config.floors.forEach(floor => tabs.append(iconButton(floor.name || floor.id,'floor', () => { this.floorId = floor.id; this.exterior=false; this.building=false; if(this.isolatedRooms)this.isolatedRooms[floor.id]=''; this.render(); }, { 'aria-pressed': String(floor.id === this.floorId&&!exterior&&!allFloors) })));
     const weather={...this.config.weather,entity:weatherEntity(this.config)};
     const daylight=daylightLevel(states,new Date(),this._hass?.config,weather.entity);this.planSlot.style.setProperty('--fp-stage-background',stageColour(mode,daylight));
     const modes=element('div',{className:'row view-modes',role:'group','aria-label':'Render style'});
@@ -118,11 +119,11 @@ export class FloorplanCard extends HTMLElement {
     for(const [value,text] of [['pokemon','Pokémon'],['zelda','Zelda'],['sims','Sims-like']])customStyle.append(element('option',{value,text,selected:mode===value}));modes.append(customStyle);
     if(['3d','sims'].includes(mode)&&!exterior){
       const activeFloor=this.config.floors.find(f=>f.id===this.floorId);this.isolatedRooms ||= {};
-      const isolation=element('select',{'aria-label':'Isolate room',title:'Isolate a room for an unobstructed view',className:'room-isolation',onchange:e=>{this.isolatedRooms[this.floorId]=e.target.value;this.render();}},[element('option',{value:'',text:'Whole floor',selected:!this.isolatedRooms[this.floorId]}),...(activeFloor?.rooms||[]).map(r=>element('option',{value:r.id,text:r.name||r.id,selected:this.isolatedRooms[this.floorId]===r.id}))]);modes.append(isolation);
+      const isolation=element('select',{'aria-label':'Isolate room',title:'Isolate a room for an unobstructed view',className:'room-isolation',onchange:e=>{this.isolatedRooms[this.floorId]=e.target.value;this.building=false;this.render();}},[element('option',{value:'',text:'Whole floor',selected:!this.isolatedRooms[this.floorId]}),...(activeFloor?.rooms||[]).map(r=>element('option',{value:r.id,text:r.name||r.id,selected:this.isolatedRooms[this.floorId]===r.id}))]);if(!allFloors)modes.append(isolation);
     }
     if(this.config.floors.length)header.append(modes);
-    if(['3d','sims'].includes(mode)&&!exterior&&this.config.floors.length>1)tabs.append(iconButton('All storeys','floor',()=>{if(this.isolatedRooms?.[this.floorId]){this.isolatedRooms[this.floorId]='';this.building=true;}else this.building=!this.building;this.render();},{'aria-pressed':String(!!this.building&&!this.isolatedRooms?.[this.floorId])}));
-    if(['3d','sims'].includes(mode)&&this.config.exterior?.items.length)tabs.append(iconButton('Exterior','cube',()=>{this.exterior=!this.exterior;this.render();},{'aria-pressed':String(!!this.exterior)}));
+    if(this.config.floors.length>1)tabs.append(iconButton('All','floor',()=>{if(this.isolatedRooms)this.isolatedRooms[this.floorId]='';this.building=true;this.exterior=false;if(!['3d','sims'].includes(mode))this.viewMode='3d';this.render();},{'aria-pressed':String(!!allFloors),title:'View all floors'}));
+    if(this.config.exterior?.items.length)tabs.append(iconButton('Exterior','cube',()=>{this.exterior=true;this.building=false;if(!['3d','sims'].includes(mode))this.viewMode='3d';this.render();},{'aria-pressed':String(!!exterior)}));
     const stageTools=element('div',{className:'stage-tools'},[tabs,iconButton(this.hideOverlays?'Show overlays':'Hide overlays','eye',()=>{this.hideOverlays=!this.hideOverlays;this.render();},{'aria-pressed':String(!!this.hideOverlays),title:this.hideOverlays?'Show overlays':'Hide overlays',className:'overlay-toggle'})]);
     stageTools.append(iconButton(this.inspectorOpen?'Hide lighting':'Lighting','bulb',()=>{this.inspectorOpen=!this.inspectorOpen;this.render();},{'aria-expanded':String(!!this.inspectorOpen),'aria-controls':'lighting-panel',title:this.inspectorOpen?'Hide lighting':'Lighting',className:'inspector-toggle'}));
     const settings=element('details',{className:'display-settings',open:!!this.displayOpen},[element('summary',{'aria-label':'Display settings',title:'Display settings'},[icon('sliders')]),element('div',{className:'display-popover'},[element('h3',{text:'Display settings'}),element('p',{className:'display-description',text:'Choose what stays visible on your floorplan.'}),...displayFields(display,next=>{this.displayPreferences=next;this.displayOpen=true;this.render();}),element('p',{className:'muted',text:'Saved for this browser. Set shared defaults in the card editor.'})])]);
@@ -151,6 +152,7 @@ export class FloorplanCard extends HTMLElement {
       for(const floor of markerFloors) {
       markers.push(...labelMarkers(floor,states,entityId=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId},bubbles:true,composed:true}))));
       floor.entities.forEach(item => {
+        if(display.hide_cameras&&item.entity.startsWith('camera.'))return;
         const state = item.unbound?undefined:states[item.entity]; const light = item.entity.startsWith('light.');
         const name = item.name || state?.attributes.friendly_name || item.entity;
         const text = item.unbound?'Not connected':!available(state) ? 'Unavailable' : light ? state.state === 'on' ? 'On' : 'Off' : `${state.state} ${state.attributes.unit_of_measurement || ''}`.trim();
@@ -191,9 +193,10 @@ export class FloorplanCard extends HTMLElement {
       }
       for(const wall of floor.walls||[])for(const door of wall.openings||[])if(door.contact_entity){const status=doorState(door,states),node=button(`${status==='Open'?'▯':'▣'} ${doorDescription(door,states)}`,()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:door.lock_entity||door.contact_entity},bubbles:true,composed:true})),{className:'marker device-marker','aria-label':`${door.name||'Door'}: ${status}`});markers.push({node,x:wall.a[0]+(wall.b[0]-wall.a[0])*door.offset,y:wall.a[1]+(wall.b[1]-wall.a[1])*door.offset,floorId:floor.id});}
       }
-      const exteriorMarkers=(exterior?.items||[]).filter(item=>item.camera_entity||item.contact_entity).map(item=>{
-        const node=element('div',{className:'marker exterior-camera',style:'width:112px;height:auto;min-height:44px;display:block;padding:4px;white-space:normal;transform:translate(-50%,-50%)','aria-label':item.name||'Exterior camera'});
-        if(item.camera_entity)node.append(cameraThumbnail(this,item.camera_entity,states));
+      const exteriorMarkers=(exterior?.items||[]).filter(item=>(item.camera_entity&&!display.hide_cameras)||item.contact_entity).map(item=>{
+        const showCamera=item.camera_entity&&!display.hide_cameras;
+        const node=element('div',{className:'marker exterior-camera',style:`width:${showCamera?'112px':'auto'};height:auto;min-height:44px;display:block;padding:4px;white-space:normal;transform:translate(-50%,-50%)`,'aria-label':item.name||(showCamera?'Exterior camera':'Exterior door')});
+        if(showCamera)node.append(cameraThumbnail(this,item.camera_entity,states));
         if(item.contact_entity)node.append(element('small',{text:doorDescription(item,states)}));
         return {node,world:[item.x||0,(item.y||0)+(item.height||1),item.z||0]};
       });
