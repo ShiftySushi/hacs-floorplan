@@ -19,6 +19,23 @@ test('exterior geometry is data-driven and finite including a car and arbitrary 
   validateExterior(config);const scene=exterior3D(config),bounds=new THREE.Box3().setFromObject(scene);assert.ok(bounds.max.y>=5);assert.ok(scene.getObjectByName('car'));assert.ok(Number.isFinite(bounds.min.x));
   assert.throws(()=>validateExterior({...config,items:[{...config.items[0],width:NaN}]}));
 });
+test('parked cars preserve their configured orientation through tracker updates',()=>{
+  for(const rotation of [0,90,-90]){
+    const car={id:'parked',type:'car',x:0,y:0,z:0,width:1.8,depth:4.6,height:1.4,rotation,presence_entity:'device_tracker.example',charging_entity:'binary_sensor.charging'};
+    const scene=exterior3D({items:[car]}),model=scene.getObjectByName(car.id);
+    for(const heading of [90,180,undefined]){
+      scene.updateStates({'device_tracker.example':{state:'home',attributes:{heading}},'binary_sensor.charging':{state:'on'}});
+      assert.equal(model.rotation.y,rotation*Math.PI/180);assert.equal(model.visible,true);assert.equal(model.userData.charging,true);
+    }
+    scene.updateStates({'device_tracker.example':{state:'not_home',attributes:{heading:270}}});
+    assert.equal(model.visible,false);assert.equal(model.rotation.y,rotation*Math.PI/180);
+  }
+});
+test('cars without a parked orientation can follow heading and reset when it becomes unavailable',()=>{
+  const scene=exterior3D({items:[{id:'car',type:'car',x:0,y:0,z:0,width:1.8,depth:4.6,height:1.4,presence_entity:'device_tracker.example'}]}),model=scene.getObjectByName('car');
+  scene.updateStates({'device_tracker.example':{state:'home',attributes:{heading:90}}});assert.equal(model.rotation.y,Math.PI/2);
+  scene.updateStates({'device_tracker.example':{state:'home',attributes:{}}});assert.equal(model.rotation.y,0);
+});
 test('packed scene meshes survive validation and use their own vertices instead of the generic car',()=>{
   const encode=array=>Buffer.from(array.buffer).toString('base64');
   const part={positions:encode(new Int16Array([-15000,0,0,15000,0,0,0,30000,30000])),indices:encode(new Uint16Array([0,1,2])),colour:'#666666'};

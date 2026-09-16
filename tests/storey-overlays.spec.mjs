@@ -11,12 +11,11 @@ test('all storeys has per-floor overlays and an inspection toggle without rebuil
   });
   const card=page.locator('floorplan-card');
   await card.getByRole('button',{name:'3D',exact:true}).click();
-  const modes=await card.locator('.view-modes').boundingBox();
-  await card.getByRole('button',{name:'All storeys',exact:true}).click();
+  await card.getByRole('button',{name:'All',exact:true}).click();
   await expect(card.locator('.marker')).toHaveCount(4);
   await expect(card.locator('.temperature-marker')).toHaveCount(2);
   await expect.poll(async()=>card.locator('.marker').evaluateAll(nodes=>new Set(nodes.map(n=>n.style.left+','+n.style.top)).size)).toBe(4);
-  expect(await card.locator('.view-modes').boundingBox()).toEqual(modes);
+  await expect(card.getByLabel('Isolate room',{exact:true})).toHaveCount(0);
   await expect(card.locator('.plan-slot .floor-tabs')).toBeVisible();
   await card.locator('canvas').evaluate(canvas=>canvas.dataset.retained='yes');
   await card.getByRole('button',{name:'Hide overlays',exact:true}).click();

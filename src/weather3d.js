@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {weatherAppearance} from './weather.js';
 
-// Weather lives in world space, beyond the house footprint, not on the camera.
+// Weather lives in world space; precipitation respects the house footprint.
 export function weather3D(world,bounds,shelters=[]){
   const group=new THREE.Group();group.name='outdoor-weather';
   const size=bounds.getSize(new THREE.Vector3()),centre=bounds.getCenter(new THREE.Vector3()),radius=Math.max(size.x,size.z,8)*.72,top=Math.max(5,bounds.max.y+2);
@@ -17,7 +17,12 @@ export function weather3D(world,bounds,shelters=[]){
   const cloudTexture=new THREE.DataTexture(cloudPixels,96,48);cloudTexture.needsUpdate=true;cloudTexture.magFilter=THREE.LinearFilter;cloudTexture.minFilter=THREE.LinearFilter;
   const cloudMaterial=new THREE.SpriteMaterial({map:cloudTexture,color:'#cbd3dc',transparent:true,opacity:.5,depthWrite:false});
   const clouds=new THREE.Group();group.add(clouds);
-  for(let i=0;i<12;i++){const puff=new THREE.Sprite(cloudMaterial),a=i*2.399; puff.position.set(centre.x+Math.cos(a)*radius,top+.2+(i%3)*.3,centre.z+Math.sin(a)*radius);puff.scale.set(4+(i%3),2,1);clouds.add(puff);}
+  // Fill the sky at varied distances instead of outlining the site with a ring.
+  for(let i=0;i<18;i++){
+    const puff=new THREE.Sprite(cloudMaterial),a=i*2.399963,r=radius*Math.sqrt((i+.5)/18);
+    puff.position.set(centre.x+Math.cos(a)*r,top+.3+Math.sin(i*1.7)*.45,centre.z+Math.sin(a)*r);
+    const width=radius*(.65+(i%4)*.12);puff.scale.set(width,width*(.35+(i%3)*.04),1);clouds.add(puff);
+  }
   const flash=new THREE.PointLight('#d5e5ff',0,radius*5);flash.position.set(centre.x-radius,top+2,centre.z-radius);group.add(flash);
   const seeds=Array.from({length:count},(_,i)=>[(Math.sin(i*127.1+1)*43758.5453)%1,(Math.sin(i*311.7+2)*19341.33)%1,(i*.618034)%1]);
   const sheltered=(x,z)=>shelters.some(b=>x>=b.min.x-.15&&x<=b.max.x+.15&&z>=b.min.z-.15&&z<=b.max.z+.15);
@@ -28,8 +33,8 @@ export function weather3D(world,bounds,shelters=[]){
     group.visible=active&&a.intensity>0;
     const dt=last?Math.min(.1,(now-last)/1000):0;last=now;if(!reducedMotion)time+=dt;
     rain.visible=a.rain||a.wind;flakes.visible=a.snow||a.hail;clouds.visible=a.clouds>0;
-    cloudMaterial.opacity=a.fog?.4:a.clouds*.8*a.intensity;
-    cloudMaterial.color.set(a.storm?'#697786':a.fog?'#d9e0e1':'#adb9c5');
+    cloudMaterial.opacity=(a.fog?.16:a.clouds*.2)*a.intensity;
+    cloudMaterial.color.set(a.storm?'#a6b1bd':a.fog?'#e0e6e8':'#edf1f4');
     clouds.position.y=a.fog?-top+1:0;
     flash.intensity=!reducedMotion&&a.storm?Math.max(0,Math.sin(time*.7)-.98)*100*a.intensity:0;
     const n=Math.round(count*a.intensity*(a.condition==='pouring'?1:.6));geometry.setDrawRange(0,n*2);

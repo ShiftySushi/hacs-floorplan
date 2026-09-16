@@ -102,7 +102,15 @@ export function exterior3D(config,states={}){
     if(item.type==='car'){
       node.userData.vehicle=true;
       const chargingGlow=new THREE.PointLight('#4be3a4',0,3);chargingGlow.position.set(0,.25,0);node.add(chargingGlow);
-      updates.push(next=>{const location=next[item.presence_entity],heading=location?.attributes?.heading;node.visible=!item.presence_entity||location?.state==='home';if(item.presence_entity&&Number.isFinite(Number(heading))&&heading!==null&&heading!==undefined)node.rotation.y=Number(heading)*Math.PI/180;chargingGlow.intensity=next[item.charging_entity]?.state==='on'?2:0;node.userData.charging=chargingGlow.intensity>0;});
+      updates.push(next=>{
+        const location=next[item.presence_entity],heading=location?.attributes?.heading;
+        node.visible=!item.presence_entity||location?.state==='home';
+        // An explicit scene rotation is the parked orientation in local coordinates.
+        // GPS heading is useful only when no parked orientation has been configured.
+        const liveHeading=item.presence_entity&&heading!==null&&heading!==undefined&&heading!==''&&Number.isFinite(Number(heading))?Number(heading):0;
+        node.rotation.y=(item.rotation??liveHeading)*Math.PI/180;
+        chargingGlow.intensity=next[item.charging_entity]?.state==='on'?2:0;node.userData.charging=chargingGlow.intensity>0;
+      });
     }
   }
   group.updateStates=next=>updates.forEach(update=>update(next));group.updateStates(states);
