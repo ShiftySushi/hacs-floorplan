@@ -14,13 +14,13 @@ test('information stays visible, updates independently, and exterior returns to 
   await card.getByRole('button',{name:'Hide overlays',exact:true}).click();await expect(card.locator('.information-panel')).toBeVisible();
   await card.evaluate(el=>{el.__canvas=el.plan.querySelector('canvas');el.hass={...el._hass,states:{...el._hass.states,'sensor.power':{state:'920',attributes:{unit_of_measurement:'W'}}}};});
   await expect(card.locator('.information-panel')).toContainText('920 W');expect(await card.evaluate(el=>el.__canvas===el.plan.querySelector('canvas'))).toBe(true);
-  await card.getByRole('button',{name:'Exterior',exact:true}).click();
+  await card.getByRole('button',{name:'External',exact:true}).click();
   await expect.poll(()=>card.locator('.plan-3d').getAttribute('data-fitted-bounds')).not.toBeNull();
   const bounds=await card.locator('.plan-3d').evaluate(el=>JSON.parse(el.dataset.fittedBounds));expect(bounds.flat().every(Number.isFinite)).toBe(true);
   await page.screenshot({path:info.outputPath('information-exterior.png')});
   const panel=await card.locator('.information-panel').boundingBox();expect(panel.x).toBeGreaterThanOrEqual(0);expect(panel.x+panel.width).toBeLessThanOrEqual(page.viewportSize().width);
   await card.locator('.information-panel summary').click();await expect(card.locator('.information-item').first()).toBeHidden();
-  await card.getByRole('button',{name:'Exterior',exact:true}).click();
+  await card.getByRole('button',{name:'External',exact:true}).click();
   await card.getByRole('button',{name:'2D',exact:true}).click();
   await expect(card.locator('[data-strip-pattern="progressive-fill"]')).toHaveAttribute('data-strip-fill','0.5');
   await card.evaluate(el=>{el.hass={...el._hass,states:{...el._hass.states,'sensor.pattern':{state:'off'}}};});await expect(card.locator('[data-strip-pattern]')).toHaveCount(0);

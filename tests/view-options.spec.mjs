@@ -21,12 +21,12 @@ test('floor choices stay ordered and exclusive, and camera visibility applies ac
   await configure();
   const choices=card.getByRole('group',{name:'Floors',exact:true});
   const selected=async name=>{
-    await expect(choices.getByRole('button')).toHaveText(['Ground','Upper','All','Exterior']);
+    await expect(choices.getByRole('button')).toHaveText(['Ground','Upper','External','All']);
     await expect(choices.locator('[aria-pressed="true"]')).toHaveCount(1);
     await expect(choices.getByRole('button',{name,exact:true})).toHaveAttribute('aria-pressed','true');
   };
   await selected('Ground');
-  for(const name of ['All','Exterior','Exterior','All','Upper','Ground']){await choices.getByRole('button',{name,exact:true}).click();await selected(name);}
+  for(const name of ['All','External','External','All','Upper','Ground']){await choices.getByRole('button',{name,exact:true}).click();await selected(name);}
   await card.evaluate(el=>{el.activeRoom={floorId:el.floorId,roomId:el.config.floors[0].rooms[0].id};el.renderRoomPanel();});
   await expect(card.locator('.room-panel .room-camera')).toHaveCount(1);
   await card.getByLabel('Display settings',{exact:true}).click();await card.getByLabel('Hide cameras',{exact:true}).check();
@@ -34,13 +34,13 @@ test('floor choices stay ordered and exclusive, and camera visibility applies ac
   await expect(card.getByRole('button',{name:'Room camera details',exact:true})).toHaveCount(0);
   await page.screenshot({path:`/tmp/view-options-settings-${info.project.name}.png`});
   await card.getByLabel('Display settings',{exact:true}).click();await card.getByRole('button',{name:'Close room controls',exact:true}).click();
-  await choices.getByRole('button',{name:'Exterior',exact:true}).click();await selected('Exterior');
+  await choices.getByRole('button',{name:'External',exact:true}).click();await selected('External');
   await expect(card.locator('.room-camera')).toHaveCount(0);
   await expect(card.locator('.exterior-camera')).toHaveCount(1);await expect(card.locator('.exterior-camera')).toContainText('Closed');
   await expect(card.locator('.plan-3d')).toHaveAttribute('data-fitted-bounds',/.+/);
   await page.screenshot({path:`/tmp/view-options-exterior-${info.project.name}.png`});
   await page.reload();await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));await configure();
-  await selected('Exterior');await expect(card.locator('.room-camera')).toHaveCount(0);
+  await selected('External');await expect(card.locator('.room-camera')).toHaveCount(0);
   await card.getByLabel('Display settings',{exact:true}).click();await expect(card.getByLabel('Hide cameras',{exact:true})).toBeChecked();
   await card.getByLabel('Hide cameras',{exact:true}).uncheck();await expect(card.locator('.room-camera')).toHaveCount(2);
   await card.getByLabel('Display settings',{exact:true}).click();

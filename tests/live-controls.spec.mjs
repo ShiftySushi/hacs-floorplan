@@ -1,5 +1,6 @@
 import {test,expect} from '@playwright/test';
 async function setup(page){
+  await page.route('**/api/camera_proxy_stream/**',route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="#d8e8ea"/><text x="16" y="28">Fictional live stream</text></svg>'}));
   await page.route('**/api/camera_proxy/**',route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="#d8e8ea"/><path d="M0 180V120L100 60L230 130L320 90V180" fill="#698976"/><text x="16" y="28" font-size="16">Fictional camera</text></svg>'}));
   await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   await page.locator('floorplan-card').evaluate(card=>{
@@ -21,7 +22,7 @@ test('parked car stays aligned with the drive when GPS heading changes',async({p
     config.information={enabled:false,items:[]};el.setConfig(config);
     el.hass={...el._hass,states:{...el._hass.states,'sun.sun':{state:'above_horizon',attributes:{elevation:45}}}};
   });
-  await card.getByRole('button',{name:'Exterior',exact:true}).click();
+  await card.getByRole('button',{name:'External',exact:true}).click();
   const plan=card.locator('.plan-3d');await expect(plan).toHaveAttribute('data-fitted-bounds',/.+/);
   for(const heading of [90,180,270]){
     await card.evaluate((el,heading)=>{el.hass={...el._hass,states:{...el._hass.states,'device_tracker.car':{state:'home',attributes:{heading}}}};},heading);
@@ -72,12 +73,22 @@ test('room cards expose current readings, controls, errors and energy on desktop
   await panel.evaluate(el=>el.scrollTop=0);await page.screenshot({path:info.outputPath('room-controls.png')});
   await panel.getByRole('button',{name:'Close room controls',exact:true}).click();await expect(panel).toHaveCount(0);expect(errors).toEqual([]);
 });
+test('second-floor printer opens its live camera feed',async({page},info)=>{
+  await setup(page);const card=page.locator('floorplan-card');
+  await card.evaluate(el=>{const config=structuredClone(el.config);config.information={enabled:false,items:[]};config.floors[0].id='second';config.floors[0].name='Second';el.setConfig(config);});
+  await card.getByRole('button',{name:'Printer: printing',exact:true}).click();
+  const panel=card.getByRole('dialog'),feed=panel.getByRole('img',{name:'Example camera',exact:true});
+  await expect(panel).toContainText('Example printer');await expect(feed).toBeVisible();await expect(feed).toHaveAttribute('src',/\/api\/camera_proxy_stream\/camera\.example/);
+  await feed.scrollIntoViewIfNeeded();
+  await page.screenshot({path:info.outputPath('second-floor-printer-camera.png')});
+  await feed.evaluate(img=>img.dispatchEvent(new Event('error')));await expect(feed).toHaveAttribute('src',/\/api\/camera_proxy\/camera\.example/);
+});
 test('3D states update without replacing the canvas and exterior camera is usable',async({page},info)=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));await setup(page);const card=page.locator('floorplan-card');await card.getByRole('button',{name:'3D',exact:true}).click();
   await expect(card.locator('.plan-3d')).toHaveAttribute('data-printer-states','["printing"]');await expect(card.locator('.plan-3d')).toHaveAttribute('data-doors-open','1');
   await card.evaluate(el=>{el.__canvas=el.plan.querySelector('canvas');el.hass={...el._hass,states:{...el._hass.states,'sensor.printer':{state:'error',attributes:{}},'binary_sensor.door':{state:'off',attributes:{}}}};});
   await expect(card.locator('.plan-3d')).toHaveAttribute('data-printer-states','["error"]');await expect(card.locator('.plan-3d')).toHaveAttribute('data-doors-open','0');expect(await card.evaluate(el=>el.__canvas===el.plan.querySelector('canvas'))).toBe(true);
-  await card.getByRole('button',{name:'Exterior',exact:true}).click();await expect(card.locator('.exterior-camera img')).toBeVisible();await expect(card.locator('.exterior-camera')).toHaveCSS('opacity','1');await expect(card.locator('.plan-3d')).toHaveCSS('opacity','1');await page.screenshot({path:info.outputPath('exterior-live.png')});
+  await card.getByRole('button',{name:'External',exact:true}).click();await expect(card.locator('.exterior-camera img')).toBeVisible();await expect(card.locator('.exterior-camera')).toHaveCSS('opacity','1');await expect(card.locator('.plan-3d')).toHaveCSS('opacity','1');await page.screenshot({path:info.outputPath('exterior-live.png')});
   await expect.poll(()=>card.locator('.plan-3d').getAttribute('data-vehicle-states')).toContain('"visible":true');
   await card.evaluate(el=>{el.hass={...el._hass,states:{...el._hass.states,'device_tracker.car':{state:'not_home',attributes:{heading:90}}}};});
   await expect.poll(()=>card.locator('.plan-3d').getAttribute('data-vehicle-states')).toContain('"visible":false');

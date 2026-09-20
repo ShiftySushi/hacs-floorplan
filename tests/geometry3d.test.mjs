@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { wallSections, storeyPlacement, selectSceneLights, wallJoins, illuminationUV } from '../src/plan3d.js';
+import { wallSections, connectedStoreyPlacements, isExteriorWall, selectSceneLights, wallJoins, illuminationUV } from '../src/plan3d.js';
 import { furniture3D } from '../src/furniture3d.js';
 import { CATALOGUE, panelArrangement } from '../src/catalogue.js';
 import { roomLightSources } from '../src/illumination.js';
@@ -18,10 +18,22 @@ test('wall solids preserve lintels and sills while subtracting actual openings',
 test('every catalogue object creates finite original 3D geometry',()=>{
   for(const object of CATALOGUE){const group=furniture3D({...object,rotation:37});let vertices=0;group.traverse(node=>{if(node.geometry){const values=node.geometry.attributes.position.array;assert.ok(values.every(Number.isFinite),object.type);vertices+=values.length;node.geometry.dispose();}if(node.material)node.material.dispose();});assert.ok(vertices>0,object.type);}
 });
-test('exploded storeys preserve explicit alignment and elevation',()=>{
-  assert.deepEqual(storeyPlacement({},2),{x:0,y:12,z:0});
-  assert.deepEqual(storeyPlacement({offset_x_m:1.2,offset_z_m:-.4,elevation_m:2.7},1),{x:1.2,y:5.7,z:-.4});
-  assert.deepEqual(storeyPlacement({elevation_m:2.7},1,false),{x:0,y:2.7,z:0});
+test('connected storeys meet at physical wall or stair heights and preserve explicit alignment',()=>{
+  const floors=[
+    {id:'ground',walls:[{height:2.4}],objects:[{type:'stairs',height:2.4}]},
+    {id:'first',offset_x_m:.2,walls:[{height:2.4}],objects:[{type:'stairs',height:2.4}]},
+    {id:'second',offset_z_m:-.1,elevation_m:5,walls:[{height:2.3}]}
+  ];
+  assert.deepEqual(connectedStoreyPlacements(floors),[{x:0,y:0,z:0},{x:.2,y:2.4,z:0},{x:0,y:5,z:-.1}]);
+});
+test('wall adjacency distinguishes outside walls from shared partitions',()=>{
+  const floor={width_m:10,depth_m:8,rooms:[
+    {id:'left',points:[[0,0],[50,0],[50,100],[0,100]]},
+    {id:'right',points:[[50,0],[100,0],[100,100],[50,100]]}
+  ]};
+  assert.equal(isExteriorWall({a:[0,0],b:[0,100]},floor),true);
+  assert.equal(isExteriorWall({a:[0,0],b:[100,0]},floor),true,'one long boundary can border several rooms on the same side');
+  assert.equal(isExteriorWall({a:[50,0],b:[50,100]},floor),false);
 });
 test('furniture variants produce distinct geometry',()=>{
   for(const [type,variant] of [['piano','grand'],['bed','single'],['sofa','corner']]){

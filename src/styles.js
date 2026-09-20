@@ -69,48 +69,41 @@ button:hover:not(:disabled){box-shadow:0 2px 8px #243d3215;background:var(--fp-s
 .editor label input,.editor label select{box-sizing:border-box}
 .editor>.wizard-footer{padding-top:12px;margin-top:8px}.editor>details{margin:12px 0 0}
 .editor>details>summary{min-height:0;padding:10px 0}
-.stage-tools .overlay-toggle,.stage-tools .overlay-toggle[aria-pressed=true]{color:var(--fp-accent);background:var(--fp-surface);display:inline-flex;gap:6px;align-items:center}.stage-tools .overlay-toggle .icon{width:16px;height:16px}.stage-tools .floor-tabs button .icon{display:block;width:14px;height:14px}.stage-tools .floor-tabs button:last-child[aria-pressed=true]{box-shadow:inset 0 -2px var(--fp-accent)}
+.stage-tools .floor-tabs button .icon{width:14px;height:14px}.stage-tools .floor-tabs button:last-child[aria-pressed=true]{box-shadow:inset 0 -2px var(--fp-accent)}
 .plan-slot{padding-bottom:86px}.docked-navigation{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:12px;max-width:calc(100% - 16px);padding:7px 12px;border:1px solid var(--fp-line);border-radius:12px;background:var(--fp-surface);z-index:8;box-shadow:0 2px 6px #173b2e12}.navigation-group{display:flex;flex-direction:column;gap:4px}.navigation-caption{font-size:9px;font-weight:600;color:var(--secondary-text-color,#617269);text-align:center}.navigation-buttons{display:flex;gap:4px}.docked-navigation button{min-height:34px;min-width:32px;padding:4px 8px;font-size:13px;border-radius:6px}.navigation-group+.navigation-group{border-left:1px solid var(--fp-line);padding-left:12px}@container(max-width:440px){.docked-navigation{gap:6px;padding:6px 8px}.navigation-group+.navigation-group{padding-left:6px}.docked-navigation button{min-width:30px;padding:4px 6px}}
-.plan-slot{padding-top:64px}.stage-tools{position:absolute;top:10px;left:12px;right:12px;z-index:8;display:flex;align-items:center;justify-content:space-between;gap:8px}.stage-tools .floor-tabs{flex-wrap:nowrap;overflow-x:auto;max-width:100%;padding:3px;border-radius:10px;background:var(--fp-surface);box-shadow:0 1px 5px #173b2e12}.stage-tools button{white-space:nowrap}.stage-tools .overlay-toggle{font-size:11px;min-height:34px;padding:6px 10px;background:var(--fp-surface);border-color:transparent;flex-shrink:0}.stage-tools .floor-tabs button{font-size:11px;min-height:32px;padding:5px 8px}.stage-tools .floor-tabs .icon{display:none}@container(max-width:440px){.stage-tools{left:8px;right:8px;gap:5px}.stage-tools .floor-tabs button{font-size:10px;padding:5px}.stage-tools .overlay-toggle{font-size:10px;padding:5px}}
+.plan-slot{padding-top:64px}.stage-tools{position:absolute;top:10px;left:12px;right:12px;z-index:8}.stage-tools .floor-tabs{flex-wrap:nowrap;overflow-x:auto;padding:3px;border-radius:10px;background:var(--fp-surface);box-shadow:0 1px 5px #173b2e12}.stage-tools button{white-space:nowrap}.stage-tools .floor-tabs button{font-size:11px;min-height:32px;padding:5px 8px}@container(max-width:440px){.stage-tools{left:8px;right:8px;gap:5px}.stage-tools .floor-tabs button{font-size:10px;padding:5px}}
 
 .floorplan-dashboard:not(.inspector-collapsed) .plan-slot{padding-top:108px}
 ` + /* Graphical dashboard: contextual tools, with a fully removable inspector. */ `
 .floorplan-dashboard.inspector-collapsed .card-workspace{grid-template-columns:minmax(0,1fr)}
 .inspector-slot[hidden]{display:none}
-.stage-tools{justify-content:flex-start;flex-wrap:wrap}
-.stage-tools .floor-tabs{margin-right:auto}
-.stage-tools .stage-style{padding:0;border:0;margin:0 0 0 auto;display:block}
+.stage-tools .stage-style{padding:0;border:0;display:block}
 .stage-tools .stage-style .view-modes{width:auto;flex-wrap:wrap;margin:0}
 .room-isolation{max-width:160px;min-width:100px}
 .stage-tools .stage-style .view-modes button{flex-direction:row;min-height:32px;font-size:11px}
-.stage-tools .inspector-toggle{font-size:11px;min-height:34px;padding:6px 10px;background:var(--fp-surface);color:var(--fp-accent)}
 .stage-tools .floor-tabs button .icon{display:block}
 .floorplan-dashboard .plan-slot{height:var(--fp-stage-height,clamp(400px,calc(100dvh - 130px),900px))}
 @container(min-width:760px){.floorplan-dashboard .inspector-slot,.floorplan-dashboard .controls{max-height:var(--fp-stage-height,clamp(400px,calc(100dvh - 130px),900px))}}
 @container(max-width:759px){.floorplan-dashboard .plan-slot{padding-top:108px}.stage-tools .stage-style{flex-basis:100%;display:flex;justify-content:flex-end}.stage-tools .floor-tabs{max-width:calc(100% - 10px)} }
 @media(hover:hover) and (pointer:fine){
-.floorplan-dashboard .stage-tools,.floorplan-dashboard .docked-navigation,.floorplan-dashboard .marker,.floorplan-dashboard .outdoor-temperature{opacity:0;transition:opacity .25s ease .6s}
+.floorplan-dashboard .stage-tools,.floorplan-dashboard .docked-navigation,.floorplan-dashboard .marker,.floorplan-dashboard .outdoor-temperature{opacity:0}
 .floorplan-dashboard:hover .stage-tools,.floorplan-dashboard:hover .docked-navigation,.floorplan-dashboard:hover .marker,.floorplan-dashboard:hover .outdoor-temperature,.floorplan-dashboard:has(:focus-visible) .stage-tools,.floorplan-dashboard:has(:focus-visible) .docked-navigation,.floorplan-dashboard:has(:focus-visible) .marker,.floorplan-dashboard:has(:focus-visible) .outdoor-temperature{opacity:1;transition-delay:0s}
 }
-@media(prefers-reduced-motion:reduce){.floorplan-dashboard .stage-tools,.floorplan-dashboard .docked-navigation,.floorplan-dashboard .marker,.floorplan-dashboard .outdoor-temperature{transition:none}}
-
 .display-settings{margin:0;position:relative;font-size:11px;flex-shrink:0}
-.display-settings>summary{box-sizing:border-box;min-height:34px;cursor:pointer;list-style:none;padding:9px 12px;border-radius:8px;background:var(--fp-surface);color:var(--fp-accent)}
+.display-settings>summary{cursor:pointer;list-style:none}
 .stage-tools:has(.display-settings[open]){z-index:10}
-.display-popover{box-sizing:border-box;position:absolute;top:calc(100% + 8px);right:0;width:235px;padding:14px;border:1px solid var(--fp-line);border-radius:12px;background:var(--fp-surface);box-shadow:0 8px 24px #0003;max-height:60vh;overflow:auto}
-.display-popover label{font-size:12px}.display-popover select{width:100%;font-size:12px}.display-popover p{font-size:11px}
+.display-popover{box-sizing:border-box;position:absolute;top:calc(100% + 8px);overflow:auto}.display-popover select{width:100%}.display-popover p{font-size:11px}
 .floorplan-dashboard .marker{scale:var(--fp-marker-scale,.8)}
 .floorplan-dashboard[data-lights=hidden] .overlay-lights,.floorplan-dashboard[data-temperatures=hidden] .overlay-temperatures,.floorplan-dashboard[data-temperatures=hidden] .outdoor-temperature,.floorplan-dashboard[data-heating=hidden] .overlay-heating{display:none}
 .floorplan-dashboard[data-lights=always] .overlay-lights,.floorplan-dashboard[data-temperatures=always] .overlay-temperatures,.floorplan-dashboard[data-temperatures=always] .outdoor-temperature,.floorplan-dashboard[data-heating=always] .overlay-heating,.floorplan-dashboard[data-controls=always] .stage-tools,.floorplan-dashboard[data-controls=always] .docked-navigation,.floorplan-dashboard:has(.display-settings[open]) .stage-tools{opacity:1;transition-delay:0s}
 @container(max-width:759px){.floorplan-dashboard .plan-slot{padding-top:150px}.stage-tools .floor-tabs{flex-basis:auto;margin:0 auto 0 0}.stage-tools .stage-style{flex-basis:auto;margin-left:auto}.docked-navigation{gap:4px;padding:6px}.navigation-group+.navigation-group{padding-left:4px}.docked-navigation button{min-width:27px;padding:4px}.display-settings{position:static}.display-popover{right:0;left:auto;top:calc(100% + 6px);width:min(280px,100%)}}
+@container(max-width:440px){.docked-navigation{width:calc(100% - 16px);overflow-x:auto}.docked-navigation button{flex:none;white-space:nowrap;font-size:10px;padding:4px 5px}}
 
 ` + /* A quiet entrance and progressive hover disclosure. */ `
 @keyframes floorplan-arrive{from{opacity:0}to{opacity:1}}
 @keyframes model-arrive{from{opacity:0;rotate:-1.5deg;scale:.98}to{opacity:1;rotate:0deg;scale:1}}
 .floorplan-dashboard.has-entered{animation:floorplan-arrive .65s ease both}
 .floorplan-dashboard.has-entered .plan{animation:model-arrive 1.1s cubic-bezier(.2,.7,.2,1) both}
-.stage-tools .overlay-toggle,.stage-tools .inspector-toggle{font-size:0;width:36px;min-width:36px;padding:8px;justify-content:center}
-.stage-tools .overlay-toggle .icon,.stage-tools .inspector-toggle .icon{width:18px;height:18px}
 .docked-navigation .navigation-caption{display:none}
 .docked-navigation{padding:6px 8px;gap:8px;border-radius:10px;box-shadow:0 3px 12px #173b2e10}
 .docked-navigation button{font-size:12px;min-height:32px}
@@ -128,9 +121,9 @@ button:hover:not(:disabled){box-shadow:0 2px 8px #243d3215;background:var(--fp-s
 .stage-tools>.stage-style{justify-self:end;margin:0}
 .stage-utilities{position:relative;display:flex;align-items:center;gap:6px;justify-self:center}
 .stage-utilities .display-settings{position:static}
-.stage-utilities .display-settings>summary,.stage-utilities>.overlay-toggle,.stage-utilities>.inspector-toggle{display:flex;align-items:center;justify-content:center;width:36px;height:36px;min-height:36px;min-width:36px;padding:8px;box-sizing:border-box;border:1px solid transparent;border-radius:8px;background:var(--fp-surface);color:var(--fp-accent)}
+.stage-utilities :is(.display-settings>summary,.overlay-toggle,.inspector-toggle,.follow-toggle){display:flex;align-items:center;justify-content:center;flex:none;width:36px;height:36px;min-height:36px;padding:8px;box-sizing:border-box;border:1px solid transparent;border-radius:8px;background:var(--fp-surface);color:var(--fp-accent)}
+.stage-utilities>.follow-toggle[aria-pressed=true]{color:#fff;background:var(--fp-accent);border-color:var(--fp-accent)}
 .display-settings>summary::-webkit-details-marker{display:none}
-.stage-utilities>.overlay-toggle,.stage-utilities>.inspector-toggle{gap:0}
 .stage-utilities .icon{width:18px;height:18px;flex-shrink:0}
 .stage-utilities button:hover,.display-settings>summary:hover,.display-settings[open]>summary{background:var(--fp-soft);border-color:var(--fp-line)}
 .display-settings>summary:focus-visible{outline:2px solid var(--fp-accent);outline-offset:2px}
