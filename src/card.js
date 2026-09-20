@@ -54,7 +54,7 @@ export class FloorplanCard extends HTMLElement {
     const identity=JSON.stringify([location.pathname,this.config.title,this.config.floors.map(f=>f.id)]);
     let hash=2166136261;for(const char of identity)hash=Math.imul(hash^char.charCodeAt(0),16777619);
     const key=`floorplan-view-${hash>>>0}`;
-    if(this.viewStorageKey!==key){this.viewStorageKey=key;this.viewStates={};this.blindStates={};this.inspectorOpen=false;try{const saved=JSON.parse(localStorage.getItem(key));if(saved){if(['clean','3d','pokemon','zelda','sims'].includes(saved.mode))this.viewMode=saved.mode;this.floorId=saved.floorId;this.building=!!saved.building;this.exterior=!!saved.exterior;this.hideOverlays=!!saved.hideOverlays;this.inspectorOpen=!!saved.inspectorOpen;this.displayPreferences=saved.display;this.isolatedRooms=saved.isolatedRooms || {};this.viewStates=saved.cameras || {};this.blindStates=saved.blinds || {};}}catch{}}
+    if(this.viewStorageKey!==key){this.viewStorageKey=key;this.viewStates={};this.blindStates={};this.inspectorOpen=false;this.follow=false;try{const saved=JSON.parse(localStorage.getItem(key));if(saved){if(['clean','3d','pokemon','zelda','sims'].includes(saved.mode))this.viewMode=saved.mode;this.floorId=saved.floorId;this.building=!!saved.building;this.exterior=!!saved.exterior;this.hideOverlays=!!saved.hideOverlays;this.inspectorOpen=!!saved.inspectorOpen;this.displayPreferences=saved.display;this.isolatedRooms=saved.isolatedRooms || {};this.viewStates=saved.cameras || {};this.blindStates=saved.blinds || {};}}catch{}}
     if (!this.config.floors.some(f => f.id === this.floorId)) this.floorId = this.config.floors[0]?.id;
     const configured = new Set([...this.config.floors.flatMap(f => [...f.entities.map(e => e.entity), ...f.rooms.flatMap(r => r.lights), ...(f.objects || []).map(o=>o.light_entity).filter(Boolean)]), ...this.config.groups.flatMap(g => g.entities)]);
     this.selected = new Set([...this.selected].filter(id => configured.has(id))); this.render();
@@ -108,9 +108,10 @@ export class FloorplanCard extends HTMLElement {
     const header = element('div', {className:'card-header stage-style'});
     const tabs = element('div', { className: 'row floor-tabs', role: 'group', 'aria-label': 'Floors' });
     const mode=this.viewMode || this.config.appearance?.mode || 'clean';
+    if(!['3d','sims'].includes(mode))this.follow=false;
     const exterior=['3d','sims'].includes(mode)&&this.exterior?this.config.exterior:undefined;
     const allFloors=['3d','sims'].includes(mode)&&this.building&&!exterior&&!this.isolatedRooms?.[this.floorId];
-    this.config.floors.forEach(floor => tabs.append(iconButton(floor.name || floor.id,'floor', () => { this.floorId = floor.id; this.exterior=false; this.building=false; if(this.isolatedRooms)this.isolatedRooms[floor.id]=''; this.render(); }, { 'aria-pressed': String(floor.id === this.floorId&&!exterior&&!allFloors) })));
+    this.config.floors.forEach(floor => tabs.append(iconButton(floor.name || floor.id,'floor', () => { this.floorId = floor.id; this.exterior=false; this.building=false; this.follow=false; if(this.isolatedRooms)this.isolatedRooms[floor.id]=''; this.render(); }, { 'aria-pressed': String(floor.id === this.floorId&&!exterior&&!allFloors) })));
     const weather={...this.config.weather,entity:weatherEntity(this.config)};
     const daylight=daylightLevel(states,new Date(),this._hass?.config,weather.entity);this.planSlot.style.setProperty('--fp-stage-background',stageColour(mode,daylight));
     const modes=element('div',{className:'row view-modes',role:'group','aria-label':'Render style'});
@@ -122,18 +123,19 @@ export class FloorplanCard extends HTMLElement {
       const isolation=element('select',{'aria-label':'Isolate room',title:'Isolate a room for an unobstructed view',className:'room-isolation',onchange:e=>{this.isolatedRooms[this.floorId]=e.target.value;this.building=false;this.render();}},[element('option',{value:'',text:'Whole floor',selected:!this.isolatedRooms[this.floorId]}),...(activeFloor?.rooms||[]).map(r=>element('option',{value:r.id,text:r.name||r.id,selected:this.isolatedRooms[this.floorId]===r.id}))]);if(!allFloors)modes.append(isolation);
     }
     if(this.config.floors.length)header.append(modes);
-    if(this.config.floors.length>1)tabs.append(iconButton('All','floor',()=>{if(this.isolatedRooms)this.isolatedRooms[this.floorId]='';this.building=true;this.exterior=false;if(!['3d','sims'].includes(mode))this.viewMode='3d';this.render();},{'aria-pressed':String(!!allFloors),title:'View all floors'}));
-    if(this.config.exterior?.items.length)tabs.append(iconButton('Exterior','cube',()=>{this.exterior=true;this.building=false;if(!['3d','sims'].includes(mode))this.viewMode='3d';this.render();},{'aria-pressed':String(!!exterior)}));
+    if(this.config.exterior?.items.length)tabs.append(iconButton('External','cube',()=>{this.exterior=true;this.building=false;this.follow=false;if(!['3d','sims'].includes(mode))this.viewMode='3d';this.render();},{'aria-pressed':String(!!exterior)}));
+    if(this.config.floors.length>1)tabs.append(iconButton('All','floor',()=>{if(this.isolatedRooms)this.isolatedRooms[this.floorId]='';this.building=true;this.exterior=false;this.follow=false;if(!['3d','sims'].includes(mode))this.viewMode='3d';this.render();},{'aria-pressed':String(!!allFloors)}));
     const stageTools=element('div',{className:'stage-tools'},[tabs,iconButton(this.hideOverlays?'Show overlays':'Hide overlays','eye',()=>{this.hideOverlays=!this.hideOverlays;this.render();},{'aria-pressed':String(!!this.hideOverlays),title:this.hideOverlays?'Show overlays':'Hide overlays',className:'overlay-toggle'})]);
     stageTools.append(iconButton(this.inspectorOpen?'Hide lighting':'Lighting','bulb',()=>{this.inspectorOpen=!this.inspectorOpen;this.render();},{'aria-expanded':String(!!this.inspectorOpen),'aria-controls':'lighting-panel',title:this.inspectorOpen?'Hide lighting':'Lighting',className:'inspector-toggle'}));
+    stageTools.append(iconButton(this.follow?'Stop Follow mode':'Follow active rooms','presence',()=>{this.follow=!this.follow;if(this.follow){this.exterior=false;this.building=true;if(this.isolatedRooms)this.isolatedRooms[this.floorId]='';if(!['3d','sims'].includes(mode))this.viewMode='3d';}this.render();},{'aria-pressed':String(!!this.follow),className:'follow-toggle'}));
     const settings=element('details',{className:'display-settings',open:!!this.displayOpen},[element('summary',{'aria-label':'Display settings',title:'Display settings'},[icon('sliders')]),element('div',{className:'display-popover'},[element('h3',{text:'Display settings'}),element('p',{className:'display-description',text:'Choose what stays visible on your floorplan.'}),...displayFields(display,next=>{this.displayPreferences=next;this.displayOpen=true;this.render();}),element('p',{className:'muted',text:'Saved for this browser. Set shared defaults in the card editor.'})])]);
     settings.addEventListener('toggle',()=>{if(settings.isConnected)this.displayOpen=settings.open;});
     // Icon-only controls must not retain an anonymous text flex item and its gap.
-    for(const control of stageTools.querySelectorAll('.overlay-toggle,.inspector-toggle')){
+    for(const control of stageTools.querySelectorAll('.overlay-toggle,.inspector-toggle,.follow-toggle')){
       control.setAttribute('aria-label',control.textContent.trim());
       control.replaceChildren(control.querySelector('svg'));
     }
-    const utilities=element('div',{className:'stage-utilities',role:'group','aria-label':'Floorplan tools'},[stageTools.querySelector('.overlay-toggle'),stageTools.querySelector('.inspector-toggle'),settings]);
+    const utilities=element('div',{className:'stage-utilities',role:'group','aria-label':'Floorplan tools'},[stageTools.querySelector('.follow-toggle'),stageTools.querySelector('.overlay-toggle'),stageTools.querySelector('.inspector-toggle'),settings]);
     stageTools.append(utilities,header);
     this.headerSlot.replaceChildren();
     this.card.classList.toggle('inspector-collapsed',!this.inspectorOpen);
@@ -150,6 +152,7 @@ export class FloorplanCard extends HTMLElement {
       const markers = [];
       const markerFloors=this.building&&!isolatedRoom&&['3d','sims'].includes(mode)?this.config.floors:[floor];
       for(const floor of markerFloors) {
+      if(!this.follow){
       markers.push(...labelMarkers(floor,states,entityId=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId},bubbles:true,composed:true}))));
       floor.entities.forEach(item => {
         if(display.hide_cameras&&item.entity.startsWith('camera.'))return;
@@ -170,11 +173,12 @@ export class FloorplanCard extends HTMLElement {
         if(this.config.appearance?.labels)marker.append(element('span',{className:'marker-label',text:name}));
         markers.push({ node: marker, x: item.x, y: item.y, entity:item.entity, floorId:floor.id });
       });
+      }
       for(const room of floor.rooms || []) {
         const temperature=roomTemperature(room,states);
         const presence=roomState(room,states,floor);
         const environment=roomEnvironment(room,states);
-        if(!room.points?.length)continue;
+        if(!room.points?.length||this.follow&&!presence.occupied)continue;
         const centre=roomReadoutPoint(room,floor);
         const label=[temperature?`${room.name} temperature: ${temperature}`:room.name,environment.humidity?`Humidity: ${environment.humidity}`:'',presence.occupied?'Presence detected · 1+':'',environment.warning?'Air quality warning':''].filter(Boolean).join(' · ');
         const marker=button([temperature,environment.humidity].filter(Boolean).join(' · ')||room.name,()=>openRoom(this,floor.id,room.id),{className:`marker overlay-temperatures temperature-marker room-readout temp-${temperatureTone(room.temperature_entity,states[room.temperature_entity])}${presence.occupied?' occupied':''}${environment.warning?' air-warning':''}`,title:label,'aria-label':label,'data-room-id':room.id});
@@ -183,15 +187,15 @@ export class FloorplanCard extends HTMLElement {
         if(environment.warning)marker.append(element('span',{className:'room-readout-alert',text:'Air quality'}));
         markers.push({node:marker,x:centre[0],y:centre[1],floorId:floor.id});
       }
-      for(const radiator of (floor.objects || []).filter(item=>item.type==='radiator' && radiatorEntity(item,floor))) {
+      if(!this.follow)for(const radiator of (floor.objects || []).filter(item=>item.type==='radiator' && radiatorEntity(item,floor))) {
         const entityId=radiatorEntity(radiator,floor),state=heatingState(states[entityId]);
         const marker=button('♨',()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId},bubbles:true,composed:true})),{className:`marker overlay-heating radiator-control ${state==='heating'?'heating':''}`,title:`Radiator: ${state}`,'aria-label':`Radiator: ${state}`});
         markers.push({node:marker,x:radiator.x,y:radiator.y,floorId:floor.id});
       }
-      for(const object of floor.objects.filter(o=>o.type==='printer_3d'&&o.status_entity)){
+      if(!this.follow)for(const object of floor.objects.filter(o=>o.type==='printer_3d'&&o.status_entity)){
         const status=printerState(object,states),room=objectRoom(object,floor),node=button(status==='error'?'⚠ Printer error':status==='printing'?`Printing · ${sensorText(object.progress_entity,states)}`:'Printer',()=>room&&openRoom(this,floor.id,room.id),{className:`marker device-marker${status==='error'?' device-error':''}`,'aria-label':`Printer: ${status}`});markers.push({node,x:object.x,y:object.y,floorId:floor.id});
       }
-      for(const wall of floor.walls||[])for(const door of wall.openings||[])if(door.contact_entity){const status=doorState(door,states),node=button(`${status==='Open'?'▯':'▣'} ${doorDescription(door,states)}`,()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:door.lock_entity||door.contact_entity},bubbles:true,composed:true})),{className:'marker device-marker','aria-label':`${door.name||'Door'}: ${status}`});markers.push({node,x:wall.a[0]+(wall.b[0]-wall.a[0])*door.offset,y:wall.a[1]+(wall.b[1]-wall.a[1])*door.offset,floorId:floor.id});}
+      if(!this.follow)for(const wall of floor.walls||[])for(const door of wall.openings||[])if(door.contact_entity){const status=doorState(door,states),node=button(`${status==='Open'?'▯':'▣'} ${doorDescription(door,states)}`,()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:door.lock_entity||door.contact_entity},bubbles:true,composed:true})),{className:'marker device-marker','aria-label':`${door.name||'Door'}: ${status}`});markers.push({node,x:wall.a[0]+(wall.b[0]-wall.a[0])*door.offset,y:wall.a[1]+(wall.b[1]-wall.a[1])*door.offset,floorId:floor.id});}
       }
       const exteriorMarkers=(exterior?.items||[]).filter(item=>(item.camera_entity&&!display.hide_cameras)||item.contact_entity).map(item=>{
         const showCamera=item.camera_entity&&!display.hide_cameras;
@@ -200,7 +204,7 @@ export class FloorplanCard extends HTMLElement {
         if(item.contact_entity)node.append(element('small',{text:doorDescription(item,states)}));
         return {node,world:[item.x||0,(item.y||0)+(item.height||1),item.z||0]};
       });
-      const options={...this.config.appearance,exterior,isolatedRoom,hideLightFixtures:display.hide_light_fixtures,hideRadiators:display.hide_radiators,hideExtractionFans:display.hide_extraction_fans,idleRotation:display.idle_rotation,labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays?[]:exterior?exteriorMarkers:markers,daylight,building:!!this.building&&!isolatedRoom,allFloors:this.config.floors};
+      const options={...this.config.appearance,exterior,isolatedRoom,follow:!!this.follow,hideLightFixtures:display.hide_light_fixtures,hideRadiators:display.hide_radiators,hideExtractionFans:display.hide_extraction_fans,idleRotation:display.idle_rotation,labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays?[]:exterior?exteriorMarkers:markers,daylight,building:!!this.building&&!isolatedRoom,allFloors:this.config.floors};
       options.onLightClick=(floorId,id)=>this.activateLight(floorId,id);
       options.onEntityClick=entityId=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId},bubbles:true,composed:true}));
       options.weather=weather;
@@ -209,7 +213,7 @@ export class FloorplanCard extends HTMLElement {
       const baseView=this.viewStates[baseCameraKey] ||= {};options.viewState=this.viewStates[cameraKey] ||= {};
       for(const key of ['doors','portraits'])options.viewState[key]=baseView[key] ||= {};
       options.onViewChange=()=>this.saveView();
-      const key=JSON.stringify([floor,exterior,display.hide_light_fixtures,display.hide_radiators,display.hide_extraction_fans,this.config.appearance,mode,!!this.building,this.building?this.config.floors:null]);
+      const key=JSON.stringify([floor,exterior,display.hide_light_fixtures,display.hide_radiators,display.hide_extraction_fans,this.config.appearance,mode,!!this.building,!!this.follow,this.building?this.config.floors:null]);
       if(key!==this.planKey || !this.plan) {
         this.plan?.dispose?.();
         this.plan=(['3d','sims'].includes(mode)?render3D:renderPlan)(floor,states,options);this.planKey=key;
@@ -236,7 +240,7 @@ export class FloorplanCard extends HTMLElement {
         const controls=buttons.slice(start,end);controls.forEach(control=>control.removeAttribute('style'));
         return element('div',{className:'navigation-group',role:'group','aria-label':name},[element('span',{className:'navigation-caption',text:name}),element('div',{className:'navigation-buttons'},controls)]);
       }));
-      if(three){buttons[4].textContent='Reset';const walls=buttons.find(b=>b.getAttribute('aria-label')==='Toggle cutaway walls');if(walls)walls.textContent='Walls';}
+      if(three){buttons[4].textContent='Reset';const walls=buttons.find(b=>b.getAttribute('aria-label')==='Toggle cutaway walls');if(walls)walls.textContent='Cutaway';}
       this.planSlot.append(navigation);
     }
     const controls = element('section', { className: 'controls', 'aria-label': 'Light controls' });
