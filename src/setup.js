@@ -91,8 +91,8 @@ export function floorSetup(host,floor) {
     },{disabled:host.calibrationPoints?.length!==2}),button('Cancel calibration',()=>{host.calibrating=false;host.calibrationPoints=[];host.render();}));
   }
   root.append(scale);
-  const alignment=element('details',{},[element('summary',{text:'Align storeys in 3D'}),element('p',{className:'muted',text:'Match the same building corner or stairwell across floors. Elevation is the floor level above the building origin; All storeys adds a viewing gap between levels.'})]);
-  for(const [key,label,fallback,min,max] of [['elevation_m','Floor elevation (metres)',host.floorIndex*3,-20,100],['offset_x_m','Horizontal X offset (metres)',0,-100,100],['offset_z_m','Horizontal depth offset (metres)',0,-100,100]])alignment.append(field(label,element('input',{type:'number',min,max,step:.05,value:floor[key] ?? fallback,onchange:e=>{const value=Number(e.target.value);if(!Number.isFinite(value)||value<min||value>max){host.error=`${label} must be between ${min} and ${max}.`;host.render();return;}floor[key]=value;host.emit();}})));
+  const alignment=element('details',{},[element('summary',{text:'Align storeys in 3D'})]);
+  for(const [key,label,fallback,min,max] of [['elevation_m','Floor elevation (metres)',host.floorIndex*2.4,-20,100],['offset_x_m','Horizontal X offset (metres)',0,-100,100],['offset_z_m','Horizontal depth offset (metres)',0,-100,100]])alignment.append(field(label,element('input',{type:'number',min,max,step:.05,value:floor[key] ?? fallback,onchange:e=>{const value=Number(e.target.value);if(!Number.isFinite(value)||value<min||value>max){host.error=`${label} must be between ${min} and ${max}.`;host.render();return;}floor[key]=value;host.emit();}})));
   root.append(alignment);
   root.append(renderPlan(floor,host._hass?.states || {},{edit:true,draft:host.calibrating?host.calibrationPoints:[],onPoint:point=>{if(host.calibrating){host.calibrationPoints??=[];if(host.calibrationPoints.length===2)host.calibrationPoints=[];host.calibrationPoints.push(point);host.render();}}}));
   root.append(button('Remove floor',()=>{host.removingFloor=!host.removingFloor;host.render();}));

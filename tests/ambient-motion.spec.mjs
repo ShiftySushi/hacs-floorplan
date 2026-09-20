@@ -26,6 +26,7 @@ test('reduced motion suppresses decoration but honours explicit idle rotation',a
  await card.locator('.display-settings summary').click();await page.mouse.move(0,0);
  await expect.poll(async()=>Number(await card.locator('.plan').getAttribute('data-idle-angle')),{timeout:12000}).toBeGreaterThan(.001);
  await page.reload();
+ await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
  // Navigation completes before the restored WebGL view has painted. Start the
  // idle deadline after first paint and its visibility notification, especially
  // with software rendering on hosted runners.

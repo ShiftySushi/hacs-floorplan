@@ -17,7 +17,7 @@ import { element, button } from './dom.js';
 import { floorDimensions } from './scene.js';
 import { roomLightSources, lightAppearance } from './illumination.js';
 import { heatingState } from './heating.js';
-import {radiatorEntity,doorState} from './live-data.js';
+import {radiatorEntity,doorState,objectRoom} from './live-data.js';
 import {updatePrinter3D} from './printers3d.js';
 import { blendAppearance, panelFrame } from './light-animation.js';
 import { daylightLevel } from './daylight.js';
@@ -36,8 +36,29 @@ export function wallSections(length, height, openings = []) {
   return result;
 }
 
-export function storeyPlacement(floor,index,exploded=true) {
-  return {x:floor.offset_x_m ?? 0,z:floor.offset_z_m ?? 0,y:(floor.elevation_m ?? index*3)+(exploded?index*3:0)};
+export function connectedStoreyPlacements(floors) {
+  let nextElevation=0;
+  return floors.map(floor=>{
+    const y=floor.elevation_m ?? nextElevation;
+    nextElevation=y+(Math.max(0,...(floor.walls || []).map(wall=>wall.height || 0),...(floor.objects || []).filter(object=>object.type==='stairs').map(object=>object.height || 0))||3);
+    return {x:floor.offset_x_m ?? 0,y,z:floor.offset_z_m ?? 0};
+  });
+}
+
+function pointInPolygon(x,y,points=[]) {
+  let hit=false;
+  for(let i=0,j=points.length-1;i<points.length;j=i++){
+    const a=points[i],b=points[j];
+    if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])hit=!hit;
+  }
+  return hit;
+}
+
+export function isExteriorWall(wall,floor) {
+  const rooms=floor.rooms || [],dimensions=floorDimensions(floor),dx=(wall.b[0]-wall.a[0])*dimensions.width/100,dz=(wall.b[1]-wall.a[1])*dimensions.depth/100,length=Math.hypot(dx,dz);
+  if(!length)return true;
+  const x=(wall.a[0]+wall.b[0])/2,y=(wall.a[1]+wall.b[1])/2,nx=-dz/length*.18/dimensions.width*100,nz=dx/length*.18/dimensions.depth*100;
+  return [-1,1].some(side=>!rooms.some(room=>pointInPolygon(x+nx*side,y+nz*side,room.points)));
 }
 
 /** Small shared endpoint caps close angled wall joins without extending any opening. */
@@ -84,7 +105,7 @@ export function render3D(floor, states, options = {}) {
   const gpuLights=selectSceneLights(floors,floor.id,options.quality);
   const assignedIds=[...new Set(floors.flatMap(f=>[...(f.entities || []).filter(e=>e.entity.startsWith('light.')).map(e=>e.entity),...(f.objects || []).map(o=>o.light_entity).filter(Boolean),...(f.rooms || []).flatMap(r=>r.lights || [])]))];
   const sourceFor=(f,id)=>roomLightSources(f,(f.rooms || []).find(r=>r.lights?.includes(id)) || {lights:[id],points:[[0,0],[100,0],[100,100],[0,100]]}).find(source=>source.id===id);
-  const placements=floors.map((f,i)=>floors.length>1?storeyPlacement(f,i):{x:0,y:0,z:0});
+  const placements=floors.length>1?connectedStoreyPlacements(floors):[{x:0,y:0,z:0}];
   const centreY=options.exterior?options.exterior.height_m/3:(Math.min(...placements.map(p=>p.y))+Math.max(...placements.map(p=>p.y)))/2;
   const {width,depth}=floorDimensions(floor), span=options.exterior?Math.max(options.exterior.width_m,options.exterior.depth_m,options.exterior.height_m):Math.max(...floors.map((f,i)=>{const d=floorDimensions(f);return Math.max(d.width+Math.abs(placements[i].x)*2,d.depth+Math.abs(placements[i].z)*2);}),centreY*2+4);
   const markerSpaces=new Map(),artworks=[],presenceModels=[];
@@ -127,11 +148,13 @@ export function render3D(floor, states, options = {}) {
   const heatCanvas=document.createElement('canvas');heatCanvas.width=heatCanvas.height=64;const heatInk=heatCanvas.getContext('2d'),heatGradient=heatInk.createRadialGradient(32,32,0,32,32,32);heatGradient.addColorStop(0,'rgba(255,64,30,.7)');heatGradient.addColorStop(.45,'rgba(255,50,20,.25)');heatGradient.addColorStop(1,'rgba(255,40,10,0)');heatInk.fillStyle=heatGradient;heatInk.fillRect(0,0,64,64);textures.heat=new THREE.CanvasTexture(heatCanvas);textures.heat.colorSpace=THREE.SRGBColorSpace;
   function material(colour) {return new THREE.MeshStandardMaterial({color:colour,roughness:.88});}
   function box(w,h,d,x,y,z,colour,parent=world) {const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material(colour));mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;parent.add(mesh);return mesh;}
+  const inside=pointInPolygon;
   function buildStorey(floor,index) {
   const root=world,storey=new THREE.Group();root.add(storey);
   const {width,depth}=floorDimensions(floor),placement=placements[index];
   storey.position.set(placement.x,placement.y,placement.z);storey.rotation.y=-(floor.rotation || 0)*Math.PI/180;
   const localWorld=storey;
+  const content=new Map((floor.rooms || []).map(room=>{const group=new THREE.Group();localWorld.add(group);return [room.id,group];})),wallMeta=new Map((floor.walls || []).map(wall=>[wall,isExteriorWall(wall,floor)]));
   if(sims&&index===0&&!options.isolatedRoom)sims.lawn(localWorld,width,depth);
   const position=(p,y=0)=>new THREE.Vector3((p[0]/100-.5)*width,y,(p[1]/100-.5)*depth);
   markerSpaces.set(floor.id,{floor,position,group:storey});
@@ -148,12 +171,12 @@ export function render3D(floor, states, options = {}) {
     const edges=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:'#9c8d79'}));mesh.add(edges);
     const centre=room.points.reduce((a,p)=>[a[0]+p[0]/room.points.length,a[1]+p[1]/room.points.length],[0,0]);
     const presence=sims?.presence(localWorld,position(centre,Math.max(2.4,...(floor.walls || []).map(w=>w.height || 2.4))+.35));
-    roomMeshes.push({room,floor,mesh,edges,presence,base:new THREE.Color(colour)});
+    const state={room,floor,mesh,edges,presence,base:new THREE.Color(colour),group:content.get(room.id),value:options.follow?0:1};roomMeshes.push(state);state.group.userData.follow=state;
   }
     for(const marker of (floor.entities || []).filter(e=>e.entity.startsWith('light.'))){
       if((floor.objects || []).some(o=>o.light_entity===marker.entity))continue;
       const source=sourceFor(floor,marker.entity),height=source?.height ?? (marker.fixture==='pendant'?2.1:2.4),spot=marker.fixture!=='pendant';
-      const fitting=new THREE.Group();fitting.position.copy(position([marker.x,marker.y],height));localWorld.add(fitting);
+      const room=objectRoom(marker,floor),parent=content.get(room?.id)||localWorld,fitting=new THREE.Group();fitting.position.copy(position([marker.x,marker.y],height));parent.add(fitting);
       fitting.userData.lightTarget={floorId:floor.id,id:marker.entity};
       const shade=new THREE.Mesh(new THREE.CylinderGeometry(spot?.09:.1,spot?.09:.16,spot?.055:.16,16),material('#e8e6de'));shade.position.y=spot?0:.07;fitting.add(shade);
       if(!spot){const ceiling=Math.max(2.4,...(floor.walls || []).map(w=>w.height || 2.4)),length=Math.max(.03,ceiling-height-.15);const cord=new THREE.Mesh(new THREE.CylinderGeometry(.009,.009,length,6),material('#485052'));cord.position.y=length/2+.15;fitting.add(cord);}
@@ -163,47 +186,48 @@ export function render3D(floor, states, options = {}) {
       const source=sourceFor(floor,id),radius=source?.radius || 2,height=Math.max(.02,source?.height ?? 2.1);
       const accent=(floor.objects || []).some(o=>o.light_entity===id),glow=accent?new THREE.PointLight('#ffe5b0',0,radius*2,2):new THREE.SpotLight('#ffe5b0',0,height+radius*2,Math.atan(radius/height),.75,2);glow.position.copy(position(point,height));if(glow.target)glow.target.position.copy(position(point,.01));
       glow.castShadow=lightMeshes.length<(options.quality==='high'?6:options.quality==='low'?0:3);const shadowSize=options.quality==='high'?512:256;glow.shadow.mapSize.set(shadowSize,shadowSize);glow.shadow.normalBias=.005;glow.shadow.camera.near=.02;
-      localWorld.add(glow);if(glow.target)localWorld.add(glow.target);lightMeshes.push({id,glow,accent});
+      const room=objectRoom({x:point[0],y:point[1]},floor),parent=content.get(room?.id)||localWorld;parent.add(glow);if(glow.target)parent.add(glow.target);lightMeshes.push({id,glow,accent,follow:parent.userData.follow});
     }
   if(!floor.rooms?.length)box(width,.1,depth,0,-.05,0,'#cbb89a',localWorld);
   for(const wall of floor.walls || []) {
     if(!wall.a || !wall.b)continue;const a=position(wall.a),b=position(wall.b),length=a.distanceTo(b);if(length<.01)continue;
     const group=new THREE.Group();group.position.copy(a);group.rotation.y=-Math.atan2(b.z-a.z,b.x-a.x);localWorld.add(group);
     const height=wall.height || 2.4;
-    const pieces=[];
+    const externalWall=wallMeta.get(wall),pieces=[];
     for(const r of wallSections(length,height,wall.openings))pieces.push(box(r.width,r.height,wall.thickness || .15,r.x,r.y,0,sims?.wallColour || '#ece8dc',group));
     pieces.push(...wardrobeDoors(group,wall,length));
     for(const opening of wall.openings || []){
       const key=JSON.stringify([floor.id,wall.sourceWallId||wall.id,opening.id]);options.viewState ||= {};options.viewState.doors ||= {};
       const framed=openingFrame(group,{...opening,frame:opening.frame||(opening.contact_entity?'solid':undefined)},length,{open:options.viewState.doors[key],onChange:open=>{if(!opening.contact_entity){options.viewState.doors[key]=open;options.onViewChange?.();}schedule();}});pieces.push(...framed);
-      if(framed.door){framed.door.binding=opening;doors.push(framed.door);windows.push({floor,room:windowRoom(opening,wall,floor),area:opening.width*opening.height,get transmission(){return framed.door.transmission;}});}
+      if(framed.door){Object.assign(framed.door,{binding:opening,externalWall});doors.push(framed.door);windows.push({floor,room:windowRoom(opening,wall,floor),area:opening.width*opening.height,get transmission(){return framed.door.transmission;}});}
       if(framed.door&&opening.outside_lights?.length){const glow=new THREE.PointLight('#ffe7be',0,3,2);glow.position.set(length*opening.offset,1.1,0);group.add(glow);framed.door.outside={glow,ids:opening.outside_lights};}
     }
     // A doorway/window splits geometry, not the wall's cutaway decision.
-    for(const mesh of pieces)mesh.userData.cutawayAnchor={group,point:new THREE.Vector3(length/2,height/2,0)};
+    for(const mesh of pieces)Object.assign(mesh.userData,{cutawayAnchor:{group,point:new THREE.Vector3(length/2,height/2,0)},externalWall});
     wallMeshes.push(...pieces);
     for(const opening of wall.openings || [])if(opening.type==='window'){
       const key=JSON.stringify([floor.id,wall.sourceWallId||wall.id,opening.id]);options.blindStates ||= {};
       const blind=windowBlinds(group,opening,length,wall,floor,{closed:options.blindStates[key]===true,onChange:closed=>{options.blindStates[key]=closed;options.onViewChange?.();}});
-      if(blind)blinds.push(blind);windows.push({floor,room:blind?.room || windowRoom(opening,wall,floor),area:(opening.width || .9)*(opening.height || 1.2),get value(){return blind?.value || 0;}});
+      if(blind){blind.externalWall=externalWall;blinds.push(blind);}windows.push({floor,room:blind?.room || windowRoom(opening,wall,floor),area:(opening.width || .9)*(opening.height || 1.2),get value(){return blind?.value || 0;}});
     }
     // Low skirting defines the floor perimeter even when tall walls are cut away.
-    for(const r of wallSections(length,.09,(wall.openings || []).filter(o=>o.type==='door')))skirtings.push(box(r.width,r.height,(wall.thickness || .15)+.025,r.x,r.y,0,'#fdfbf2',group));
+    for(const r of wallSections(length,.09,(wall.openings || []).filter(o=>o.type==='door'))){const mesh=box(r.width,r.height,(wall.thickness || .15)+.025,r.x,r.y,0,'#fdfbf2',group);mesh.userData.externalWall=externalWall;skirtings.push(mesh);}
   }
-  for(const mesh of ceilingMeshes(floor,position)){localWorld.add(mesh);wallMeshes.push(mesh);}
+  for(const mesh of ceilingMeshes(floor,position)){mesh.userData.externalWall=true;localWorld.add(mesh);wallMeshes.push(mesh);}
   for(const rooflight of floor.ceiling_slopes || [])if(rooflight.type==='rooflight'){
     const points=rooflight.vertices,x=points.reduce((s,p)=>s+p[0],0)/4,y=points.reduce((s,p)=>s+p[1],0)/4,room=(floor.rooms||[]).find(r=>inside(x,y,r.points));
     const [a,b,,d]=points.map(([x,y,h])=>position([x,y],h)),right=d.clone().sub(a).normalize(),up=a.clone().sub(b).normalize(),normal=right.clone().cross(up),holder=new THREE.Group();
     holder.position.copy(b).addScaledVector(normal,.025);holder.setRotationFromMatrix(new THREE.Matrix4().makeBasis(right,up,normal));localWorld.add(holder);
     const key=JSON.stringify([floor.id,'rooflight',rooflight.id]);options.blindStates ||= {};
     const blind=windowBlinds(holder,{width:a.distanceTo(d),height:a.distanceTo(b),sill:0,sliding:true,blinds:rooflight.blinds},a.distanceTo(d),{a:[x,y],b:[x,y]},floor,{closed:options.blindStates[key]===true,onChange:closed=>{options.blindStates[key]=closed;options.onViewChange?.();}});
-    if(blind){blind.room=room;blinds.push(blind);}
+    if(blind){blind.room=room;blind.externalWall=true;blinds.push(blind);}
     windows.push({floor,room,area:a.distanceTo(d)*a.distanceTo(b),get value(){return blind?.value||0;}});
   }
   for(const join of wallJoins(floor.walls || [],width,depth)){
-    const mesh=new THREE.Mesh(new THREE.CylinderGeometry(join.radius,join.radius,join.height,16),material(sims?.wallColour || '#ece8dc'));mesh.position.set(join.x,join.height/2,join.z);mesh.castShadow=true;mesh.receiveShadow=true;localWorld.add(mesh);wallMeshes.push(mesh);
+    const joined=(floor.walls || []).filter(wall=>[wall.a,wall.b].some(point=>Math.hypot((point[0]/100-.5)*width-join.x,(point[1]/100-.5)*depth-join.z)<.025));
+    const mesh=new THREE.Mesh(new THREE.CylinderGeometry(join.radius,join.radius,join.height,16),material(sims?.wallColour || '#ece8dc'));mesh.userData.externalWall=joined.length>0&&joined.every(wall=>wallMeta.get(wall));mesh.position.set(join.x,join.height/2,join.z);mesh.castShadow=true;mesh.receiveShadow=true;localWorld.add(mesh);wallMeshes.push(mesh);
   }
-  for(const object of floor.objects || []) {const model=(sims?kenneyFurniture(object):null) || furniture3D(object);model.position.copy(position([object.x,object.y],.025+(object.elevation_m || 0)));localWorld.add(model);
+  for(const object of floor.objects || []) {const model=(sims?kenneyFurniture(object):null) || furniture3D(object),room=objectRoom(object,floor);model.position.copy(position([object.x,object.y],.025+(object.elevation_m || 0)));(content.get(room?.id)||localWorld).add(model);
     if(isPresenceSensor(object))presenceModels.push({object,model});
     sims?.furniture(model);
     if(options.hideLightFixtures&&['lamp','wall_light','nanoleaf_panels','tv_lightstrip'].includes(object.type))model.visible=false;
@@ -240,15 +264,15 @@ export function render3D(floor, states, options = {}) {
       const room=node.material.userData.room || rooms.find(r=>inside(x*.998+.1,y*.998+.1,r.points));node.material.userData.blinds=room?roomDaylightWindows(relevant,space.floor,room):undefined;
     });
   }
-  function inside(x,y,points=[]){let hit=false;for(let i=0,j=points.length-1;i<points.length;j=i++){const a=points[i],b=points[j];if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])hit=!hit;}return hit;}
   const wallDaylights=[...markerSpaces.values()].map(space=>wallDaylight(space,windows,[...wallMeshes,...skirtings]));
   const disposeWallOcclusion=wallOcclusion(scene,wallMeshes.filter(m=>!m.userData.glazing),camera,ambient);
   const toolbar=element('div',{className:'three-toolbar'});toolbar.style.cssText='position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:5px;padding:5px;border-radius:14px;background:var(--card-background-color,#fff);box-shadow:0 2px 12px #0002;z-index:5';
   function control(text,label,action) {return button(text,()=>{manualOrbit();action();},{'aria-label':label,title:label});}
-  let cutaway=options.viewState?.cutaway ?? true,hideWalls=!!options.viewState?.hideWalls;
-  let lastWallFrame=0;
+  let cutaway=options.viewState?.cutaway ?? true,hideWalls=options.viewState?.hideWalls ?? !!options.building;
+  let lastWallFrame=0,lastFollowFrame=performance.now();
   const cameraPose={azimuth,elevation,zoom};let lastCamera=performance.now();
-  toolbar.append(control('↶','Orbit left',()=>{azimuth-=.25;schedule();}),control('↷','Orbit right',()=>{azimuth+=.25;schedule();}),control('−','Zoom out',()=>{zoom=Math.max(.5,zoom/1.2);schedule();}),control('+','Zoom in',()=>{zoom=Math.min(3,zoom*1.2);schedule();}),control('⌂','Reset 3D view',()=>{({azimuth,elevation,zoom}=home);schedule();}),control('▱','Toggle cutaway walls',()=>{cutaway=!cutaway;schedule();}));const hideWallButton=control('Hide all walls','Hide all walls',()=>{hideWalls=!hideWalls;schedule();});toolbar.append(hideWallButton);for(const art of artworks)toolbar.append(control('▣','Rotate artwork',()=>art.toggle()));plan.append(toolbar);
+  toolbar.append(control('↶','Orbit left',()=>{azimuth-=.25;schedule();}),control('↷','Orbit right',()=>{azimuth+=.25;schedule();}),control('−','Zoom out',()=>{zoom=Math.max(.5,zoom/1.2);schedule();}),control('+','Zoom in',()=>{zoom=Math.min(3,zoom*1.2);schedule();}),control('⌂','Reset 3D view',()=>{({azimuth,elevation,zoom}=home);schedule();}),control('▱','Toggle cutaway walls',()=>{cutaway=!cutaway;schedule();}));
+  const hideWallButton=control(options.building?'Show exterior walls':'Hide all walls',options.building?'Show exterior walls':'Hide all walls',()=>{hideWalls=!hideWalls;schedule();});toolbar.append(hideWallButton);for(const art of artworks)toolbar.append(control('▣','Rotate artwork',()=>art.toggle()));plan.append(toolbar);
   const blindsButton=control('Close all blinds','Close all blinds',()=>{const close=blinds.some(b=>!b.closed);for(const blind of blinds)blind.setClosed(close);schedule();});
   if(options.exterior)for(const label of ['Toggle cutaway walls','Hide all walls'])toolbar.querySelector(`[aria-label="${label}"]`)?.remove();
   if(blinds.length)toolbar.append(blindsButton);
@@ -285,18 +309,20 @@ export function render3D(floor, states, options = {}) {
     camera.left=cx-extent*aspect;camera.right=cx+extent*aspect;camera.top=cy+extent;camera.bottom=cy-extent;camera.updateProjectionMatrix();
     plan.dataset.fittedBounds=JSON.stringify(corners.map(p=>p.clone().applyMatrix4(camera.projectionMatrix)).map(p=>[p.x,p.y]));
     // Foreground walls become low partitions; back walls retain room definition.
-    let wallsAnimating=false;
+    let wallsAnimating=false;const followBlend=reducedMotion?1:1-Math.exp(-(now-lastFollowFrame)/220);lastFollowFrame=now;
+    for(const entry of roomMeshes){const {room,floor,mesh,edges,group}=entry,target=options.follow&&roomPresence(room,floor).some(id=>states[id]?.state==='on')?1:options.follow?0:1;entry.value=Math.abs(entry.value-target)<.004?target:entry.value+(target-entry.value)*followBlend;wallsAnimating ||= entry.value!==target;mesh.material.opacity=entry.value;mesh.material.transparent=entry.value<1;mesh.material.depthWrite=entry.value>.98;edges.material.opacity=entry.value;edges.material.transparent=entry.value<1;edges.visible=entry.value>.01;group.scale.setScalar(Math.max(.001,entry.value));}
     const wallBlend=lastWallFrame?1-Math.exp(-(orbitTime-lastWallFrame)/140):1;lastWallFrame=orbitTime;
     for(const mesh of wallMeshes){
-      const anchor=mesh.userData.cutawayAnchor,point=anchor?anchor.point.clone().applyMatrix4(anchor.group.matrixWorld):mesh.getWorldPosition(new THREE.Vector3()),front=point.x*camera.position.x+point.z*camera.position.z>span*.7,target=(hideWalls?0:cutaway&&mesh.userData.ceiling?.32:cutaway&&front&&(anchor||mesh.position.y>.35)?.08:1)*(mesh.userData.glazing?.12:1);
+      const anchor=mesh.userData.cutawayAnchor,point=anchor?anchor.point.clone().applyMatrix4(anchor.group.matrixWorld):mesh.getWorldPosition(new THREE.Vector3()),front=point.x*camera.position.x+point.z*camera.position.z>span*.7,target=(hideWalls&&(!options.building||mesh.userData.externalWall)?0:cutaway&&mesh.userData.ceiling?.32:cutaway&&front&&(anchor||mesh.position.y>.35)?.08:1)*(mesh.userData.glazing?.12:1);
       const next=mesh.material.opacity+(target-mesh.material.opacity)*wallBlend;
       mesh.material.opacity=Math.abs(next-target)<.002?target:next;
       if(mesh.material.opacity!==target)wallsAnimating=true;
       const transparent=mesh.material.opacity<1;if(mesh.material.transparent!==transparent){mesh.material.transparent=transparent;mesh.material.needsUpdate=true;}mesh.material.depthWrite=!transparent;
     }
-    hideWallButton.textContent=hideWalls?'Show walls':'Hide all walls';hideWallButton.setAttribute('aria-label',hideWallButton.textContent);hideWallButton.setAttribute('aria-pressed',String(hideWalls));
-    for(const door of doors)door.setVisible(!hideWalls);
-    for(const mesh of skirtings)mesh.visible=!hideWalls;for(const blind of blinds)blind.hit.visible=!hideWalls;
+    const wallLabel=options.building?(hideWalls?'Show exterior walls':'Hide exterior walls'):(hideWalls?'Show walls':'Hide all walls');hideWallButton.textContent=options.building?'Exterior':'All walls';hideWallButton.title=wallLabel;hideWallButton.setAttribute('aria-label',wallLabel);hideWallButton.setAttribute('aria-pressed',String(hideWalls));
+    for(const door of doors)door.setVisible(!(hideWalls&&(!options.building||door.externalWall)));
+    for(const mesh of skirtings)mesh.visible=!(hideWalls&&(!options.building||mesh.userData.externalWall));
+    for(const blind of blinds)blind.hit.visible=!(hideWalls&&(!options.building||blind.externalWall));
     plan.dataset.wallOpacities=JSON.stringify(wallMeshes.map(mesh=>mesh.material.opacity));
     for(const marker of markers){const space=markerSpaces.get(marker.floorId || floor.id);if(!space&&!marker.world)continue;const height=marker.height ?? (marker.entity?.startsWith('light.')?sourceFor(space.floor,marker.entity)?.height ?? 2.1:.35);const p=(marker.world?new THREE.Vector3(...marker.world).applyMatrix4(world.matrixWorld):space.position([marker.x,marker.y],height).applyMatrix4(space.group.matrixWorld)).project(camera);marker.node.style.left=`${(p.x*.5+.5)*100}%`;marker.node.style.top=`${(-p.y*.5+.5)*100}%`;}
     for(const label of storeyLabels){label.node.hidden=!!options.hideOverlays;const p=label.point.clone().applyMatrix4(label.group.matrixWorld).project(camera);label.node.style.left=`${(p.x*.5+.5)*100}%`;label.node.style.top=`${(-p.y*.5+.5)*100}%`;}
@@ -342,7 +368,7 @@ export function render3D(floor, states, options = {}) {
     for(const {room,floor,mesh,edges,base,illumination,presence} of roomMeshes){mesh.material.color.copy(base).multiplyScalar(.85);
       const occupied=roomPresence(room,floor).some(id=>states[id]?.state==='on');if(presence)presence.visible=occupied&&!options.hideOverlays;
       edges.material.color.set(occupied?'#00b58b':'#9c8d79');}
-    for(const {id,glow,accent} of lightMeshes){const {level,colour}=lightAppearance(visualStates[id]);glow.color.setRGB(colour[0]/255,colour[1]/255,colour[2]/255,THREE.SRGBColorSpace);glow.intensity=level*(accent?4:32);}
+    for(const {id,glow,accent,follow} of lightMeshes){const {level,colour}=lightAppearance(visualStates[id]),visibility=follow?.value ?? (options.follow?0:1);glow.color.setRGB(colour[0]/255,colour[1]/255,colour[2]/255,THREE.SRGBColorSpace);glow.intensity=level*(accent?4:32)*visibility;}
     for(const {id,lens,shade,fitting} of fixtures){fitting.visible=!options.hideLightFixtures;const {level,colour}=lightAppearance(visualStates[id]);lens.material.emissive.setRGB(colour[0]/255,colour[1]/255,colour[2]/255,THREE.SRGBColorSpace);lens.material.emissiveIntensity=level*.8;shade.material.emissive.copy(lens.material.emissive);shade.material.emissiveIntensity=level*.2;}
     return animate;
   }

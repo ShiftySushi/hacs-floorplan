@@ -13,12 +13,13 @@ export const roomPanelStyles=`
 .room-readout{gap:4px;max-width:180px}.room-readout .occupant-count{font-size:11px;font-weight:700}.room-readout.air-warning{outline:2px solid #b66b00}.room-panel{position:absolute;right:14px;top:var(--fp-info-top,64px);z-index:5;width:min(340px,calc(100% - 28px));max-height:calc(100% - var(--fp-info-top,64px) - 78px);overflow:auto;overscroll-behavior:contain;background:var(--fp-surface,var(--card-background-color,#fff));color:var(--primary-text-color,#26343d);border:1px solid var(--fp-line,#cad5d0);border-radius:14px;padding:12px;box-shadow:0 5px 24px #172e3630;font-size:12px}.room-panel header{display:flex;align-items:center;justify-content:space-between;gap:8px}.room-panel h3,.room-panel h4{margin:4px 0}.room-panel section{border-top:1px solid #80958c35;margin-top:10px;padding-top:8px}.room-panel .room-actions{display:flex;flex-wrap:wrap;gap:5px}.room-panel button{min-height:44px;white-space:normal}.room-panel .room-status-line{display:flex;justify-content:space-between;gap:8px;margin:5px 0;overflow-wrap:anywhere}.room-panel .room-camera{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#17262b;border-radius:8px}.room-panel .device-error{padding:8px;border:2px solid #c33232;border-radius:6px;color:#b32121;font-weight:700}.room-panel .room-feedback{padding:6px 0;overflow-wrap:anywhere}.room-panel .room-air-warning{color:#9a5800;font-weight:600}.device-marker{min-width:44px;min-height:44px}.device-marker.device-error{border:2px solid #c33232;color:#b32121;background:#fff0ef}.room-panel .energy-device{padding:5px 0}.room-panel .energy-device small{display:block}.camera-unavailable{margin:6px 0;opacity:.75}@container(max-width:600px){.room-panel{right:8px;width:calc(100% - 16px);padding:10px}.room-panel h3{font-size:15px}}
 `;
 const more=(host,id)=>{if(id)host.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:id},bubbles:true,composed:true}));};
-export function cameraThumbnail(host,id,states){
+export function cameraThumbnail(host,id,states,live=false){
   const box=element('div'),s=states[id],path=s?.attributes?.entity_picture;
-  if(!knownState(s)||typeof path!=='string'||!path.startsWith('/api/camera_proxy/')||path.startsWith('//')){box.append(element('p',{className:'camera-unavailable',text:'Camera unavailable'}));return box;}
+  if(!knownState(s)||typeof path!=='string'||!path.startsWith('/api/camera_proxy/')){box.append(element('p',{className:'camera-unavailable',text:'Camera unavailable'}));return box;}
   const fresh=path+(path.includes('?')?'&':'?')+'_fp='+Math.floor(Date.now()/60000);
-  const img=element('img',{className:'room-camera',alt:s.attributes?.friendly_name||'Camera',src:host._hass?.hassUrl?host._hass.hassUrl(fresh):fresh});
-  img.addEventListener('error',()=>box.replaceChildren(element('p',{className:'camera-unavailable',text:'Camera unavailable'})),{once:true});
+  const url=p=>host._hass?.hassUrl?host._hass.hassUrl(p):p;
+  const img=element('img',{className:'room-camera',alt:s.attributes?.friendly_name||'Camera',src:url(live?path.replace('/camera_proxy/','/camera_proxy_stream/'):fresh)});
+  img.addEventListener('error',()=>{if(live){live=false;img.src=url(fresh);}else box.replaceChildren(element('p',{className:'camera-unavailable',text:'Camera unavailable'}));});
   const action=button('',()=>more(host,id),{'aria-label':`Open ${img.alt}`});action.style.cssText='padding:0;width:100%;border:0';action.append(img);box.append(action);return box;
 }
 export function deviceActions(id,state){
@@ -65,7 +66,7 @@ export function roomPanel(host,states){
     section.append(element('p',{className:status==='error'?'device-error':'',text:status==='error'?'⚠ Printer error — check the printer':`Printer: ${status}`}));
     for(const [key,label] of [['progress_entity','Progress'],['time_left_entity','Time left'],['bed_temperature_entity','Bed temperature'],['job_entity','Job']])if(object[key])line(label,sensorText(object[key],states),section);
     const strip=floor.objects.find(o=>o.pattern_entity&&objectRoom(o,floor)?.id===room.id);if(strip)line('Printer light display',sensorText(strip.pattern_entity,states),section);
-    if(object.camera_entity&&!display.hide_cameras)section.append(cameraThumbnail(host,object.camera_entity,states));section.append(button('Printer details',()=>more(host,object.status_entity)));panel.append(section);
+    if(object.camera_entity&&!display.hide_cameras)section.append(cameraThumbnail(host,object.camera_entity,states,true));section.append(button('Printer details',()=>more(host,object.status_entity)));panel.append(section);
   }
   for(const wall of floor.walls||[])for(const door of wall.openings||[])if(door.room_id===room.id&&door.contact_entity)line(door.name||'Door',doorDescription(door,states));
   if(room.energy?.length){const summary=energySummary(room.energy,states),section=element('section',{},[element('h4',{text:'Plug energy'}),element('p',{text:`${summary.power} now · ${summary.energy} today${summary.partial?' · Partial readings':''}`})]);
