@@ -100,8 +100,8 @@ export function render3D(floor, states, options = {}) {
   const scene=new THREE.Scene(), world=new THREE.Group();scene.add(world);
   const sims=options.mode==='sims'?createSimsStyle():null,home=sims?{azimuth:Math.PI/4,elevation:.615,zoom:1.25}:{azimuth:.4,elevation:1,zoom:1.35};
   if(options.exterior)Object.assign(home,{azimuth:-1,elevation:.75,zoom:1.35});
-  const floors=options.exterior?[]:options.building&&options.allFloors?.length?options.allFloors:[floor];
-  if(floors.length>1)home.zoom=.95;
+  const floors=(options.exterior||options.building)&&options.allFloors?.length?options.allFloors:[floor];
+  if(floors.length>1&&!options.exterior)home.zoom=.95;
   const gpuLights=selectSceneLights(floors,floor.id,options.quality);
   const assignedIds=[...new Set(floors.flatMap(f=>[...(f.entities || []).filter(e=>e.entity.startsWith('light.')).map(e=>e.entity),...(f.objects || []).map(o=>o.light_entity).filter(Boolean),...(f.rooms || []).flatMap(r=>r.lights || [])]))];
   const sourceFor=(f,id)=>roomLightSources(f,(f.rooms || []).find(r=>r.lights?.includes(id)) || {lights:[id],points:[[0,0],[100,0],[100,100],[0,100]]}).find(source=>source.id===id);
@@ -247,7 +247,7 @@ export function render3D(floor, states, options = {}) {
   floors.forEach(buildStorey);
   const exteriorScene=options.exterior?exterior3D(options.exterior,states):null;
   if(exteriorScene)world.add(exteriorScene);
-  const exteriorBounds=options.exterior?new THREE.Box3().setFromObject(world):null;
+  const exteriorBounds=exteriorScene?new THREE.Box3().setFromObject(exteriorScene):null;
   world.updateMatrixWorld(true);
   const weatherBounds=new THREE.Box3().setFromObject(world),shelters=[];
   if(options.exterior)world.traverse(node=>{if(node.isMesh){const b=new THREE.Box3().setFromObject(node);if(b.max.y>1.7&&(b.min.y>1.7||b.max.y-b.min.y>1.5))shelters.push(b);}});
@@ -268,13 +268,13 @@ export function render3D(floor, states, options = {}) {
   const disposeWallOcclusion=wallOcclusion(scene,wallMeshes.filter(m=>!m.userData.glazing),camera,ambient);
   const toolbar=element('div',{className:'three-toolbar'});toolbar.style.cssText='position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:5px;padding:5px;border-radius:14px;background:var(--card-background-color,#fff);box-shadow:0 2px 12px #0002;z-index:5';
   function control(text,label,action) {return button(text,()=>{manualOrbit();action();},{'aria-label':label,title:label});}
-  let cutaway=options.viewState?.cutaway ?? true,hideWalls=options.viewState?.hideWalls ?? !!options.building;
+  let cutaway=options.viewState?.cutaway ?? true,hideWalls=options.viewState?.hideWalls ?? (!!options.building&&!options.exterior);
   let lastWallFrame=0,lastFollowFrame=performance.now();
   const cameraPose={azimuth,elevation,zoom};let lastCamera=performance.now();
   toolbar.append(control('↶','Orbit left',()=>{azimuth-=.25;schedule();}),control('↷','Orbit right',()=>{azimuth+=.25;schedule();}),control('−','Zoom out',()=>{zoom=Math.max(.5,zoom/1.2);schedule();}),control('+','Zoom in',()=>{zoom=Math.min(3,zoom*1.2);schedule();}),control('⌂','Reset 3D view',()=>{({azimuth,elevation,zoom}=home);schedule();}),control('▱','Toggle cutaway walls',()=>{cutaway=!cutaway;schedule();}));
   const hideWallButton=control(options.building?'Show exterior walls':'Hide all walls',options.building?'Show exterior walls':'Hide all walls',()=>{hideWalls=!hideWalls;schedule();});toolbar.append(hideWallButton);for(const art of artworks)toolbar.append(control('▣','Rotate artwork',()=>art.toggle()));plan.append(toolbar);
   const blindsButton=control('Close all blinds','Close all blinds',()=>{const close=blinds.some(b=>!b.closed);for(const blind of blinds)blind.setClosed(close);schedule();});
-  if(options.exterior)for(const label of ['Toggle cutaway walls','Hide all walls'])toolbar.querySelector(`[aria-label="${label}"]`)?.remove();
+  if(options.exterior)toolbar.querySelector('[aria-label="Toggle cutaway walls"]')?.remove();
   if(blinds.length)toolbar.append(blindsButton);
   // Rotation is disabled by default and explicitly opted into via Display settings.
   // Honour that choice even when decorative animations are reduced by the OS.
@@ -298,8 +298,9 @@ export function render3D(floor, states, options = {}) {
     world.updateMatrixWorld(true);
     // Fit the projected building bounds to the actual canvas, at any orbit angle.
     const corners=[];
-    if(exteriorBounds)for(const x of [exteriorBounds.min.x,exteriorBounds.max.x])for(const y of [exteriorBounds.min.y,exteriorBounds.max.y])for(const z of [exteriorBounds.min.z,exteriorBounds.max.z])corners.push(new THREE.Vector3(x,y,z).applyMatrix4(camera.matrixWorldInverse));
+    if(exteriorBounds&&!hideWalls)for(const x of [exteriorBounds.min.x,exteriorBounds.max.x])for(const y of [exteriorBounds.min.y,exteriorBounds.max.y])for(const z of [exteriorBounds.min.z,exteriorBounds.max.z])corners.push(new THREE.Vector3(x,y,z).applyMatrix4(camera.matrixWorldInverse));
     for(const space of markerSpaces.values()){
+      if(options.exterior&&!hideWalls)continue;
       const top=Math.max(2.4,...(space.floor.walls || []).map(w=>w.height || 2.4));
       const region=options.isolatedRoom?space.floor.rooms[0].points:[[0,0],[100,100]],xs=region.map(p=>p[0]),ys=region.map(p=>p[1]);
       for(const x of [Math.min(...xs),Math.max(...xs)])for(const y of [Math.min(...ys),Math.max(...ys)])for(const height of [-.1,top])corners.push(space.position([x,y],height).applyMatrix4(space.group.matrixWorld).applyMatrix4(camera.matrixWorldInverse));
@@ -313,19 +314,20 @@ export function render3D(floor, states, options = {}) {
     for(const entry of roomMeshes){const {room,floor,mesh,edges,group}=entry,target=options.follow&&roomPresence(room,floor).some(id=>states[id]?.state==='on')?1:options.follow?0:1;entry.value=Math.abs(entry.value-target)<.004?target:entry.value+(target-entry.value)*followBlend;wallsAnimating ||= entry.value!==target;mesh.material.opacity=entry.value;mesh.material.transparent=entry.value<1;mesh.material.depthWrite=entry.value>.98;edges.material.opacity=entry.value;edges.material.transparent=entry.value<1;edges.visible=entry.value>.01;group.scale.setScalar(Math.max(.001,entry.value));}
     const wallBlend=lastWallFrame?1-Math.exp(-(orbitTime-lastWallFrame)/140):1;lastWallFrame=orbitTime;
     for(const mesh of wallMeshes){
-      const anchor=mesh.userData.cutawayAnchor,point=anchor?anchor.point.clone().applyMatrix4(anchor.group.matrixWorld):mesh.getWorldPosition(new THREE.Vector3()),front=point.x*camera.position.x+point.z*camera.position.z>span*.7,target=(hideWalls&&(!options.building||mesh.userData.externalWall)?0:cutaway&&mesh.userData.ceiling?.32:cutaway&&front&&(anchor||mesh.position.y>.35)?.08:1)*(mesh.userData.glazing?.12:1);
+      const anchor=mesh.userData.cutawayAnchor,point=anchor?anchor.point.clone().applyMatrix4(anchor.group.matrixWorld):mesh.getWorldPosition(new THREE.Vector3()),front=point.x*camera.position.x+point.z*camera.position.z>span*.7,target=(hideWalls&&(!(options.building||options.exterior)||mesh.userData.externalWall)?0:cutaway&&mesh.userData.ceiling?.32:cutaway&&front&&(anchor||mesh.position.y>.35)?.08:1)*(mesh.userData.glazing?.12:1);
       const next=mesh.material.opacity+(target-mesh.material.opacity)*wallBlend;
       mesh.material.opacity=Math.abs(next-target)<.002?target:next;
       if(mesh.material.opacity!==target)wallsAnimating=true;
       const transparent=mesh.material.opacity<1;if(mesh.material.transparent!==transparent){mesh.material.transparent=transparent;mesh.material.needsUpdate=true;}mesh.material.depthWrite=!transparent;
     }
-    const wallLabel=options.building?(hideWalls?'Show exterior walls':'Hide exterior walls'):(hideWalls?'Show walls':'Hide all walls');hideWallButton.textContent=options.building?'Exterior':'All walls';hideWallButton.title=wallLabel;hideWallButton.setAttribute('aria-label',wallLabel);hideWallButton.setAttribute('aria-pressed',String(hideWalls));
-    for(const door of doors)door.setVisible(!(hideWalls&&(!options.building||door.externalWall)));
-    for(const mesh of skirtings)mesh.visible=!(hideWalls&&(!options.building||mesh.userData.externalWall));
-    for(const blind of blinds)blind.hit.visible=!(hideWalls&&(!options.building||blind.externalWall));
+    const wallLabel=options.exterior?(hideWalls?'Show exterior':'Hide walls and roof'):options.building?(hideWalls?'Show exterior walls':'Hide exterior walls'):(hideWalls?'Show walls':'Hide all walls');hideWallButton.textContent=options.exterior?wallLabel:options.building?'Exterior':'All walls';hideWallButton.title=wallLabel;hideWallButton.setAttribute('aria-label',wallLabel);hideWallButton.setAttribute('aria-pressed',String(hideWalls));
+    if(exteriorScene){exteriorScene.visible=!hideWalls;for(const space of markerSpaces.values())space.group.visible=hideWalls;plan.dataset.interior=String(hideWalls);}
+    for(const door of doors)door.setVisible(!(hideWalls&&(!(options.building||options.exterior)||door.externalWall)));
+    for(const mesh of skirtings)mesh.visible=!(hideWalls&&(!(options.building||options.exterior)||mesh.userData.externalWall));
+    for(const blind of blinds)blind.hit.visible=!(hideWalls&&(!(options.building||options.exterior)||blind.externalWall));
     plan.dataset.wallOpacities=JSON.stringify(wallMeshes.map(mesh=>mesh.material.opacity));
-    for(const marker of markers){const space=markerSpaces.get(marker.floorId || floor.id);if(!space&&!marker.world)continue;const height=marker.height ?? (marker.entity?.startsWith('light.')?sourceFor(space.floor,marker.entity)?.height ?? 2.1:.35);const p=(marker.world?new THREE.Vector3(...marker.world).applyMatrix4(world.matrixWorld):space.position([marker.x,marker.y],height).applyMatrix4(space.group.matrixWorld)).project(camera);marker.node.style.left=`${(p.x*.5+.5)*100}%`;marker.node.style.top=`${(-p.y*.5+.5)*100}%`;}
-    for(const label of storeyLabels){label.node.hidden=!!options.hideOverlays;const p=label.point.clone().applyMatrix4(label.group.matrixWorld).project(camera);label.node.style.left=`${(p.x*.5+.5)*100}%`;label.node.style.top=`${(-p.y*.5+.5)*100}%`;}
+    for(const marker of markers){marker.node.hidden=!!options.exterior&&(marker.world?hideWalls:!hideWalls);const space=markerSpaces.get(marker.floorId || floor.id);if(!space&&!marker.world)continue;const height=marker.height ?? (marker.entity?.startsWith('light.')?sourceFor(space.floor,marker.entity)?.height ?? 2.1:.35);const p=(marker.world?new THREE.Vector3(...marker.world).applyMatrix4(world.matrixWorld):space.position([marker.x,marker.y],height).applyMatrix4(space.group.matrixWorld)).project(camera);marker.node.style.left=`${(p.x*.5+.5)*100}%`;marker.node.style.top=`${(-p.y*.5+.5)*100}%`;}
+    for(const label of storeyLabels){label.node.hidden=!!options.hideOverlays||!!options.exterior&&!hideWalls;const p=label.point.clone().applyMatrix4(label.group.matrixWorld).project(camera);label.node.style.left=`${(p.x*.5+.5)*100}%`;label.node.style.top=`${(-p.y*.5+.5)*100}%`;}
     const blindsMoving=[...blinds,...doors].map(b=>b.update(now,reducedMotion)).some(Boolean);
     const closed=blinds.filter(b=>b.closed).length;
     blindsButton.textContent=closed===blinds.length?'Open all blinds':'Close all blinds';
@@ -408,6 +410,7 @@ export function render3D(floor, states, options = {}) {
   const move=e=>{if(!pointer)return;pointer.dragged ||= Math.hypot(e.clientX-pointer.startX,e.clientY-pointer.startY)>=5;azimuth-=(e.clientX-pointer.x)*.008;elevation=Math.min(1.45,Math.max(.3,elevation+(e.clientY-pointer.y)*.006));pointer.x=e.clientX;pointer.y=e.clientY;schedule();};
   const up=e=>{if(pointer&&!pointer.dragged&&e.type==='pointerup'&&Math.hypot(e.clientX-pointer.startX,e.clientY-pointer.startY)<5){const rect=renderer.domElement.getBoundingClientRect(),x=(e.clientX-rect.left)/rect.width*2-1,y=1-(e.clientY-rect.top)/rect.height*2;
     const ray=new THREE.Raycaster();ray.setFromCamera({x,y},camera);const light=lightAt(ray)||nearbyLight(e.clientX,e.clientY,rect);if(light){options.onLightClick?.(light.floorId,light.id);pointer=null;return;}
+    if(options.exterior&&!hideWalls){pointer=null;return;}
     const hit=ray.intersectObjects(artworks.map(a=>a.model),true)[0],art=artworks.find(a=>hit&&a.model.children.includes(hit.object));if(art){art.toggle();pointer=null;return;}
     const screen=ray.intersectObjects(televisions.flatMap(tv=>tv.screens),false)[0],tv=televisions.find(tv=>screen&&tv.screens.includes(screen.object));
     if(tv&&tvIsOn(states[tv.object.media_entity])){
