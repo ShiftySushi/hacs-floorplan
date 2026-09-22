@@ -300,7 +300,7 @@ export class FloorplanCard extends HTMLElement {
     if (this.error) controls.append(element('p', { className: 'error', text: this.error, role: 'alert' }));
     controls.append(choices);
     const choicesScroll=this.controlsSlot.querySelector('.light-choices')?.scrollTop || 0;
-    updatePanel(this.controlsSlot,'.controls',controls);
+    this.controlsSlot.replaceChildren(controls);
     this.controlsSlot.querySelector('.light-choices').scrollTop=choicesScroll;
     this.saveView();
     restoreFocus();
