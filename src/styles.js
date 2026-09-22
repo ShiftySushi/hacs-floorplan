@@ -123,6 +123,8 @@ button:hover:not(:disabled){box-shadow:0 2px 8px #243d3215;background:var(--fp-s
 .stage-utilities .display-settings{position:static}
 .stage-utilities :is(.display-settings>summary,.overlay-toggle,.inspector-toggle,.follow-toggle){display:flex;align-items:center;justify-content:center;flex:none;width:36px;height:36px;min-height:36px;padding:8px;box-sizing:border-box;border:1px solid transparent;border-radius:8px;background:var(--fp-surface);color:var(--fp-accent)}
 .stage-utilities>.follow-toggle[aria-pressed=true]{color:#fff;background:var(--fp-accent);border-color:var(--fp-accent)}
+.floorplan-dashboard .stage-utilities>.follow-toggle{width:auto;gap:4px}
+.floorplan-dashboard .marker[hidden]{display:none!important}
 .display-settings>summary::-webkit-details-marker{display:none}
 .stage-utilities .icon{width:18px;height:18px;flex-shrink:0}
 .stage-utilities button:hover,.display-settings>summary:hover,.display-settings[open]>summary{background:var(--fp-soft);border-color:var(--fp-line)}

@@ -89,6 +89,8 @@ export class FloorplanCard extends HTMLElement {
   }
   render() {
     if (!this.config) return;
+    const displayPanel=this.planSlot?.querySelector('.display-settings'),displayScroll=displayPanel?.querySelector('.display-popover')?.scrollTop || 0;
+    this.displayOpen=displayPanel?.open ?? this.displayOpen;
     refreshCalendars(this);
     const restoreFocus=preserveFocus(this.shadowRoot);
     const states = {...this._hass?.states};
@@ -131,10 +133,11 @@ export class FloorplanCard extends HTMLElement {
     const settings=element('details',{className:'display-settings',open:!!this.displayOpen},[element('summary',{'aria-label':'Display settings',title:'Display settings'},[icon('sliders')]),element('div',{className:'display-popover'},[element('h3',{text:'Display settings'}),element('p',{className:'display-description',text:'Choose what stays visible on your floorplan.'}),...displayFields(display,next=>{this.displayPreferences=next;this.displayOpen=true;this.render();}),element('p',{className:'muted',text:'Saved for this browser. Set shared defaults in the card editor.'})])]);
     settings.addEventListener('toggle',()=>{if(settings.isConnected)this.displayOpen=settings.open;});
     // Icon-only controls must not retain an anonymous text flex item and its gap.
-    for(const control of stageTools.querySelectorAll('.overlay-toggle,.inspector-toggle,.follow-toggle')){
+    for(const control of stageTools.querySelectorAll('.overlay-toggle,.inspector-toggle')){
       control.setAttribute('aria-label',control.textContent.trim());
       control.replaceChildren(control.querySelector('svg'));
     }
+    const followControl=stageTools.querySelector('.follow-toggle');followControl.setAttribute('aria-label',followControl.textContent.trim());followControl.replaceChildren(icon('presence'),document.createTextNode('Follow'));
     const utilities=element('div',{className:'stage-utilities',role:'group','aria-label':'Floorplan tools'},[stageTools.querySelector('.follow-toggle'),stageTools.querySelector('.overlay-toggle'),stageTools.querySelector('.inspector-toggle'),settings]);
     stageTools.append(utilities,header);
     this.headerSlot.replaceChildren();
@@ -142,7 +145,7 @@ export class FloorplanCard extends HTMLElement {
     this.controlsSlot.id='lighting-panel';
     this.controlsSlot.hidden=!this.inspectorOpen;
     const sourceFloor = this.config.floors.find(f => f.id === this.floorId);
-    const isolatedRoom=['3d','sims'].includes(mode)&&sourceFloor?.rooms.some(r=>r.id===this.isolatedRooms?.[this.floorId])?this.isolatedRooms[this.floorId]:'';
+    const isolatedRoom=!exterior&&['3d','sims'].includes(mode)&&sourceFloor?.rooms.some(r=>r.id===this.isolatedRooms?.[this.floorId])?this.isolatedRooms[this.floorId]:'';
     const floor=isolatedRoom?isolateRoomFloor(sourceFloor,isolatedRoom):sourceFloor;
     if (!floor || (!floor.image && !floor.rooms.length && !floor.walls?.length)) {
       this.plan?.dispose?.();this.plan=null;this.planKey=null;
@@ -150,7 +153,7 @@ export class FloorplanCard extends HTMLElement {
     }
     else {
       const markers = [];
-      const markerFloors=this.building&&!isolatedRoom&&['3d','sims'].includes(mode)?this.config.floors:[floor];
+      const markerFloors=(this.building||exterior)&&!isolatedRoom&&['3d','sims'].includes(mode)?this.config.floors:[floor];
       for(const floor of markerFloors) {
       if(!this.follow){
       markers.push(...labelMarkers(floor,states,entityId=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId},bubbles:true,composed:true}))));
@@ -204,7 +207,7 @@ export class FloorplanCard extends HTMLElement {
         if(item.contact_entity)node.append(element('small',{text:doorDescription(item,states)}));
         return {node,world:[item.x||0,(item.y||0)+(item.height||1),item.z||0]};
       });
-      const options={...this.config.appearance,exterior,isolatedRoom,follow:!!this.follow,hideLightFixtures:display.hide_light_fixtures,hideRadiators:display.hide_radiators,hideExtractionFans:display.hide_extraction_fans,idleRotation:display.idle_rotation,labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays?[]:exterior?exteriorMarkers:markers,daylight,building:!!this.building&&!isolatedRoom,allFloors:this.config.floors};
+      const options={...this.config.appearance,exterior,isolatedRoom,follow:!!this.follow,hideLightFixtures:display.hide_light_fixtures,hideRadiators:display.hide_radiators,hideExtractionFans:display.hide_extraction_fans,idleRotation:display.idle_rotation,labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays?[]:[...exteriorMarkers,...markers],daylight,building:!!this.building&&!isolatedRoom,allFloors:this.config.floors};
       options.onLightClick=(floorId,id)=>this.activateLight(floorId,id);
       options.onEntityClick=entityId=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId},bubbles:true,composed:true}));
       options.weather=weather;
@@ -213,7 +216,7 @@ export class FloorplanCard extends HTMLElement {
       const baseView=this.viewStates[baseCameraKey] ||= {};options.viewState=this.viewStates[cameraKey] ||= {};
       for(const key of ['doors','portraits'])options.viewState[key]=baseView[key] ||= {};
       options.onViewChange=()=>this.saveView();
-      const key=JSON.stringify([floor,exterior,display.hide_light_fixtures,display.hide_radiators,display.hide_extraction_fans,this.config.appearance,mode,!!this.building,!!this.follow,this.building?this.config.floors:null]);
+      const key=JSON.stringify([floor,exterior,display.hide_light_fixtures,display.hide_radiators,display.hide_extraction_fans,this.config.appearance,mode,!!this.building,!!this.follow,this.building||exterior?this.config.floors:null]);
       if(key!==this.planKey || !this.plan) {
         this.plan?.dispose?.();
         this.plan=(['3d','sims'].includes(mode)?render3D:renderPlan)(floor,states,options);this.planKey=key;
@@ -226,6 +229,7 @@ export class FloorplanCard extends HTMLElement {
       if(outdoor&&!this.hideOverlays&&!(this.config.information?.enabled!==false&&this.config.information?.items?.some(i=>i.type==='weather'))){const readout=button(`Outside ${outdoor}`,()=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:outdoorId},bubbles:true,composed:true})),{className:`outdoor-temperature temp-${temperatureTone(outdoorId,states[outdoorId])}`,'aria-label':`Outdoor temperature: ${outdoor}`});this.planSlot.append(readout);}
     }
     this.planSlot.querySelector('.stage-tools')?.remove();this.planSlot.append(stageTools);
+    stageTools.querySelector('.display-popover').scrollTop=displayScroll;
     refreshInformationHistory(this);
     updatePanel(this.planSlot,'.information-panel',informationPanel(this,states));
     this.renderRoomPanel();
@@ -295,7 +299,9 @@ export class FloorplanCard extends HTMLElement {
     if (this.busy) controls.append(element('p', { text: 'Updating lights…', role: 'status' }));
     if (this.error) controls.append(element('p', { className: 'error', text: this.error, role: 'alert' }));
     controls.append(choices);
+    const choicesScroll=this.controlsSlot.querySelector('.light-choices')?.scrollTop || 0;
     this.controlsSlot.replaceChildren(controls);
+    this.controlsSlot.querySelector('.light-choices').scrollTop=choicesScroll;
     this.saveView();
     restoreFocus();
   }
