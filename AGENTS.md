@@ -4,7 +4,7 @@
 - `npm run check` checks syntax, HACS packaging and the committed build's reproducibility.
 - `npm test` runs unit and publication-boundary regression tests.
 - `npm run test:browser` runs desktop/mobile Chromium tests against the committed distribution and fictional demo. Install Chromium with `npx playwright install --with-deps chromium` in CI.
-- `npm run build` uses esbuild to generate the single self-contained `dist/hacs-floorplan.js`, including Three.js and licence notices; never edit this file directly. `npm run check` enforces a reproducible distribution below 900,000 bytes. Do not introduce CDN imports or unbundled runtime assets.
+- `npm run build` uses esbuild to generate the single self-contained `dist/hacs-floorplan.js`, including Three.js and licence notices; never edit this file directly. `npm run check` enforces a reproducible distribution below 1,000,000 bytes. Do not introduce CDN imports or unbundled runtime assets.
 - `npm run check:public` validates indexed files; `node scripts/check-public.mjs --history <full-sha>` validates the complete reachable history.
 - Enable `.githooks` on each checkout with `git config core.hooksPath .githooks`. Never bypass the private-asset guard to publish personal plans.
 - Everything under `floorplans/` is private and ignored, including derived geometry, models, screenshots and the personal demo. Public fixtures must be fictional and independent of personal geometry.
