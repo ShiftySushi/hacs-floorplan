@@ -145,11 +145,7 @@ When importing a portable configuration into Home Assistant, wait for the import
 
 To replace an already populated card, open **Import / export → Replace current configuration** and choose **Import configuration JSON**. The file replaces all existing items and settings, clears unfinished editing tools and returns to **Floors**. Nothing is merged; **Undo** restores the entire previous configuration. There is no need to delete or recreate the card.
 
-Keep personal images, outlines, traced geometry, models and exported dashboard configurations under `floorplans/`. This entire directory is ignored by Git and excluded from exports. These assets are not bundled in `dist/` and are not required to build or install the card.
-
 In the card editor, choose **Floors → Choose floorplan image**, then select a local outline. The image is uploaded to your Home Assistant instance or, for a small SVG, stored directly in your dashboard configuration. There is no need to upload it to GitHub, put it in the plugin directory, or edit YAML. Plugin updates leave those personal assets separate from the installed code.
-
-On a personal checkout, the original images and derived assets can remain under `floorplans/`; the private demo is at `/floorplans/demo.html` and model previews at `/floorplans/models/`. Those local files are intentionally absent from a fresh clone. Back them up separately through your normal private backup process.
 
 In **Entities → Add element**, place lights, temperature and presence markers before connecting Home Assistant. Give each element a name and room, and drag it to position it (10 cm snapping). Unconnected lights can already belong to room and group selections. Later, choose **Assigned entity**: the position, name and room/group references are preserved. Unconnected elements are labelled **Not connected** and cannot send commands. They are included in full configuration exports.
 
@@ -157,39 +153,12 @@ Use **Import / export → Export full configuration** to save the layout with al
 
 The public demo uses a fictional layout and contains no traced personal room boundaries or dimensions.
 
-## Git remotes and publication checks
+## Development
 
-`origin` is the primary Gitea repository and `github` is the public HACS repository. Pushes are explicit to each remote; there is no automatic mirror of working-directory files.
-
-```sh
-git config core.hooksPath .githooks
-git config remote.pushDefault origin
-npm run check:public
-```
-
-The pre-commit hook checks indexed files, including files force-added past `.gitignore`. The pre-push hook checks every reachable historical blob, so deleting a private file from the latest commit does not make a leaking history acceptable. Only approved source, distribution, documentation, tests and fictional demo paths pass; embedded image payloads are also rejected. These local hooks must be enabled on each clone and can be bypassed, so they complement careful review rather than provide a server-side guarantee.
-
-## Development and preview
-
-Requires Node.js 22+. Three.js is bundled into the card; the installed card does not fetch a renderer or artwork from a CDN. esbuild and Playwright are locked development dependencies. Python 3 serves the interactive local demo.
-
-```sh
-npm ci --ignore-scripts
-npm run build
-npm run check
-npm test
-node scripts/models.mjs  # regenerate SVG outlines and OBJ models
-npm run demo
-```
-
-Open `http://127.0.0.1:8124/demo/` for the fictional demo. **Live view** fits the floorplan into the available screen, with compatible lighting controls beside it on wider screens. **Edit layout** opens the layout studio. Simulated presence and service failures are available in the demo toolbar. The optional model command requires private `floorplans/models/geometry.json` and is not part of the plugin build. The public demo never connects to a live Home Assistant server and resets on reload. The optional private editor uses a shared scene file through its development server; browser storage is a recovery copy. See [AGENTS.md](AGENTS.md) for the private editor's persistence contract. Export a portable scene for a separate backup or transfer to Home Assistant.
-
-The `src/` modules separate light service rules, scene geometry, 2D/3D rendering and guided setup. `scripts/build.mjs` uses esbuild to bundle a single self-contained `dist/hacs-floorplan.js`, including licence notices. The packaging check requires a reproducible build below 900,000 bytes. Run the build after changing source; do not edit the distribution directly.
-
-Project delivery publishes the same reviewed commit and branch to Forgejo and GitHub and creates or updates a PR on both hosts in the same session. **Push for review** stops once both hosts' required checks pass. **Push and finalise** also includes merging both PRs, post-merge validation and safe task-branch cleanup. See [Delivery to both hosts](AGENTS.md#delivery-to-both-hosts) for the authoritative workflow, partial-delivery handling and authorisation boundaries.
+Build, preview, bundle budget, private assets and publication checks are covered in [PROJECT.md](PROJECT.md). Contributor commands and the delivery workflow are in [AGENTS.md](AGENTS.md).
 
 ## References
 
-The [Spatial Lights Card](https://github.com/Mihonarium/hass-spatial-lights-card) is the interaction reference supplied for this project. This implementation is independent and does not import its source. Integration follows Home Assistant's [custom card contract](https://developers.home-assistant.io/docs/frontend/custom-ui/custom-card/), [light capabilities](https://developers.home-assistant.io/docs/core/entity/light/) and [image upload API](https://github.com/home-assistant/frontend/blob/dev/src/data/image_upload.ts).
+The [Spatial Lights Card](https://github.com/Mihonarium/hass-spatial-lights-card) is the interaction reference supplied for this project. This implementation is independent and does not import its source.
 
 Live Home Assistant installation, authenticated image upload, HACS delivery and physical-device behaviour still require integration verification.
