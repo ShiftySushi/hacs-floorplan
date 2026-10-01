@@ -4,7 +4,8 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   fullyParallel: false, workers: 1, retries: 0,
   reporter: 'list',
-  use: { baseURL: 'http://127.0.0.1:8125', trace: 'off', screenshot: 'off', video: 'off' },
+  // Chromium keeps renderer memory in /tmp rather than /dev/shm, so CI does not depend on the runner's container shm size.
+  use: { baseURL: 'http://127.0.0.1:8125', trace: 'off', screenshot: 'off', video: 'off', launchOptions: { args: ['--disable-dev-shm-usage'] } },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 900 } } },
     { name: 'mobile', use: { ...devices['Pixel 7'], defaultBrowserType: 'chromium' } },
