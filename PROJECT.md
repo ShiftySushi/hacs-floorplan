@@ -27,6 +27,17 @@ The `src/` modules separate light service rules, scene geometry, 2D/3D rendering
 
 `npm run check` requires a reproducible build below 1,000,000 bytes. The budget is a growth alarm, not a platform limit: the file is served compressed (about 330 KB with gzip) and loaded once per dashboard session. Bundled Three.js accounts for roughly 600 KB before packing, and shaders, CSS and furniture models are already packed losslessly, so the remaining headroom is for the card's own code. Before raising the budget again, check what the growth is and whether it belongs in the card.
 
+## Diorama renderer (not yet selectable)
+
+The `src/diorama-*.js` modules are a fixed-angle illustrated renderer being developed alongside the existing views. Nothing in `src/index.js` imports it yet, so it is not in `dist/`, adds nothing to the bundle and cannot be chosen in the card or editor.
+
+- `diorama-renderer.js` builds one storey or the whole house from the same scene the card uses. The whole house rests as a true stack; hover, click, Enter or Space slides the storeys sideways into a stepped row, and Escape stacks them again.
+- `diorama-cutaway.js` decides every wall height for the viewing direction. It is pure geometry with no Three.js dependency and is covered by `tests/diorama-cutaway.test.mjs`.
+- `diorama-lightmap.js` paints lamp light into one small texture instead of adding a light per fitting; `diorama-ink.js` draws outlines from depth and normals; `diorama-merge.js` collapses static meshes per material.
+- `diorama-assets*.js` and `diorama-stairs.js` hold the furniture and stair models. Types without a diorama model fall back to `furniture3d.js`.
+
+Before it can become a view it still needs wiring into the card (markers, light picking, the layout editor), a decision on the bundle budget, browser tests and a check on tablet hardware.
+
 ## Private assets
 
 Keep personal images, outlines, traced geometry, models and exported dashboard configurations under `floorplans/`. This entire directory is ignored by Git and excluded from exports. These assets are not bundled in `dist/` and are not required to build or install the card.
