@@ -139,7 +139,7 @@ export function renderPlan(floor, states, options={}) {
       }}
       const art=svgElement('g',{transform:`translate(${-ow/2} ${-oh/2})`});
       if(pixel&&item.style_images?.[mode]){const spriteHeight=['tv','bookshelf','display_cabinet','computer','ultrawide_monitor'].includes(item.type)?Math.max(oh,ow*.75):oh;art.append(svgElement('rect',{width:ow,height:oh,fill:'transparent'}),svgElement('image',{href:item.style_images[mode],x:0,y:(oh-spriteHeight)/2,width:ow,height:spriteHeight,preserveAspectRatio:'xMidYMid meet',style:'image-rendering:pixelated','data-private-sprite':item.id}));}
-      else art.append(objectArtwork(item,mode,ow,oh));object.append(art);
+      else art.append(objectArtwork(item,ow,oh));object.append(art);
       if(item.pattern_entity){const a=stripAppearance(item,states);if(a.level)object.append(svgElement('rect',{x:ow*(a.centre-a.fraction/2),y:-Math.max(oh,3)/2,width:ow*a.fraction,height:Math.max(oh,3),rx:1,fill:`rgb(${a.colour.join(',')})`,'data-strip-pattern':a.pattern,'data-strip-fill':a.fraction,style:`filter:drop-shadow(0 0 4px rgb(${a.colour.join(',')}))` }));}
       // Furniture fronts face local +Y in the plan (local +Z in 3D).
       // Keep the marker inside the rotating object group and out of hit testing.

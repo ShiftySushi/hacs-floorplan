@@ -52,5 +52,7 @@ export function createLightmap(storeys,{scale=24,gain=1.7}={}){
   function tag(root,index){root.traverse(node=>{if(node.isMesh&&!node.geometry.attributes.dioStorey)node.geometry.setAttribute('dioStorey',new THREE.BufferAttribute(new Float32Array(node.geometry.attributes.position.count).fill(index),1));});}
   /** Painted light at a plan position, as [r, g, b] 0–255, from the last draw. */
   function sample(storey,x,z){const [px,py]=pixel(x,z);return Array.from(context.getImageData(Math.round(px),Math.round(py)+storey*h,1,1).data).slice(0,3);}
-  return {apply,add,draw,tag,sample,setShift(index,x,z){shift[index].set(x,z);},dispose(){texture.dispose();}};
+  return {apply,add,draw,tag,sample,setShift(index,x,z){shift[index].set(x,z);},
+    /** Scale every lamp's contribution; daylight washes lamps out. `level` 1 is the evening strength. */
+    setGain(level){uniforms.dioGain.value=gain*level;},dispose(){texture.dispose();}};
 }

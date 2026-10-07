@@ -57,3 +57,21 @@ test('turning the camera swaps which outside walls are cut',()=>{
   const roles=Object.fromEntries(planCutaway(floor(),[-Math.SQRT1_2,-Math.SQRT1_2]).map(plan=>[plan.wall.id,plan.role]));
   assert.deepEqual([roles.n,roles.w,roles.e,roles.s],['near','near','far','far']);
 });
+
+test('a sloping ceiling stands only where it cannot come between the viewer and the room',async()=>{
+  const {slopeHides}=await import('../src/diorama-cutaway.js'),home=floor();
+  // Falling steeply to the north wall, away from the viewer: it rises faster than any sight
+  // line, so every one of them passes beneath it.
+  const far={vertices:[[0,0,1.2],[100,0,1.2],[100,10,2.4],[0,10,2.4]]};
+  assert.equal(slopeHides(home,far,towards),false);
+  // The same slope against the south wall falls towards the viewer and covers the room.
+  const near={vertices:[[0,100,1.2],[100,100,1.2],[100,90,2.4],[0,90,2.4]]};
+  assert.equal(slopeHides(home,near,towards),true);
+  // Seen from the north-west instead, the two swap.
+  const opposite=[-Math.SQRT1_2,-Math.SQRT1_2];
+  assert.equal(slopeHides(home,far,opposite),true);assert.equal(slopeHides(home,near,opposite),false);
+  // A shallow slope over the far side rises more slowly than the sight lines and crosses them.
+  assert.equal(slopeHides(home,{vertices:[[0,0,2.2],[100,0,2.2],[100,60,2.4],[0,60,2.4]]},towards),true);
+  // With no rooms there is nothing to hide.
+  assert.equal(slopeHides({...home,rooms:[]},near,towards),false);
+});

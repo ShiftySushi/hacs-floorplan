@@ -58,5 +58,5 @@ export function createInk(renderer,{stage='#15161a',ink='#4a2f25'}={}){
     const autoClear=renderer.autoClear;renderer.autoClear=false;camera.layers.set(1);renderer.render(scene,camera);renderer.autoClear=autoClear;
     camera.layers.set(0);scene.background=background;
   }
-  return {render,dispose(){colour.dispose();normal.dispose();normalMaterial.dispose();quad.geometry.dispose();quad.material.dispose();}};
+  return {render,setStage(value){uniforms.stage.value.set(value);},dispose(){colour.dispose();normal.dispose();normalMaterial.dispose();quad.geometry.dispose();quad.material.dispose();}};
 }

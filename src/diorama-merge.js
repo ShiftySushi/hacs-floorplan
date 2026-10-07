@@ -4,13 +4,14 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 /**
  * Collapse a storey's static meshes into one mesh per material. A furnished
  * house is thousands of small boxes; drawn singly, twice a frame for the ink
- * pass, they cost far more than their triangles do.
+ * pass, they cost far more than their triangles do. Subtrees marked `animate` or
+ * `live` in userData move on their own and are left alone.
  */
 export function consolidate(root){
   root.updateMatrixWorld(true);
   const inverse=root.matrixWorld.clone().invert(),groups=new Map(),remove=[];
   (function visit(node){
-    if(node.userData.animate)return;
+    if(node.userData.animate||node.userData.live)return;
     if(node.isMesh&&!node.isInstancedMesh&&!Array.isArray(node.material)&&node.layers.mask===1&&node.visible&&!node.userData.tvScreen){
       const geometry=(node.geometry.index?node.geometry.toNonIndexed():node.geometry.clone()).applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse,node.matrixWorld));
       for(const name of Object.keys(geometry.attributes))if(!['position','normal','uv'].includes(name))geometry.deleteAttribute(name);
