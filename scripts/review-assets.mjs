@@ -1,5 +1,5 @@
 // Contact sheet of every furniture type at the illustrated view's fixed angle, for judging
-// which models need redesigning. Writes PNGs to test-results/; nothing here is shipped.
+// which models need redesigning. Writes PNGs to asset-review/, which Git ignores; nothing here is shipped.
 import {spawn} from 'node:child_process';
 import {mkdir} from 'node:fs/promises';
 import {chromium} from '@playwright/test';
@@ -16,7 +16,7 @@ const at=slot=>[((slot%columns)+.4)/columns*100,(Math.floor(slot/columns)+.4)/ro
 const sheet=number=>entries.slice(number*perSheet,(number+1)*perSheet).map((entry,slot)=>{const [x,y]=at(slot);const below=Math.min(1.2,(entry.width+entry.depth)/4+.25);return {caption:entry.label,point:[x+below/width*100,y+below/depth*100],object:{id:`review-${slot}`,type:entry.type,...(entry.variant?{variant:entry.variant}:{}),x,y,width:entry.width,depth:entry.depth,height:entry.height,rotation:0}};});
 
 const port=process.env.PORT||'8127',server=spawn(process.execPath,['scripts/serve-demo.mjs'],{stdio:'ignore',env:{...process.env,PORT:port}});
-await new Promise(resolve=>setTimeout(resolve,1200));await mkdir('test-results',{recursive:true});
+await new Promise(resolve=>setTimeout(resolve,1200));await mkdir('asset-review',{recursive:true});
 const browser=await chromium.launch(),page=await browser.newPage({viewport:{width:1600,height:1150}}),older=[];
 try{
   await page.goto(`http://127.0.0.1:${port}/demo/`);await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
@@ -38,8 +38,8 @@ try{
         resolve(items.filter(item=>fallbacks.includes(item.object.id)).map(item=>item.caption));
       },5000));
     },[items,width,depth]);
-    older.push(...fallbacks);await page.locator('floorplan-card').screenshot({path:`test-results/asset-review-${number+1}.png`});
+    older.push(...fallbacks);await page.locator('floorplan-card').screenshot({path:`asset-review/asset-review-${number+1}.png`});
   }
-  console.log(`${entries.length} models drawn on ${sheets} sheets (test-results/asset-review-1.png onwards).`);
+  console.log(`${entries.length} models drawn on ${sheets} sheets (asset-review/asset-review-1.png onwards).`);
   console.log(`${older.length} still use the older generic model: ${older.join(', ')}`);
 }finally{await browser.close();server.kill();}
