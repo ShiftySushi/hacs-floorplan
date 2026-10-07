@@ -86,7 +86,7 @@ Sloping ceilings and rooflights are drawn where they fall away from the viewer, 
 
 Anything hung on a wall that the view cuts away, such as kitchen wall cupboards on the near side, is drawn as a faint ghost so it stays readable without hiding the room.
 
-**Follow**, in the floorplan tools, shows the whole house and keeps only the rooms whose presence sensors are active fully lit; every other room dims, and the storeys spread so an occupied room is never hidden under the floor above. It appears once a room has a presence sensor, and choosing a floor, External or All leaves it. On a single floor, **Focus room** picks one room out the same way by hand. Both choices are saved in the current browser.
+**Follow**, the person icon in the floorplan tools, shows the whole house and keeps only the rooms whose presence sensors are active fully lit; every other room dims, and the storeys spread so an occupied room is never hidden under the floor above. It appears once a room has a presence sensor, and choosing a floor, External or All leaves it. On a single floor, **Focus room** picks one room out the same way by hand. Both choices are saved in the current browser.
 
 In the **All** view, rest the pointer on the drawing for a moment, click it, or press Enter to spread the storeys apart. Display settings offer **Ground floor on the left when spread**; without it the storeys take whichever order nests them most closely.
 

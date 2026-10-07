@@ -129,7 +129,7 @@ export class FloorplanCard extends HTMLElement {
       control.replaceChildren(control.querySelector('svg'));
     }
     const utilities=element('div',{className:'stage-utilities',role:'group','aria-label':'Floorplan tools'},[stageTools.querySelector('.overlay-toggle'),stageTools.querySelector('.inspector-toggle'),settings]);
-    if(followable){const toggle=iconButton('Follow','presence',()=>{this.follow=!following;if(this.follow)this.exterior=false;this.saveView();this.render();},{'aria-pressed':String(following),title:following?'Stop following occupied rooms':'Keep occupied rooms lit and dim the rest',className:'follow-toggle'});utilities.prepend(toggle);}
+    if(followable){const toggle=iconButton('Follow','presence',()=>{this.follow=!following;if(this.follow)this.exterior=false;this.saveView();this.render();},{'aria-pressed':String(following),title:following?'Stop following occupied rooms':'Keep occupied rooms lit and dim the rest',className:'follow-toggle'});toggle.setAttribute('aria-label','Follow');toggle.replaceChildren(toggle.querySelector('svg'));utilities.prepend(toggle);}
     // One room of the floor on show can be picked out the same way, by hand.
     const shown=this.config.floors.find(f=>f.id===this.floorId);
     if(!exterior&&!allFloors&&!following&&shown?.rooms.length>1)utilities.prepend(element('select',{'aria-label':'Focus room',title:'Keep one room lit and dim the rest',className:'room-isolation',onchange:e=>{this.focusRooms[this.floorId]=e.target.value;this.saveView();this.render();}},[element('option',{value:'',text:'Whole floor',selected:!this.focusRooms?.[this.floorId]}),...shown.rooms.map(r=>element('option',{value:r.id,text:r.name||r.id,selected:this.focusRooms?.[this.floorId]===r.id}))]));
