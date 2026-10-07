@@ -15,6 +15,7 @@ import {consolidate} from './diorama-merge.js';
 import {isHung,ELEVATION} from './diorama-cutaway.js';
 import {insidePolygon,spreadLayout,coveredPoint} from './diorama-spread.js';
 import {createFade,createGlide,ghost} from './diorama-live.js';
+import {createRig,STAGE,stageShade} from './diorama-rig.js';
 import {panelFrame} from './light-animation.js';
 import {stripAppearance,updateStrip} from './strip-pattern.js';
 import {artwork3D} from './artwork3d.js';
@@ -23,10 +24,7 @@ import {heatingState} from './heating.js';
 import {radiatorEntity,doorState} from './live-data.js';
 
 export {ELEVATION};
-export const STAGE='#15161a';
-const DAY_STAGE='#4b5d72';
-/** Stage colour behind the drawing for a daylight level from 0 (evening) to 1 (full day). */
-export const stageShade=(daylight=0)=>'#'+new THREE.Color(STAGE).lerp(new THREE.Color(DAY_STAGE),Math.max(0,Math.min(1,daylight))).getHexString();
+export {STAGE,stageShade};
 // Screen pixels per metre below which the card's markers start to shrink.
 const MARKER_METRE=34;
 
@@ -62,12 +60,7 @@ export function renderDiorama(input,states,options={}){
   const scene=new THREE.Scene(),ink=createInk(renderer,{stage:STAGE}),assets=createAssets(),overlay=createOverlay(plan,{compact:house,clock:options.clock===true}),reducedMotion=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const azimuth=options.azimuth??Math.PI/4,towards=new THREE.Vector3(Math.sin(azimuth),0,Math.cos(azimuth));
 
-  // Night base: cool, never black, so warm lamps have something to push against.
-  const sky=new THREE.HemisphereLight('#8793c8','#54413a',.92);scene.add(sky);
-  // The same key light is the moon in the evening and the sun by day.
-  const moon=new THREE.DirectionalLight('#8da2dc',.3);moon.position.copy(towards).multiplyScalar(4).add(new THREE.Vector3(-towards.z*3,7,towards.x*3));scene.add(moon);
-  // A soft fill from the viewer keeps the backs of foreground furniture readable.
-  const fill=new THREE.DirectionalLight('#d8c2ad',.7);fill.position.copy(towards).multiplyScalar(5).setY(3.2);scene.add(fill);
+  const rig=createRig(scene,towards,options.daylight);
 
   const haloMap=halo(),lights=[],animated=[],televisions=[],shells=[],pills=[],storeys=[],targets=[],fittingHeights=new Map(),doors=[],radiators=[],printers=[],sensors=[],artworks=[],frames=[],windows=[];
   function glowSprite(parent,at,size){
@@ -226,17 +219,14 @@ export function renderDiorama(input,states,options={}){
   const wanted=()=>house&&(pinned||hovering)?1:0,ease=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
   function retarget(){const now=performance.now(),target=wanted();if(target!==Math.round(spreadGoal)){spreadFrom=spread;spreadGoal=target;spreadStart=now;}plan.dataset.spread=String(target);renderer.domElement.setAttribute('aria-pressed',String(!!pinned));last=0;schedule();}
   let spreadGoal=0;
-  const colour=new THREE.Color(),grades={sky:['#8793c8','#e4ecff'],ground:['#54413a','#b7a68f'],key:['#8da2dc','#fff0d2'],stage:[STAGE,DAY_STAGE]},daylight=createGlide(Math.max(0,Math.min(1,options.daylight||0)),2500);
-  for(const pair of Object.values(grades))pair.splice(0,2,new THREE.Color(pair[0]),new THREE.Color(pair[1]));
-  // Evening is the resting look. Daylight brightens and cools the room light, washes the
-  // lamps out and lifts the stage; windows let it in unless their blind is down.
-  let graded=-1,scaled='';
+  const colour=new THREE.Color();
+  // Daylight brightens and cools the room light (see diorama-rig.js), washes the lamps out
+  // and lifts the stage; windows let it in unless their blind is down.
+  let stage='',scaled='';
   function grade(now){
-    const day=daylight(Math.max(0,Math.min(1,options.daylight||0)),now,reducedMotion);
-    sky.color.lerpColors(...grades.sky,day);sky.groundColor.lerpColors(...grades.ground,day);sky.intensity=.92+.5*day;
-    moon.color.lerpColors(...grades.key,day);moon.intensity=.3+.8*day;fill.intensity=.7-.2*day;lightmap.setGain(1-.5*day);
+    const graded=rig.grade(options.daylight,now,reducedMotion),day=graded.day;lightmap.setGain(1-.5*day);
     // The host watches this element's style, so it is written only when the grade moves.
-    if(day!==graded){graded=day;colour.lerpColors(...grades.stage,day);ink.setStage(colour);plan.style.background='#'+colour.getHexString();plan.dataset.daylight=day.toFixed(2);}
+    if(graded.stage!==stage){stage=graded.stage;ink.setStage(stage,graded.horizon);plan.style.background=stage;plan.dataset.daylight=day.toFixed(2);}
     let closed=0;
     for(const entry of windows){
       const down=options.blindStates?.[entry.key]===true&&!!(entry.blind||entry.rooflight),value=entry.glide(down?1:0,now,reducedMotion);if(down)closed++;

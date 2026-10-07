@@ -2,6 +2,12 @@
 
 Notable changes to Floorplan Card. Versions follow [Semantic Versioning](https://semver.org/); while the card is below 1.0, a minor version may change or remove behaviour.
 
+## Unreleased
+
+### Changed
+
+- **Breaking:** the **External** tab is now drawn in the illustrated style, from the same fixed angle as the rooms, and follows daylight. The orbiting camera, its zoom and reset controls, **Hide walls and roof** and the **Slow idle rotation** display setting are removed; choose a floor or **All** to see inside.
+
 ## 0.2.0 - 2026-10-07
 
 The card's interior is now one illustrated, fixed-angle view. This replaces every earlier live style, so it changes how an existing dashboard looks.

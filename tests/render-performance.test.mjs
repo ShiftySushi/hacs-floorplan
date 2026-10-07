@@ -2,15 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Box3,Ray,Vector3} from 'three';
 import {furniture3D} from '../src/furniture3d.js';
-import {batchStaticModel} from '../src/static-model3d.js';
 import {wallBVH} from '../src/wall-bvh.js';
 
-test('static batching retains transformed bounds and materials with fewer draw meshes',()=>{
-  const model=furniture3D({type:'side_table',variant:'sword',width:1.025,depth:.16,height:.2,rotation:67});model.position.set(4,2,7);
-  const before=new Box3().setFromObject(model,true),materials=new Set();let oldCount=0;model.traverse(n=>{if(n.isMesh){oldCount++;materials.add(n.material);}});
-  batchStaticModel(model);const after=new Box3().setFromObject(model,true);let count=0;model.traverse(n=>{if(n.isMesh){count++;assert.ok(materials.has(n.material));}});
-  assert.ok(count<oldCount/2);assert.ok(before.min.distanceTo(after.min)<1e-6&&before.max.distanceTo(after.max)<1e-6);
-});
 test('worktop sits above every base cabinet body surface, without coplanar side/back strips',()=>{
   const m=furniture3D({type:'kitchen_unit',front_style:'shaker',width:1.2,depth:.6,height:.9});const top=m.children.find(n=>n.userData.worktop),bounds=new Box3().setFromObject(top);
   assert.ok(Math.abs(bounds.max.y-.9)<1e-6);

@@ -7,10 +7,10 @@ import { element, button, field, preserveFocus, updatePanel } from './dom.js';
 import { roomState } from './rooms.js';
 import { icon, iconButton } from './icons.js';
 import { renderPlan } from './plan.js';
-import { render3D } from './plan3d.js';
+import { renderExterior } from './diorama-exterior.js';
 import { renderDiorama, stageShade } from './diorama-renderer.js';
 import { roomTemperature, roomReadoutPoint, heatingState, temperatureTone } from './heating.js';
-import { daylightLevel, stageColour } from './daylight.js';
+import { daylightLevel } from './daylight.js';
 const collectionStyles='.collection-controls{display:grid;grid-template-columns:minmax(0,1fr) 70px;gap:4px;align-items:center;width:100%;padding:3px 0}.collection-controls .collection-adjust{display:inline-flex;align-items:center;justify-content:center;gap:4px;align-self:center;width:70px;min-width:0;min-height:44px;padding:3px;font-size:11px;line-height:1.2;border-color:transparent;background:transparent;color:var(--secondary-text-color,#63776e);box-shadow:none}.collection-controls .collection-adjust .icon{width:15px;height:15px}.collection-controls .collection-adjust:hover,.collection-controls .collection-adjust[aria-pressed=true]{background:var(--secondary-background-color,#eef4f0);color:var(--primary-text-color,#26343d)}.collection-controls .collection-adjust:focus-visible{outline:2px solid var(--primary-color,#007c91);outline-offset:1px}';
 import {sceneEntities,sceneState} from './ha-updates.js';
 import {informationPanel,informationStyles} from './information-panel.js';
@@ -108,12 +108,12 @@ export class FloorplanCard extends HTMLElement {
     this.planSlot.classList.toggle('has-outdoor',!!roomTemperature({temperature_entity:this.config.outdoor_temperature_entity},states));
     const header = element('div', {className:'card-header stage-style'});
     const tabs = element('div', { className: 'row floor-tabs', role: 'group', 'aria-label': 'Floors' });
-    // The interior is always the diorama; only the exterior still uses the orbiting 3D view.
+    // Interior and exterior are both drawn in the illustrated, fixed-angle style.
     const exterior=this.exterior&&this.config.exterior?.items.length?this.config.exterior:undefined,mode=exterior?'3d':'diorama';
     const allFloors=!!this.building&&!exterior&&this.config.floors.length>1;
     this.config.floors.forEach(floor => tabs.append(iconButton(floor.name || floor.id,'floor', () => { this.floorId = floor.id; this.exterior=false; this.building=false; this.render(); }, { 'aria-pressed': String(floor.id === this.floorId&&!exterior&&!allFloors) })));
     const weather={...this.config.weather,entity:weatherEntity(this.config)};
-    const daylight=daylightLevel(states,new Date(),this._hass?.config,weather.entity);this.planSlot.style.setProperty('--fp-stage-background',exterior?stageColour(mode,daylight):stageShade(daylight));
+    const daylight=daylightLevel(states,new Date(),this._hass?.config,weather.entity);this.planSlot.style.setProperty('--fp-stage-background',stageShade(daylight));
     if(this.config.exterior?.items.length)tabs.append(iconButton('External','cube',()=>{this.exterior=true;this.building=false;this.render();},{'aria-pressed':String(!!exterior)}));
     if(this.config.floors.length>1)tabs.append(iconButton('All','floor',()=>{this.building=true;this.exterior=false;this.render();},{'aria-pressed':String(!!allFloors)}));
     const stageTools=element('div',{className:'stage-tools'},[tabs,iconButton(this.hideOverlays?'Show overlays':'Hide overlays','eye',()=>{this.hideOverlays=!this.hideOverlays;this.render();},{'aria-pressed':String(!!this.hideOverlays),title:this.hideOverlays?'Show overlays':'Hide overlays',className:'overlay-toggle'})]);
@@ -191,7 +191,7 @@ export class FloorplanCard extends HTMLElement {
         if(item.contact_entity)node.append(element('small',{text:doorDescription(item,states)}));
         return {node,world:[item.x||0,(item.y||0)+(item.height||1),item.z||0]};
       });
-      const options={...this.config.appearance,exterior,hideLightFixtures:display.hide_light_fixtures,hideRadiators:display.hide_radiators,hideExtractionFans:display.hide_extraction_fans,idleRotation:display.idle_rotation,spreadOrder:display.ground_left?'ground-left':'compact',labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays?[]:[...exteriorMarkers,...markers],daylight,building:allFloors,allFloors:this.config.floors,storeyOffset:this.config.floors.indexOf(floor)};
+      const options={...this.config.appearance,exterior,hideLightFixtures:display.hide_light_fixtures,hideRadiators:display.hide_radiators,hideExtractionFans:display.hide_extraction_fans,spreadOrder:display.ground_left?'ground-left':'compact',labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays?[]:[...exteriorMarkers,...markers],daylight,building:allFloors,allFloors:this.config.floors,storeyOffset:this.config.floors.indexOf(floor)};
       options.onLightClick=(floorId,id)=>this.activateLight(floorId,id);
       options.onEntityClick=entityId=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId},bubbles:true,composed:true}));
       options.weather=weather;
@@ -205,7 +205,7 @@ export class FloorplanCard extends HTMLElement {
         this.plan?.dispose?.();
         // A floor that is only a traced image has nothing to build from, so it stays a flat plan.
         const built=(allFloors?this.config.floors:[floor]).filter(f=>f.rooms.length||f.walls?.length);
-        this.plan=exterior?render3D(floor,states,options):built.length?renderDiorama(built,states,options):renderPlan(floor,states,{...options,mode:'clean'});this.planKey=key;
+        this.plan=exterior?renderExterior(exterior,floor,states,options):built.length?renderDiorama(built,states,options):renderPlan(floor,states,{...options,mode:'clean'});this.planKey=key;
         this.planSlot.replaceChildren(this.plan);
         this.planObserver?.disconnect();this.planObserver=new MutationObserver(()=>this.fitPlan());this.planObserver.observe(this.plan,{attributes:true,attributeFilter:['style']});
       } else this.plan.update?.(states,options);

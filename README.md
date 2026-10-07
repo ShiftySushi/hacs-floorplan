@@ -94,7 +94,7 @@ Earlier versions offered 2D, orbiting 3D, Pokémon, Zelda and Sims-like live sty
 
 - Follow mode and single-room isolation.
 - Uploaded Pokémon or Zelda backgrounds and furniture sprites (`style_images`).
-- Weather effects, which appear only in the External view.
+- Weather inside the rooms' views; rain, snow and cloud are drawn in the External view.
 
 Furniture editing snaps placements and moves to a 10 cm grid by default. Drag an item from the catalogue onto the plan, or select it and tap its position. You can turn snapping off in the furniture inspector; that choice remains in effect while editing.
 
@@ -120,7 +120,7 @@ Calendar items merge the next seven days from selected calendars, sorted by star
 
 For a prepared low-battery summary, select **Battery count sensor** and **Battery names sensor**. These replace the device scan; the names sensor contains comma-separated names. An unavailable summary stays unavailable rather than falling back to a different count.
 
-A scene with `exterior` data exposes an **External** button after the floor choices and before All. It opens an orbiting 3D view with its own saved camera: drag to orbit, use the zoom and reset controls, or focus the canvas and use arrow keys, `+`, `−` and `Home`. **Slow idle rotation (3D)** in Display settings applies to this view. Choose **Hide walls and roof** to hide the exterior model and reveal the connected floors, stairs and room controls; **Show exterior** restores the site model. The camera fits the visible view, and the inside/outside choice survives live updates. Choosing a floor returns to that floor. The exterior contains metre-based `box`, `surface`, `plant` and `car` items: boxes/plants/cars use `x`, `y`, `z`, `width`, `height`, `depth` and optional `rotation`/`colour`; surfaces use three or four `[x,y,z]` vertices. The root specifies `width_m`, `depth_m`, `height_m` and `items`. Exterior geometry is supplied through the scene configuration; the furniture editor does not edit it. Personal site geometry belongs only in a private scene, not the card bundle.
+A scene with `exterior` data exposes an **External** button after the floor choices and before All. It shows the outside of the home from the same fixed angle, and in the same ink and light, as the rooms: it brightens through the day, and rain, snow, fog and cloud from your weather entity fall over the site. Choose a floor or **All** to go back inside. The exterior contains metre-based `box`, `surface`, `plant` and `car` items: boxes/plants/cars use `x`, `y`, `z`, `width`, `height`, `depth` and optional `rotation`/`colour`; surfaces use three or four `[x,y,z]` vertices. The root specifies `width_m`, `depth_m`, `height_m` and `items`. Exterior geometry is supplied through the scene configuration; the furniture editor does not edit it. Personal site geometry belongs only in a private scene, not the card bundle.
 
 Exterior items can select a `finish` of `grass`, `asphalt`, `paving` or `brick`. These finishes use repeating procedural textures at metre scale; plants use textured leaf geometry. Imported meshes can be embedded in `exterior.models` and referenced by an item's `model` key. Model data and attribution stay in the portable scene; model credits are documented in [CREDITS.md](CREDITS.md). Rendering requires no external model or texture requests.
 
