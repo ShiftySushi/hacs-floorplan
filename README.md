@@ -21,7 +21,7 @@ A visual floorplan for your Home Assistant dashboard. Arrange rooms, furniture a
 
 Add `https://github.com/ShiftySushi/hacs-floorplan` to HACS **Custom repositories** with type **Dashboard**. Install **Floorplan Card** and reload the browser. If HACS does not register the resource automatically, add `/hacsfiles/hacs-floorplan/hacs-floorplan.js` as a JavaScript module in Dashboard Resources.
 
-The distribution filename matches the repository name. [HACS supports installation from the default branch without a versioned release](https://www.hacs.xyz/docs/publish/plugin/). The GitHub distribution contains only plugin code and the fictional demo; personal floorplans are supplied locally through the editor.
+The distribution filename matches the repository name. HACS offers the latest [release](https://github.com/ShiftySushi/hacs-floorplan/releases) and lists what changed in each; [CHANGELOG.md](CHANGELOG.md) holds the same notes. The GitHub distribution contains only plugin code and the fictional demo; personal floorplans are supplied locally through the editor.
 
 ## Guided setup
 
