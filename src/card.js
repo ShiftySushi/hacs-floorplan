@@ -8,7 +8,7 @@ import { roomState } from './rooms.js';
 import { icon, iconButton } from './icons.js';
 import { renderPlan } from './plan.js';
 import { render3D } from './plan3d.js';
-import { renderDiorama, STAGE } from './diorama-renderer.js';
+import { renderDiorama, stageShade } from './diorama-renderer.js';
 import { roomTemperature, roomReadoutPoint, heatingState, temperatureTone } from './heating.js';
 import { daylightLevel, stageColour } from './daylight.js';
 const collectionStyles='.collection-controls{display:grid;grid-template-columns:minmax(0,1fr) 70px;gap:4px;align-items:center;width:100%;padding:3px 0}.collection-controls .collection-adjust{display:inline-flex;align-items:center;justify-content:center;gap:4px;align-self:center;width:70px;min-width:0;min-height:44px;padding:3px;font-size:11px;line-height:1.2;border-color:transparent;background:transparent;color:var(--secondary-text-color,#63776e);box-shadow:none}.collection-controls .collection-adjust .icon{width:15px;height:15px}.collection-controls .collection-adjust:hover,.collection-controls .collection-adjust[aria-pressed=true]{background:var(--secondary-background-color,#eef4f0);color:var(--primary-text-color,#26343d)}.collection-controls .collection-adjust:focus-visible{outline:2px solid var(--primary-color,#007c91);outline-offset:1px}';
@@ -113,7 +113,7 @@ export class FloorplanCard extends HTMLElement {
     const allFloors=!!this.building&&!exterior&&this.config.floors.length>1;
     this.config.floors.forEach(floor => tabs.append(iconButton(floor.name || floor.id,'floor', () => { this.floorId = floor.id; this.exterior=false; this.building=false; this.render(); }, { 'aria-pressed': String(floor.id === this.floorId&&!exterior&&!allFloors) })));
     const weather={...this.config.weather,entity:weatherEntity(this.config)};
-    const daylight=daylightLevel(states,new Date(),this._hass?.config,weather.entity);this.planSlot.style.setProperty('--fp-stage-background',exterior?stageColour(mode,daylight):STAGE);
+    const daylight=daylightLevel(states,new Date(),this._hass?.config,weather.entity);this.planSlot.style.setProperty('--fp-stage-background',exterior?stageColour(mode,daylight):stageShade(daylight));
     if(this.config.exterior?.items.length)tabs.append(iconButton('External','cube',()=>{this.exterior=true;this.building=false;this.render();},{'aria-pressed':String(!!exterior)}));
     if(this.config.floors.length>1)tabs.append(iconButton('All','floor',()=>{this.building=true;this.exterior=false;this.render();},{'aria-pressed':String(!!allFloors)}));
     const stageTools=element('div',{className:'stage-tools'},[tabs,iconButton(this.hideOverlays?'Show overlays':'Hide overlays','eye',()=>{this.hideOverlays=!this.hideOverlays;this.render();},{'aria-pressed':String(!!this.hideOverlays),title:this.hideOverlays?'Show overlays':'Hide overlays',className:'overlay-toggle'})]);
@@ -191,7 +191,7 @@ export class FloorplanCard extends HTMLElement {
         if(item.contact_entity)node.append(element('small',{text:doorDescription(item,states)}));
         return {node,world:[item.x||0,(item.y||0)+(item.height||1),item.z||0]};
       });
-      const options={...this.config.appearance,exterior,hideLightFixtures:display.hide_light_fixtures,hideRadiators:display.hide_radiators,hideExtractionFans:display.hide_extraction_fans,idleRotation:display.idle_rotation,labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays?[]:[...exteriorMarkers,...markers],daylight,building:allFloors,allFloors:this.config.floors,storeyOffset:this.config.floors.indexOf(floor)};
+      const options={...this.config.appearance,exterior,hideLightFixtures:display.hide_light_fixtures,hideRadiators:display.hide_radiators,hideExtractionFans:display.hide_extraction_fans,idleRotation:display.idle_rotation,spreadOrder:display.ground_left?'ground-left':'compact',labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays?[]:[...exteriorMarkers,...markers],daylight,building:allFloors,allFloors:this.config.floors,storeyOffset:this.config.floors.indexOf(floor)};
       options.onLightClick=(floorId,id)=>this.activateLight(floorId,id);
       options.onEntityClick=entityId=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId},bubbles:true,composed:true}));
       options.weather=weather;
@@ -200,7 +200,7 @@ export class FloorplanCard extends HTMLElement {
       options.viewState=this.viewStates[cameraKey] ||= {};
       for(const key of ['doors','portraits'])options.viewState[key] ||= {};
       options.onViewChange=()=>this.saveView();
-      const key=JSON.stringify([floor,exterior,display.hide_light_fixtures,display.hide_radiators,display.hide_extraction_fans,this.config.appearance,mode,allFloors,allFloors||exterior?this.config.floors:null]);
+      const key=JSON.stringify([floor,exterior,display.ground_left,display.hide_light_fixtures,display.hide_radiators,display.hide_extraction_fans,this.config.appearance,mode,allFloors,allFloors||exterior?this.config.floors:null]);
       if(key!==this.planKey || !this.plan) {
         this.plan?.dispose?.();
         // A floor that is only a traced image has nothing to build from, so it stays a flat plan.

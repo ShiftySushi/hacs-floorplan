@@ -78,16 +78,21 @@ A room's **Room heating demand sensor** drives its radiators when no object dema
 
 Furniture editing opens in neutral **2D edit**. Choose **3D preview** to see that floor in the illustrated view while editing dimensions in the inspector. Return to 2D to place or drag furniture.
 
+The illustrated view follows your home as it changes. Lights fade between states over about half a second, and wall panels play their Breathe, Wave or Rainbow effect. An addressable strip shows how much of its length is lit. A radiator glows while it is heating, a door with a contact sensor stands open or shut with it, a printer's toolhead moves while it prints and its screen turns red on an error, and a presence sensor's status light comes on when it detects someone. A TV with `tv_scenes` shows those stills, five minutes each, instead of the generated films. A framed picture bound to a media player shows what is playing; click a frame that has a media player or a portrait image to turn it between landscape and portrait.
+
+The view follows the time of day. In the evening it is a dim scene lit by your lamps; as the sun rises the rooms brighten, the lamps fade into the daylight and light falls through each outside window. Click a window blind to draw or open it: a drawn blind keeps the daylight out, and the choice is saved in the current browser. The sun's height comes from Home Assistant's Sun integration, with cloud cover from your weather entity.
+
+Sloping ceilings and rooflights are drawn where they fall away from the viewer, as part of the backdrop; a slope that would cover the room is drawn see-through instead, and a rooflight lets daylight in like a window. Fitted wardrobe fronts follow their wall: full doors where the wall stands, and only their lower part where it is cut down.
+
+Anything hung on a wall that the view cuts away, such as kitchen wall cupboards on the near side, is drawn as a faint ghost so it stays readable without hiding the room.
+
+In the **All** view, rest the pointer on the drawing for a moment, click it, or press Enter to spread the storeys apart. Display settings offer **Ground floor on the left when spread**; without it the storeys take whichever order nests them most closely.
+
 ### Not yet in the illustrated view
 
 Earlier versions offered 2D, orbiting 3D, Pokémon, Zelda and Sims-like live styles. Those are retired; a scene saved with any of them loads in the illustrated view. Their data is kept in your configuration, but the following are not drawn or animated yet:
 
-- Daylight: the view is always an evening scene, and window blinds are not shown opening or closing.
 - Follow mode and single-room isolation.
-- Door contacts animating a door, radiators glowing while heating, and 3D printer nozzle movement. Their markers and the room card still report state.
-- Light fades between states, wall-panel effects (Breathe, Wave, Rainbow) and addressable strip patterns. Panels and strips follow power, brightness and colour.
-- `tv_scenes` slideshows, and artwork frames following a media player or rotating. A frame shows its fallback image.
-- Sloping ceilings (`ceiling_slopes`), mirrored `wardrobe_doors`, and presence-sensor status lights.
 - Uploaded Pokémon or Zelda backgrounds and furniture sprites (`style_images`).
 - Weather effects, which appear only in the External view.
 
