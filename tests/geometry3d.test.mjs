@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { wallSections, connectedStoreyPlacements, isExteriorWall, selectSceneLights, wallJoins, illuminationUV } from '../src/plan3d.js';
+import { wallSections } from '../src/diorama-cutaway.js';
 import { furniture3D } from '../src/furniture3d.js';
 import { CATALOGUE, panelArrangement } from '../src/catalogue.js';
 import { roomLightSources } from '../src/illumination.js';
@@ -18,23 +18,6 @@ test('wall solids preserve lintels and sills while subtracting actual openings',
 test('every catalogue object creates finite original 3D geometry',()=>{
   for(const object of CATALOGUE){const group=furniture3D({...object,rotation:37});let vertices=0;group.traverse(node=>{if(node.geometry){const values=node.geometry.attributes.position.array;assert.ok(values.every(Number.isFinite),object.type);vertices+=values.length;node.geometry.dispose();}if(node.material)node.material.dispose();});assert.ok(vertices>0,object.type);}
 });
-test('connected storeys meet at physical wall or stair heights and preserve explicit alignment',()=>{
-  const floors=[
-    {id:'ground',walls:[{height:2.4}],objects:[{type:'stairs',height:2.4}]},
-    {id:'first',offset_x_m:.2,walls:[{height:2.4}],objects:[{type:'stairs',height:2.4}]},
-    {id:'second',offset_z_m:-.1,elevation_m:5,walls:[{height:2.3}]}
-  ];
-  assert.deepEqual(connectedStoreyPlacements(floors),[{x:0,y:0,z:0},{x:.2,y:2.4,z:0},{x:0,y:5,z:-.1}]);
-});
-test('wall adjacency distinguishes outside walls from shared partitions',()=>{
-  const floor={width_m:10,depth_m:8,rooms:[
-    {id:'left',points:[[0,0],[50,0],[50,100],[0,100]]},
-    {id:'right',points:[[50,0],[100,0],[100,100],[50,100]]}
-  ]};
-  assert.equal(isExteriorWall({a:[0,0],b:[0,100]},floor),true);
-  assert.equal(isExteriorWall({a:[0,0],b:[100,0]},floor),true,'one long boundary can border several rooms on the same side');
-  assert.equal(isExteriorWall({a:[50,0],b:[50,100]},floor),false);
-});
 test('furniture variants produce distinct geometry',()=>{
   for(const [type,variant] of [['piano','grand'],['bed','single'],['sofa','corner']]){
     const base=CATALOGUE.find(item=>item.type===type),a=furniture3D(base),b=furniture3D({...base,variant});
@@ -42,31 +25,12 @@ test('furniture variants produce distinct geometry',()=>{
     for(const group of [a,b])group.traverse(node=>{node.geometry?.dispose();node.material?.dispose();});
   }
 });
-test('GPU light budget prioritises selected storey and includes unassigned markers',()=>{
-  const floors=['ground','upper'].map(id=>({id,entities:Array.from({length:10},(_,i)=>({entity:`light.${id}${i}`,x:i*9,y:40})),rooms:[]}));
-  assert.equal(selectSceneLights(floors,'upper','low').length,16);
-  assert.equal(selectSceneLights(floors,'upper','high').length,20);
-  const automatic=selectSceneLights(floors,'upper');assert.equal(automatic.length,20);
-  assert.deepEqual(automatic[0],{floorId:'upper',id:'light.upper0',point:[0,40]});
-  assert.ok(automatic.slice(0,10).every(light=>light.floorId==='upper'));
-});
-test('wall joins close shared corners without bridging endpoint openings',()=>{
-  const walls=[{a:[0,0],b:[50,0],thickness:.2,height:2.4},{a:[50,0],b:[70,40],thickness:.2,height:2.4}];
-  assert.deepEqual(wallJoins(walls,10,10),[{x:0,z:-5,radius:.1,height:2.4}]);
-  walls[0].openings=[{type:'door',offset:.9,width:1,height:2.1}];
-  assert.deepEqual(wallJoins(walls,10,10),[]);
-});
 test('long cabinet runs repeat standard doors rather than stretching handles',()=>{
   const small=furniture3D({type:'kitchen_unit',width:.6,depth:.6,height:.9}),long=furniture3D({type:'kitchen_unit',width:3,depth:.6,height:.9});
   const handles=group=>group.children.filter(mesh=>mesh.geometry.parameters.height===.02);
   assert.equal(handles(small).length,1);assert.equal(handles(long).length,5);
   assert.ok(handles(long).every(mesh=>mesh.geometry.parameters.width===.16));
   for(const group of [small,long])group.traverse(node=>{node.geometry?.dispose();node.material?.dispose();});
-});
-test('room illumination UVs preserve physical floor coordinates without tiling',()=>{
-  assert.deepEqual(illuminationUV(-5,10,10,20),[0,1]);
-  assert.deepEqual(illuminationUV(5,-10,10,20),[1,0]);
-  assert.deepEqual(illuminationUV(-2.5,5,10,20),[.25,.75]);
 });
 test('radiators retain shallow depth and add fins as their width grows',()=>{
   const definition=CATALOGUE.find(item=>item.type==='radiator');assert.equal(definition.depth,.12);assert.equal(definition.height,.6);

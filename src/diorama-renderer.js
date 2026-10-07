@@ -15,6 +15,7 @@ import {consolidate} from './diorama-merge.js';
 import {isHung,ELEVATION} from './diorama-cutaway.js';
 import {insidePolygon,spreadLayout,coveredPoint} from './diorama-spread.js';
 import {createFade,createGlide,ghost} from './diorama-live.js';
+import {createRig,STAGE,stageShade} from './diorama-rig.js';
 import {panelFrame} from './light-animation.js';
 import {stripAppearance,updateStrip} from './strip-pattern.js';
 import {artwork3D} from './artwork3d.js';
@@ -23,10 +24,7 @@ import {heatingState} from './heating.js';
 import {radiatorEntity,doorState} from './live-data.js';
 
 export {ELEVATION};
-export const STAGE='#15161a';
-const DAY_STAGE='#4b5d72';
-/** Stage colour behind the drawing for a daylight level from 0 (evening) to 1 (full day). */
-export const stageShade=(daylight=0)=>'#'+new THREE.Color(STAGE).lerp(new THREE.Color(DAY_STAGE),Math.max(0,Math.min(1,daylight))).getHexString();
+export {STAGE,stageShade};
 // Screen pixels per metre below which the card's markers start to shrink.
 const MARKER_METRE=34;
 
@@ -39,6 +37,7 @@ const MARKER_METRE=34;
  * DOM nodes this view places and hides), `onLightClick(floorId, entityId)`,
  * `quality`, `hideLightFixtures`, `hideRadiators`, `hideExtractionFans`, `daylight` (0 for
  * the evening scene to 1 for full day), `blindStates` (saved closed blinds by key) and
+ * `focusRooms` (['floorId:roomId'], rooms to keep lit while every other room dims),
  * `storeyOffset` when `input` is not the lowest storey, and `spreadOrder` (`compact` or
  * `ground-left`) for the direction the stacked storeys slide apart.
  * Standalone extras: `azimuth` (radians; the default looks from the south-east),
@@ -62,12 +61,7 @@ export function renderDiorama(input,states,options={}){
   const scene=new THREE.Scene(),ink=createInk(renderer,{stage:STAGE}),assets=createAssets(),overlay=createOverlay(plan,{compact:house,clock:options.clock===true}),reducedMotion=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const azimuth=options.azimuth??Math.PI/4,towards=new THREE.Vector3(Math.sin(azimuth),0,Math.cos(azimuth));
 
-  // Night base: cool, never black, so warm lamps have something to push against.
-  const sky=new THREE.HemisphereLight('#8793c8','#54413a',.92);scene.add(sky);
-  // The same key light is the moon in the evening and the sun by day.
-  const moon=new THREE.DirectionalLight('#8da2dc',.3);moon.position.copy(towards).multiplyScalar(4).add(new THREE.Vector3(-towards.z*3,7,towards.x*3));scene.add(moon);
-  // A soft fill from the viewer keeps the backs of foreground furniture readable.
-  const fill=new THREE.DirectionalLight('#d8c2ad',.7);fill.position.copy(towards).multiplyScalar(5).setY(3.2);scene.add(fill);
+  const rig=createRig(scene,towards,options.daylight);
 
   const haloMap=halo(),lights=[],animated=[],televisions=[],shells=[],pills=[],storeys=[],targets=[],fittingHeights=new Map(),doors=[],radiators=[],printers=[],sensors=[],artworks=[],frames=[],windows=[];
   function glowSprite(parent,at,size){
@@ -77,7 +71,7 @@ export function renderDiorama(input,states,options={}){
   const lambert=colour=>new THREE.MeshLambertMaterial({color:colour});
   const planPosition=floor=>{const {width,depth}=floorDimensions(floor);return (p,y=0)=>new THREE.Vector3((p[0]/100-.5)*width,y,(p[1]/100-.5)*depth);};
   const stairsOf=floor=>(floor?.objects||[]).filter(o=>o.type==='stairs'),ceilingOf=floor=>Math.max(2.4,...(floor.walls||[]).map(w=>w.height||2.4));
-  let elevation=0,ghosts=0;
+  let elevation=0,ghosts=0;const fallbacks=[];
   // Lamps are painted into a light map rather than added as real lights: see diorama-lightmap.js.
   const lightmap=createLightmap(floors.map(floor=>{const base=elevation;elevation+=ceilingOf(floor)+SLAB+(options.explode||0);return {...floorDimensions(floor),base};}));elevation=0;
   floors.forEach((floor,index)=>{
@@ -127,7 +121,7 @@ export function renderDiorama(input,states,options={}){
       if(object.type==='extractor_fan'&&(object.variant!=='wall'||options.hideExtractionFans))continue;
       if(object.type==='radiator'&&options.hideRadiators)continue;
       const fixture=['lamp','wall_light','nanoleaf_panels','tv_lightstrip'].includes(object.type);
-      const model=assets.build(object),middle=at.clone().setY(at.y+(object.height||.3)/2);
+      const model=assets.build(object);if(model.userData.fallback)fallbacks.push(object.id);const middle=at.clone().setY(at.y+(object.height||.3)/2);
       // Something hung on a wall that has been cut down below it would float in mid-air, so
       // it is drawn as a ghost: still there to read, and never hiding the room behind it.
       if(isHung(object)){const wall=nearestWall(at,shell.walls);if(wall.distance<.45&&wall.height<(object.elevation_m||0)+(object.height||.3)*.8){ghost(model);ghosts++;}}
@@ -223,20 +217,25 @@ export function renderDiorama(input,states,options={}){
   let frameId=0,disposed=false,visible=true,last=0,width=0,height=0,refit=false,pace=32,called=0,drew=false,strikes=0,quick=0,settle=performance.now()+1500;const START_PACE=250;
   // Spread state: hovering opens the stack, a click or Enter pins it open.
   let hoverTimer=0,hovering=false,pinned=false,spread=0,spreadFrom=0,spreadStart=-1e9;const SPREAD_MS=850,HOVER_MS=350;plan.dataset.spread='0';
-  const wanted=()=>house&&(pinned||hovering)?1:0,ease=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+  // A focused room may be on a storey the stack covers, so focus holds the storeys apart.
+  const wanted=()=>house&&(pinned||hovering||focusKey)?1:0,ease=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
   function retarget(){const now=performance.now(),target=wanted();if(target!==Math.round(spreadGoal)){spreadFrom=spread;spreadGoal=target;spreadStart=now;}plan.dataset.spread=String(target);renderer.domElement.setAttribute('aria-pressed',String(!!pinned));last=0;schedule();}
   let spreadGoal=0;
-  const colour=new THREE.Color(),grades={sky:['#8793c8','#e4ecff'],ground:['#54413a','#b7a68f'],key:['#8da2dc','#fff0d2'],stage:[STAGE,DAY_STAGE]},daylight=createGlide(Math.max(0,Math.min(1,options.daylight||0)),2500);
-  for(const pair of Object.values(grades))pair.splice(0,2,new THREE.Color(pair[0]),new THREE.Color(pair[1]));
-  // Evening is the resting look. Daylight brightens and cools the room light, washes the
-  // lamps out and lifts the stage; windows let it in unless their blind is down.
-  let graded=-1,scaled='';
+  const colour=new THREE.Color();
+  // Daylight brightens and cools the room light (see diorama-rig.js), washes the lamps out
+  // and lifts the stage; windows let it in unless their blind is down.
+  let stage='',scaled='',focusKey='';const dim=createGlide(0,900);plan.dataset.focus='0';
+  // Follow mode and room focus: the chosen rooms keep their light and the rest fall back.
+  function refocus(){
+    const chosen=new Set(options.focusRooms||[]),regions=storeys.flatMap(storey=>(storey.floor.rooms||[]).filter(room=>room.points?.length&&chosen.has(`${storey.floor.id}:${room.id}`)).map(room=>({storey:storey.index,points:room.points.map(p=>{const v=storey.position(p);return [v.x,v.z];})})));
+    const key=regions.length?JSON.stringify(regions):'';if(key===focusKey)return;
+    // The outlines stay painted while the dimming eases away, so rooms do not jump.
+    if(key)lightmap.setFocus(regions);focusKey=key;plan.dataset.focus=String(regions.length);if(house)retarget();
+  }
   function grade(now){
-    const day=daylight(Math.max(0,Math.min(1,options.daylight||0)),now,reducedMotion);
-    sky.color.lerpColors(...grades.sky,day);sky.groundColor.lerpColors(...grades.ground,day);sky.intensity=.92+.5*day;
-    moon.color.lerpColors(...grades.key,day);moon.intensity=.3+.8*day;fill.intensity=.7-.2*day;lightmap.setGain(1-.5*day);
+    const graded=rig.grade(options.daylight,now,reducedMotion),day=graded.day;lightmap.setGain(1-.5*day);lightmap.setDim(dim(focusKey?.72:0,now,reducedMotion));
     // The host watches this element's style, so it is written only when the grade moves.
-    if(day!==graded){graded=day;colour.lerpColors(...grades.stage,day);ink.setStage(colour);plan.style.background='#'+colour.getHexString();plan.dataset.daylight=day.toFixed(2);}
+    if(graded.stage!==stage){stage=graded.stage;ink.setStage(stage,graded.horizon);plan.style.background=stage;plan.dataset.daylight=day.toFixed(2);}
     let closed=0;
     for(const entry of windows){
       const down=options.blindStates?.[entry.key]===true&&!!(entry.blind||entry.rooflight),value=entry.glide(down?1:0,now,reducedMotion);if(down)closed++;
@@ -350,6 +349,7 @@ export function renderDiorama(input,states,options={}){
     markers=next;let anchor=null;
     for(let i=markers.length-1;i>=0;i--){const node=markers[i].node;if(!retained.has(node))plan.insertBefore(node,anchor);anchor=node;}
     for(const art of artworks)art.update(states);
+    refocus();
     readouts();last=0;schedule();
   }
   // A click on a lamp switches it, a turning frame swaps between landscape and portrait as it
@@ -394,6 +394,7 @@ export function renderDiorama(input,states,options={}){
   plan.reserve=pixels=>{const share=Math.max(0,Math.min(.5,pixels/(plan.clientWidth||1)));if(share!==reserved){reserved=share;refit=true;last=0;schedule();}};
   // Inspection hooks for tests and tuning: WebGL pixels cannot be read back reliably.
   plan.sampleLight=(floorId,point)=>{const storey=storeys.find(s=>s.floor.id===floorId);if(!storey)return null;const now=performance.now();animate(now,reducedMotion?0:now/1000);lightmap.draw();const at=storey.position(point);return lightmap.sample(storey.index,at.x,at.z);};
-  plan.stats=()=>{let meshes=0;scene.traverse(node=>{if(node.isMesh)meshes++;});return {ceilings:shells.flatMap(shell=>shell.group.children.filter(node=>node.userData.ceiling).map(node=>node.userData.ceiling)),televisions:televisions.map(tv=>({id:tv.object.id,on:tvIsOn(states[tv.object.media_entity])})),slideshows:televisions.filter(tv=>tv.slides.count).length,ghosts,meshes,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,programs:renderer.info.programs.length};};
+  plan.locate=(floorId,point,height=0)=>{const storey=storeys.find(s=>s.floor.id===floorId);if(!storey)return null;const p=storey.position(point,height).add(storey.group.position).project(camera);return [(p.x*.5+.5)*100,(-p.y*.5+.5)*100];};
+  plan.stats=()=>{let meshes=0;scene.traverse(node=>{if(node.isMesh)meshes++;});return {ceilings:shells.flatMap(shell=>shell.group.children.filter(node=>node.userData.ceiling).map(node=>node.userData.ceiling)),televisions:televisions.map(tv=>({id:tv.object.id,on:tvIsOn(states[tv.object.media_entity])})),slideshows:televisions.filter(tv=>tv.slides.count).length,ghosts,fallbacks,meshes,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,programs:renderer.info.programs.length};};
   plan.update=update;plan.dispose=dispose;update(states,options);return plan;
 }

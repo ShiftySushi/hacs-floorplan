@@ -220,7 +220,7 @@ export function createAssets(){
   /** Returns a positioned-at-origin model; unknown types fall back to the existing library. */
   function build(object){
     const o={width:1,depth:.6,height:.8,...object},model=builders[o.type]?.(o);
-    if(!model){const fallback=furniture3D(object);fallback.traverse(node=>{for(const material of [node.material].flat())if(material?.color&&!material.userData.lifted&&!material.map){material.color.set(lift('#'+material.color.getHexString()));material.userData.lifted=true;}});return fallback;}
+    if(!model){const fallback=furniture3D(object);fallback.userData.fallback=true;fallback.traverse(node=>{for(const material of [node.material].flat())if(material?.color&&!material.userData.lifted&&!material.map){material.color.set(lift('#'+material.color.getHexString()));material.userData.lifted=true;}});return fallback;}
     model.rotation.y=-(o.rotation||0)*Math.PI/180;return model;
   }
   return {build,dispose(){for(const texture of textures.values())texture.dispose();}};
