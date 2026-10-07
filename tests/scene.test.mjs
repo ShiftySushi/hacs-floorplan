@@ -6,7 +6,10 @@ import { CATALOGUE } from '../src/catalogue.js';
 test('legacy floors gain scene defaults and preserve image and entity coordinates',()=>{
   const floor={id:'test',image:'/local/private.svg',aspect_ratio:2,entities:[{entity:'light.a',x:15,y:70}]};
   const config=normaliseScene({floors:[floor]});
-  assert.equal(config.scene_version,1);assert.equal(config.appearance.mode,'clean');
+  assert.equal(config.scene_version,1);assert.equal(config.appearance.mode,'diorama');
+  // Scenes saved with a retired render style still load, as the diorama.
+  for(const mode of ['clean','3d','pokemon','zelda','sims'])assert.equal(normaliseScene({floors:[],appearance:{mode}}).appearance.mode,'diorama');
+  assert.throws(()=>normaliseScene({floors:[],appearance:{mode:'hologram'}}),/supported render style/);
   assert.deepEqual(floorDimensions(floor),{width:10,depth:5});
   assert.equal(floor.image,'/local/private.svg');assert.equal(floor.entities[0].x,15);
   assert.deepEqual(normaliseScene(JSON.parse(JSON.stringify(config))),config);

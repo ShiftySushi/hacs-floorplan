@@ -4,7 +4,6 @@ import {Box3,Vector3} from 'three';
 import {PRODUCT_PRESETS,applyProductPreset} from '../src/product-catalogue.js';
 import {furniture3D} from '../src/furniture3d.js';
 import {normaliseScene} from '../src/scene.js';
-import {kenneyFurniture} from '../src/kenney-furniture.js';
 
 test('Edifier pair has separate drivers and active-only rear controls',()=>{
   for(const side of ['left','right']){
@@ -56,7 +55,6 @@ test('dining finishes and integrated cabinetry survive export and reach the 3D m
   const scene=normaliseScene({floors:[{id:'fictional',objects}]});
   assert.deepEqual(normaliseScene(JSON.parse(JSON.stringify(scene))).floors[0].objects,objects);
   for(const item of objects){
-    assert.equal(kenneyFurniture(item),null);
     const model=furniture3D(item);
     assert.equal(model.children[0].material.color.getHexString(),(item.leg_colour || item.colour).slice(1));
     if(item.type==='dining_table')assert.ok(model.children.find(n=>n.userData.surfaceFinish==='speckled').material.map.isDataTexture);

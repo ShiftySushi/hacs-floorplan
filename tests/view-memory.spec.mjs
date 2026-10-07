@@ -1,15 +1,6 @@
 import {test,expect} from '@playwright/test';
-test('view and camera survive refresh and overlay toggle remains readable',async({page})=>{
+test('overlay toggle survives refresh and remains readable',async({page})=>{
   await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));const card=page.locator('floorplan-card');
-  for(const mode of ['2D','3D']){
-    await card.getByRole('button',{name:mode,exact:true}).click();
-    await card.getByRole('button',{name:'Zoom in',exact:true}).click();
-    await card.getByRole('button',{name:mode==='2D'?'Pan right':'Orbit right',exact:true}).click();
-    const read=()=>page.evaluate(()=>{const c=document.querySelector('floorplan-card');return {mode:c.viewMode || c.config.appearance.mode,cameras:c.viewStates};});
-    const before=await read();
-    await page.reload();await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));await expect(card.getByRole('button',{name:mode,exact:true})).toHaveAttribute('aria-pressed','true');
-    await expect.poll(read).toEqual(before);
-  }
   await card.getByRole('button',{name:'Hide overlays',exact:true}).click();
   const show=card.getByRole('button',{name:'Show overlays',exact:true});
   await expect(show).toBeVisible();

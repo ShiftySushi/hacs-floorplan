@@ -21,9 +21,9 @@ test('information stays visible, updates independently, and exterior returns to 
   const panel=await card.locator('.information-panel').boundingBox();expect(panel.x).toBeGreaterThanOrEqual(0);expect(panel.x+panel.width).toBeLessThanOrEqual(page.viewportSize().width);
   await card.locator('.information-panel summary').click();await expect(card.locator('.information-item').first()).toBeHidden();
   await card.getByRole('button',{name:'External',exact:true}).click();
-  await card.getByRole('button',{name:'2D',exact:true}).click();
-  await expect(card.locator('[data-strip-pattern="progressive-fill"]')).toHaveAttribute('data-strip-fill','0.5');
-  await card.evaluate(el=>{el.hass={...el._hass,states:{...el._hass.states,'sensor.pattern':{state:'off'}}};});await expect(card.locator('[data-strip-pattern]')).toHaveCount(0);
+  await expect(card.locator('.plan-diorama')).toHaveCount(0);
+  await card.locator('.floor-tabs button').first().click();
+  await expect(card.locator('.plan-diorama canvas')).toBeVisible();
   expect(errors).toEqual([]);
 });
 

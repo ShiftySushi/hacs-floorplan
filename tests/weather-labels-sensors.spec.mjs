@@ -32,7 +32,6 @@ test('weather, sensor mounting and combined labels work through the editor and l
   await editor.getByRole('group',{name:'Sensor presence entities',exact:true}).getByRole('combobox',{name:'Add entity',exact:true}).selectOption('binary_sensor.motion');
   expect(await editor.evaluate(el=>el.config.floors[0].objects.at(-1).elevation_m)).toBeGreaterThan(2);
   await page.getByRole('button',{name:'Live view',exact:true}).click();
-  await card.getByRole('button',{name:'3D',exact:true}).click();
   await expect(card.locator('.plan-3d')).toHaveAttribute('data-fitted-bounds',/.+/);
   await card.evaluate(el=>{el.__canvas=el.plan.querySelector('canvas');el.hass={...el._hass,states:{...el._hass.states,'sensor.energy':{state:'720',attributes:{friendly_name:'Energy',unit_of_measurement:'W'}}}};});
   await expect(card.locator('.entity-label')).toContainText('720 W');expect(await card.evaluate(el=>el.__canvas===el.plan.querySelector('canvas'))).toBe(true);

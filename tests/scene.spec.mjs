@@ -50,31 +50,21 @@ test('furniture can be placed, resized, varied and restored with undo and redo',
   expect((await scene(page)).floors[0].objects).toHaveLength(initial+1);
 });
 
-test('all render modes retain selected lights and compatible controls', async ({ page }) => {
+test('the illustrated view retains selected lights and compatible controls', async ({ page }) => {
   const card=page.locator('floorplan-card');
   const marker=card.getByRole('button',{name:'Diner: On',exact:true});
   await expect(marker).toBeVisible();
-  await card.locator('.plan').evaluate(async el=>{await Promise.all(el.getAnimations().map(animation=>animation.finished));});
-  const beforeZoom=await marker.boundingBox();
-  await card.getByRole('button',{name:'Zoom in',exact:true}).click();
-  await expect.poll(async()=>(await marker.boundingBox())?.width).toBeCloseTo(beforeZoom.width,0);
-  await card.getByRole('button',{name:'Fit floorplan',exact:true}).click();
   { const panel=page.locator('floorplan-card'); if(await panel.getByRole('button',{name:'Lighting',exact:true}).count()) await panel.getByRole('button',{name:'Lighting',exact:true}).click(); }
   await card.getByRole('button',{name:'Adjust All lights',exact:true}).click();
-  for(const name of ['pokemon','zelda','3D','2D']) {
-    if(['pokemon','zelda'].includes(name)){await card.getByRole('combobox',{name:'Custom style',exact:true}).selectOption(name);await expect(card.getByRole('combobox',{name:'Custom style',exact:true})).toHaveValue(name);}
-    else{await card.getByRole('button',{name,exact:true}).click();await expect(card.getByRole('button',{name,exact:true})).toHaveAttribute('aria-pressed','true');}
-    await expect(card.getByRole('button',{name:'Diner: On',exact:true})).toHaveAttribute('aria-pressed','true');
-    await expect(card.getByLabel('Brightness · 3 of 4 lights')).toBeVisible();
-    await expect(card.getByLabel('Colour · 1 of 4 lights')).toBeVisible();
-  }
+  await expect(card.getByRole('button',{name:'Diner: On',exact:true})).toHaveAttribute('aria-pressed','true');
+  await expect(card.getByLabel('Brightness · 3 of 4 lights')).toBeVisible();
+  await expect(card.getByLabel('Colour · 1 of 4 lights')).toBeVisible();
   await card.getByRole('button',{name:'Turn off',exact:true}).click();
   await expect(card.getByRole('button',{name:'Diner: Off',exact:true})).toHaveAttribute('aria-pressed','true');
 });
 
-test('3D canvas survives state updates and controls work after context loss', async ({ page }) => {
+test('canvas survives state updates and controls work after context loss', async ({ page }) => {
   const card=page.locator('floorplan-card');
-  await card.getByRole('button',{name:'3D',exact:true}).click();
   const canvas=card.locator('canvas');
   await expect(canvas).toHaveCount(1);
   const original=await canvas.elementHandle();
@@ -172,7 +162,7 @@ test('full configuration export embeds images and round-trips into another card'
   await freshEditor.getByLabel('Import configuration JSON').setInputFiles({name:'complete.json',mimeType:'application/json',buffer});
   await expect.poll(()=>scene(fresh)).toEqual(exported);
   await fresh.getByRole('button',{name:'Live view',exact:true}).click();
-  await expect(fresh.locator('floorplan-card svg.floor-image')).toBeVisible();
+  await expect(fresh.locator('floorplan-card .plan-diorama canvas')).toBeVisible();
   await destination.close();
 });
 

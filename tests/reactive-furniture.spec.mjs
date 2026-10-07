@@ -18,16 +18,13 @@ test('a decorative light can be placed, raised and connected in the furniture ed
   expect(strip.width).toBeCloseTo(75*.0254*16/Math.hypot(16,9),4);
   expect(strip.height).toBeCloseTo(75*.0254*9/Math.hypot(16,9),4);
   await page.getByRole('button',{name:'Live view',exact:true}).click();
-  const card=page.locator('floorplan-card'),glow=card.locator(`[data-object-glow="${strip.id}"]`);
-  await expect(glow).toHaveCount(1);
+  // The strip paints its own pool into the light map, in the colour and strength of its entity.
+  const card=page.locator('floorplan-card'),plan=card.locator('.plan-diorama'),pool=()=>plan.evaluate((node,point)=>node.sampleLight(document.querySelector('floorplan-card').config.floors[0].id,point),[strip.x,strip.y]);
+  await expect(plan.locator('canvas')).toBeVisible();
+  const sum=rgb=>rgb.reduce((a,b)=>a+b,0),lit=await pool();
   await card.getByRole('button',{name:'Diner: On',exact:true}).click();
-  await expect(glow).toHaveCount(0);
-  await card.getByRole('button',{name:'Diner: Off',exact:true}).click();
-  await expect(glow).toHaveCount(1);
+  await expect.poll(async()=>sum(await pool())).toBeLessThan(sum(lit));
+  const dark=await pool();
   await page.evaluate(()=>{const c=document.querySelector('floorplan-card');c.hass={...c._hass,states:{...c._hass.states,'light.diner':{state:'on',attributes:{supported_color_modes:['rgb'],brightness:128,rgb_color:[20,80,255]}}}};});
-  await expect.poll(()=>glow.evaluate(el=>{
-    const gradient=el.ownerSVGElement?.querySelector(el.getAttribute('fill').slice(4,-1));
-    if(!gradient)return null; // The fading frame may have replaced this node while resolving the locator.
-    return {colour:gradient.firstElementChild.getAttribute('stop-color'),opacity:Number(gradient.firstElementChild.getAttribute('stop-opacity')),edge:Number(gradient.lastElementChild.getAttribute('stop-opacity'))};
-  })).toEqual({colour:'rgb(20,80,255)',opacity:.45*128/255,edge:0});
+  await expect.poll(async()=>{const now=await pool();return now[2]-dark[2]>now[0]-dark[0]+20;}).toBe(true);
 });

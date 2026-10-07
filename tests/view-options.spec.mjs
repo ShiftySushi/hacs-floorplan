@@ -25,8 +25,9 @@ test('floor choices stay ordered and exclusive, and camera visibility applies ac
     await expect(choices.locator('[aria-pressed="true"]')).toHaveCount(1);
     await expect(choices.getByRole('button',{name,exact:true})).toHaveAttribute('aria-pressed','true');
   };
-  await selected('Ground');
-  for(const name of ['All','External','External','All','Upper','Ground']){await choices.getByRole('button',{name,exact:true}).click();await selected(name);}
+  // Several floors open on the stacked All view.
+  await selected('All');
+  for(const name of ['Ground','All','External','External','All','Upper','Ground']){await choices.getByRole('button',{name,exact:true}).click();await selected(name);}
   await card.evaluate(el=>{el.activeRoom={floorId:el.floorId,roomId:el.config.floors[0].rooms[0].id};el.renderRoomPanel();});
   await expect(card.locator('.room-panel .room-camera')).toHaveCount(1);
   await card.getByLabel('Display settings',{exact:true}).click();await card.getByLabel('Hide cameras',{exact:true}).check();
@@ -44,6 +45,6 @@ test('floor choices stay ordered and exclusive, and camera visibility applies ac
   await card.getByLabel('Display settings',{exact:true}).click();await expect(card.getByLabel('Hide cameras',{exact:true})).toBeChecked();
   await card.getByLabel('Hide cameras',{exact:true}).uncheck();await expect(card.locator('.room-camera')).toHaveCount(2);
   await card.getByLabel('Display settings',{exact:true}).click();
-  await card.getByRole('button',{name:'2D',exact:true}).click();await selected('Ground');
-  await choices.getByRole('button',{name:'All',exact:true}).click();await selected('All');await expect(card.locator('.plan-3d')).toBeVisible();
+  await choices.getByRole('button',{name:'Ground',exact:true}).click();await selected('Ground');await expect(card.locator('.plan-diorama')).toBeVisible();
+  await choices.getByRole('button',{name:'All',exact:true}).click();await selected('All');await expect(card.locator('.plan-diorama')).toHaveAttribute('data-spread','0');
 });

@@ -18,8 +18,10 @@ export function normaliseScene(config) {
   if(config.outdoor_temperature_entity&&!/^(sensor|climate)\.[a-z0-9_]+$/.test(config.outdoor_temperature_entity))throw new Error('Choose an outdoor temperature sensor');
   if (config.scene_version !== undefined && config.scene_version !== 1) throw new Error('This scene version is not supported. Update the card before importing it.');
   config.scene_version = 1;
-  config.appearance = { mode: 'clean', furniture_opacity: .55, labels: false, quality: 'auto', ...config.appearance };
-  if (!['clean','pokemon','zelda','3d','sims'].includes(config.appearance.mode)) throw new Error('Choose a supported render style');
+  config.appearance = { mode: 'diorama', furniture_opacity: .55, labels: false, quality: 'auto', ...config.appearance };
+  // The diorama is the only live view. Scenes saved with an earlier render style still load.
+  if (!['diorama','clean','pokemon','zelda','3d','sims'].includes(config.appearance.mode)) throw new Error('Choose a supported render style');
+  config.appearance.mode = 'diorama';
   if(config.appearance.display)config.appearance.display=displaySettings(config.appearance.display);
   if (!Number.isFinite(config.appearance.furniture_opacity) || config.appearance.furniture_opacity < 0 || config.appearance.furniture_opacity > 1) throw new Error('Furniture opacity must be between zero and one');
   if (typeof config.appearance.labels !== 'boolean' || !['auto','low','high'].includes(config.appearance.quality)) throw new Error('Invalid appearance settings');

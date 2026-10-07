@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 
-test('all storeys has per-floor overlays and an inspection toggle without rebuilding the camera',async({page})=>{
+test('all storeys has per-floor overlays that follow the stack and spread without rebuilding the canvas',async({page})=>{
   await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
   await page.evaluate(()=>{
     const card=document.querySelector('floorplan-card'),config=JSON.parse(document.querySelector('#config').textContent);
@@ -10,12 +10,16 @@ test('all storeys has per-floor overlays and an inspection toggle without rebuil
     card.setConfig(config);
   });
   const card=page.locator('floorplan-card');
-  await card.getByRole('button',{name:'3D',exact:true}).click();
   await card.getByRole('button',{name:'All',exact:true}).click();
   await expect(card.locator('.marker')).toHaveCount(4);
   await expect(card.locator('.temperature-marker')).toHaveCount(2);
   await expect.poll(async()=>card.locator('.marker').evaluateAll(nodes=>new Set(nodes.map(n=>n.style.left+','+n.style.top)).size)).toBe(4);
-  await expect(card.getByLabel('Isolate room',{exact:true})).toHaveCount(0);
+  // Stacked, the lower storey's overlays are covered by the floor above and stay hidden until the storeys spread.
+  const plan=card.locator('.plan-diorama');await expect(plan).toHaveAttribute('data-spread','0');
+  await expect.poll(()=>card.locator('.marker:not([hidden])').count()).toBeLessThan(4);
+  await plan.locator('canvas').press('Enter');await expect(plan).toHaveAttribute('data-spread','1');
+  await expect.poll(()=>card.locator('.marker:not([hidden])').count(),{timeout:8000}).toBe(4);
+  await plan.locator('canvas').press('Escape');await expect(plan).toHaveAttribute('data-spread','0');
   await expect(card.locator('.plan-slot .floor-tabs')).toBeVisible();
   await card.locator('canvas').evaluate(canvas=>canvas.dataset.retained='yes');
   await card.getByRole('button',{name:'Hide overlays',exact:true}).click();
