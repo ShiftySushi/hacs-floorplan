@@ -1,24 +1,17 @@
 import {test,expect} from '@playwright/test';
 
-test('refresh restores blinds, simulated lights and dark mode before revealing the app',async({page})=>{
+test('refresh restores simulated lights and dark mode before revealing the app',async({page})=>{
   test.setTimeout(45000);
-  await page.goto('/demo/');await expect(page.locator('#boot')).toHaveCount(0);
+  // A cold start compiles the illustrated view's shaders, which is slow on software graphics.
+  await page.goto('/demo/');await expect(page.locator('#boot')).toHaveCount(0,{timeout:15000});
   await page.evaluate(()=>document.querySelector('floorplan-card')._hass.callService('light','turn_on',{entity_id:['light.diner'],brightness_pct:23,rgb_color:[17,83,140]}));
   await page.getByRole('button',{name:'Diner: On',exact:true}).click();
   await page.getByRole('button',{name:'Toggle theme',exact:true}).click();
   await expect(page.locator('body')).toHaveClass(/dark/);
-  await page.getByRole('button',{name:'3D',exact:true}).click();
-  await page.getByRole('button',{name:'Close all blinds',exact:true}).click();
-  await expect(page.locator('.plan-3d')).toHaveAttribute('data-blinds-closed','2');
-  await page.getByRole('button',{name:'2D',exact:true}).click();await page.getByRole('button',{name:'3D',exact:true}).click();
-  await expect(page.locator('.plan-3d')).toHaveAttribute('data-blinds-closed','2');
   await page.reload();await expect(page.locator('#boot')).toHaveCount(0,{timeout:15000});
   await expect(page.locator('body')).toHaveClass(/dark/);await expect(page.getByRole('button',{name:'Diner: Off',exact:true})).toBeAttached();
   expect(await page.evaluate(()=>document.querySelector('floorplan-card')._hass.states['light.diner'].attributes.rgb_color)).toEqual([17,83,140]);
   expect(await page.evaluate(()=>document.querySelector('floorplan-card')._hass.states['light.diner'].attributes.brightness)).toBe(59);
-  await expect(page.locator('.plan-3d')).toHaveAttribute('data-blinds-closed','2');
-  await page.getByRole('button',{name:'Open all blinds',exact:true}).click();await page.reload();
-  await expect(page.locator('.plan-3d')).toHaveAttribute('data-blinds-closed','0');
 });
 
 test('slow cold loads show a styled graphic and hide unstyled content',async({page})=>{

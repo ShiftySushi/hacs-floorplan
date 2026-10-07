@@ -2,7 +2,7 @@ import {placeOnSurface,updateFurniture,removeFurniture} from './furniture-suppor
 import {lavaColours} from './lava3d.js';
 import { newId, element, button, field, svgElement } from './dom.js';
 import { renderPlan as render2D } from './plan.js';
-import { render3D } from './plan3d.js';
+import { renderDiorama } from './diorama-renderer.js';
 import { CATALOGUE, objectGlyph, TV_SIZES, tvDimensions } from './catalogue.js';
 import { PRODUCT_PRESETS, productPreset, applyProductPreset, productDimensions } from './product-catalogue.js';
 import { floorDimensions } from './scene.js';
@@ -11,15 +11,13 @@ import { iconButton } from './icons.js';
 import { entitySelect } from './setup.js';
 import {isPresenceSensor} from './presence-sensors.js';
 import {sensorFields} from './sensor-editor.js';
-import {weatherEntity} from './weather.js';
 import {liveFields} from './live-fields.js';
 const LIBRARY=[...CATALOGUE.map(item=>({...item,id:item.type})),...PRODUCT_PRESETS];
 export function furnitureSetup(host, floor) {
   const preview=host.furniturePreview==='3d';
   function renderPlan(floor,states,options){
     if(!preview)return render2D(floor,states,{...options,mode:'clean'});
-    host.furniture3DViews??=new Map();if(!host.furniture3DViews.has(floor.id))host.furniture3DViews.set(floor.id,{});
-    return render3D(floor,states,{mode:'3d',edit:true,weather:{...host.config.weather,entity:weatherEntity(host.config)},viewState:host.furniture3DViews.get(floor.id)});
+    return renderDiorama([floor],states,{quality:host.config.appearance?.quality,storeyOffset:host.config.floors.indexOf(floor)});
   }
   floor.objects ??= [];
   const root = element('div', { className: 'scene-editor furniture-editor' });
@@ -70,7 +68,7 @@ export function furnitureSetup(host, floor) {
     placeOnSurface(floor,object);floor.objects.push(object); host.selectedObject = object.id; host.pendingObject = ''; host.emit();
   };
   if (host.pendingObject) canvas.append(element('div', { className: 'row furniture-placement', role: 'status' }, [element('span', { text: `Tap to place ${LIBRARY.find(i => i.id === host.pendingObject)?.name || 'furniture'}.` }), button('Place furniture in centre', () => place([50,50])), button('Cancel placement', () => { host.pendingObject = ''; host.render(); })]));
-  const plan=renderPlan(floor, host._hass?.states || {}, { edit: true,viewState, mode: ['3d','sims'].includes(host.config.appearance?.mode) ? 'clean' : host.config.appearance?.mode, selectedObject: host.selectedObject, onPoint: place, onObject: (id,point) => { if(host.pendingObject){place(point);return;}host.selectedObject = id; host.pendingObject = ''; host.render(); },onObjectContext:id=>{host.selectedObject=id;host.pendingObject='';host.render();host.shadowRoot.querySelector('[data-object-tools]')?.focus();}, onObjectMove: unlocked&&!host.pendingObject?(id, point) => { const item = floor.objects.find(o => o.id === id); if (item) { point=snap(point); updateFurniture(floor,item,{x:point[0],y:point[1]}); host.selectedObject = id; host.emit(); } }:undefined,onObjectResize:unlocked&&host.resizeObject===host.selectedObject?(id,size)=>{const item=floor.objects.find(o=>o.id===id);if(item){updateFurniture(floor,item,size);host.emit();}}:undefined });
+  const plan=renderPlan(floor, host._hass?.states || {}, { edit: true,viewState, mode: 'clean', selectedObject: host.selectedObject, onPoint: place, onObject: (id,point) => { if(host.pendingObject){place(point);return;}host.selectedObject = id; host.pendingObject = ''; host.render(); },onObjectContext:id=>{host.selectedObject=id;host.pendingObject='';host.render();host.shadowRoot.querySelector('[data-object-tools]')?.focus();}, onObjectMove: unlocked&&!host.pendingObject?(id, point) => { const item = floor.objects.find(o => o.id === id); if (item) { point=snap(point); updateFurniture(floor,item,{x:point[0],y:point[1]}); host.selectedObject = id; host.emit(); } }:undefined,onObjectResize:unlocked&&host.resizeObject===host.selectedObject?(id,size)=>{const item=floor.objects.find(o=>o.id===id);if(item){updateFurniture(floor,item,size);host.emit();}}:undefined });
   canvas.append(plan);
   plan.addEventListener('dragover',e=>{if(unlocked&&e.dataTransfer.types.includes('application/x-floorplan-object')){e.preventDefault();e.dataTransfer.dropEffect='copy';}});
   plan.addEventListener('drop',e=>{if(!unlocked)return;const type=e.dataTransfer.getData('application/x-floorplan-object'),point=plan.pointFromClient?.(e.clientX,e.clientY);if(!point||!LIBRARY.some(item=>item.id===type))return;e.preventDefault();e.stopPropagation();place(point,type);});
@@ -124,9 +122,6 @@ export function furnitureSetup(host, floor) {
     if(['kitchen_unit','island','kitchen_island'].includes(selected.type))for(const [key,label,fallback] of [['worktop_colour','Worktop colour','#eee9dc'],['handle_colour','Handle colour','#334148']])inspector.append(field(label,element('input',{type:'color',value:selected[key] || fallback,onchange:e=>{selected[key]=e.target.value;host.emit();}})));
     if(['dining_table','chair','side_table','desk'].includes(selected.type))inspector.append(field('Leg colour',element('input',{type:'color',value:selected.leg_colour || selected.colour || '#334148',onchange:e=>{selected.leg_colour=e.target.value;host.emit();}})));
     if(selected.type==='dining_table'){const finish=element('select',{onchange:e=>{selected.surface_finish=e.target.value;host.emit();}});for(const [value,text] of [['plain','Plain'],['speckled','Speckled']])finish.append(element('option',{value,text,selected:(selected.surface_finish || 'plain')===value}));inspector.append(field('Tabletop finish',finish));}
-    const spriteUpload=element('details',{open:host.spriteArtworkId===selected.id},[element('summary',{text:'Custom pixel artwork'}),element('p',{text:'Proportional transparent sprites; upright fronts may exceed the footprint. Keep game artwork private.'})]);
-    spriteUpload.addEventListener('toggle',()=>{host.spriteArtworkId=spriteUpload.open?selected.id:null;});
-    for(const [mode,label] of [['pokemon','Pokémon'],['zelda','Zelda']]){spriteUpload.append(field(`${label} furniture sprite`,element('input',{type:'file',accept:'image/png,image/jpeg,image/webp,image/svg+xml',disabled:!!host.uploadingStyle,onchange:e=>host.uploadStyleImage(floor.id,mode,e.target.files?.[0],selected.id)})));if(selected.style_images?.[mode])spriteUpload.append(button(`Remove ${label} sprite`,()=>{delete selected.style_images[mode];host.emit();}));}inspector.append(spriteUpload);
     const variants={extractor_fan:[['','Ceiling mounted'],['wall','Wall mounted']],stairs:[['','Solid'],['understairs','Sloping underside']],radiator:[['','Panel radiator'],['towel_rail','Chrome towel rail']],sink:[['','Vanity sink'],['inset','Inset kitchen sink']],kitchen_unit:[['','Base unit'],['wall','Wall cupboard'],['glass','Glazed wall cupboard'],['drawers','Drawer unit'],['cooker','Cooker'],['extractor','Extraction hood']],fridge:[['','Freestanding'],['integrated','Integrated']],sofa:[['','Straight sofa'],['corner','Corner sofa']],piano:[['','Upright piano'],['grand','Grand piano']],bed:[['','Double bed'],['single','Single bed']],desk:[['','Desk with computer'],['plain','Plain desk']],bookshelf:[['','Bookshelf'],['cubes','Cube storage']]};
     if(selected.type==='nanoleaf_panels'){
       const effect=element('select',{onchange:e=>{selected.panel_effect=e.target.value;host.emit();}});for(const [value,text] of [['static','Static'],['breathe','Breathe'],['wave','Wave'],['rainbow','Rainbow']])effect.append(element('option',{value,text,selected:(selected.panel_effect || 'static')===value}));inspector.append(field('Panel light effect',effect));

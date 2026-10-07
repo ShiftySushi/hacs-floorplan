@@ -22,7 +22,7 @@ test('image upload survives a concurrent configuration edit',async({page})=>{
     await editor.getByLabel('Card title',{exact:true}).fill('Edited during upload');
     await editor.getByLabel('Card title',{exact:true}).press('Tab');
     release();
-    await expect(page.locator('floorplan-card').locator('svg image')).toHaveAttribute('href','/api/image/serve/upload-test/original');
+    await expect.poll(()=>page.locator('floorplan-card').evaluate(el=>el.config.floors.some(floor=>floor.image==='/api/image/serve/upload-test/original'))).toBe(true);
     await expect(editor.getByLabel('Card title',{exact:true})).toHaveValue('Edited during upload');
     await expect(editor.getByRole('alert')).toHaveCount(0);
   } finally { release(); }

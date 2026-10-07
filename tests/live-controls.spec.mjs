@@ -83,11 +83,10 @@ test('second-floor printer opens its live camera feed',async({page},info)=>{
   await page.screenshot({path:info.outputPath('second-floor-printer-camera.png')});
   await feed.evaluate(img=>img.dispatchEvent(new Event('error')));await expect(feed).toHaveAttribute('src',/\/api\/camera_proxy\/camera\.example/);
 });
-test('3D states update without replacing the canvas and exterior camera is usable',async({page},info)=>{
-  const errors=[];page.on('pageerror',e=>errors.push(e.message));await setup(page);const card=page.locator('floorplan-card');await card.getByRole('button',{name:'3D',exact:true}).click();
-  await expect(card.locator('.plan-3d')).toHaveAttribute('data-printer-states','["printing"]');await expect(card.locator('.plan-3d')).toHaveAttribute('data-doors-open','1');
+test('states update without replacing the canvas and exterior camera is usable',async({page},info)=>{
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));await setup(page);const card=page.locator('floorplan-card');await expect(card.locator('.plan-diorama canvas')).toBeVisible();
   await card.evaluate(el=>{el.__canvas=el.plan.querySelector('canvas');el.hass={...el._hass,states:{...el._hass.states,'sensor.printer':{state:'error',attributes:{}},'binary_sensor.door':{state:'off',attributes:{}}}};});
-  await expect(card.locator('.plan-3d')).toHaveAttribute('data-printer-states','["error"]');await expect(card.locator('.plan-3d')).toHaveAttribute('data-doors-open','0');expect(await card.evaluate(el=>el.__canvas===el.plan.querySelector('canvas'))).toBe(true);
+  await expect(card.getByRole('button',{name:'Printer: error',exact:true})).toBeVisible();expect(await card.evaluate(el=>el.__canvas===el.plan.querySelector('canvas'))).toBe(true);
   await card.getByRole('button',{name:'External',exact:true}).click();await expect(card.locator('.exterior-camera img')).toBeVisible();await expect(card.locator('.exterior-camera')).toHaveCSS('opacity','1');await expect(card.locator('.plan-3d')).toHaveCSS('opacity','1');await page.screenshot({path:info.outputPath('exterior-live.png')});
   await expect.poll(()=>card.locator('.plan-3d').getAttribute('data-vehicle-states')).toContain('"visible":true');
   await card.evaluate(el=>{el.hass={...el._hass,states:{...el._hass.states,'device_tracker.car':{state:'not_home',attributes:{heading:90}}}};});

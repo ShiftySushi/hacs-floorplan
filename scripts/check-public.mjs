@@ -23,6 +23,7 @@ if (history) {
   }
 } else files = git('ls-files', '-z').split('\0').filter(Boolean).map(path => ({ path, object: `:${path}` }));
 for (const { path, object } of files) {
+  // No longer shipped, but these reviewed CC0 files remain in earlier commits, which the history check still scans.
   const licensedAsset = ['src/assets/kenney-furniture.json', 'src/assets/kenney-furniture-LICENSE.txt'].includes(path);
   const demoPreview = path === 'demo/preview.png'; // Reviewed capture of the public fictional demo only.
   const demoBoot = path === 'src/demo-boot.css'; // Public loading-screen styles.

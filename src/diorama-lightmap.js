@@ -18,7 +18,7 @@ vec3 dioLight(){
  */
 export function createLightmap(storeys,{scale=24,gain=1.7}={}){
   const width=Math.max(...storeys.map(s=>s.width))+.6,depth=Math.max(...storeys.map(s=>s.depth))+.6,w=Math.ceil(width*scale),h=Math.ceil(depth*scale);
-  const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h*storeys.length;const context=canvas.getContext('2d');
+  const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h*storeys.length;const context=canvas.getContext('2d',{willReadFrequently:true});
   const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.flipY=false;texture.generateMipmaps=false;texture.minFilter=THREE.LinearFilter;
   const shift=Array.from({length:MAX_STOREYS},()=>new THREE.Vector2());
   const uniforms={dioMap:{value:texture},dioShift:{value:shift},dioCount:{value:storeys.length},dioSize:{value:new THREE.Vector2(width,depth)},dioGain:{value:gain}},sources=[],patched=new Set();
@@ -50,5 +50,7 @@ export function createLightmap(storeys,{scale=24,gain=1.7}={}){
   }
   /** Mark every mesh under `root` as belonging to storey `index`. */
   function tag(root,index){root.traverse(node=>{if(node.isMesh&&!node.geometry.attributes.dioStorey)node.geometry.setAttribute('dioStorey',new THREE.BufferAttribute(new Float32Array(node.geometry.attributes.position.count).fill(index),1));});}
-  return {apply,add,draw,tag,setShift(index,x,z){shift[index].set(x,z);},dispose(){texture.dispose();}};
+  /** Painted light at a plan position, as [r, g, b] 0–255, from the last draw. */
+  function sample(storey,x,z){const [px,py]=pixel(x,z);return Array.from(context.getImageData(Math.round(px),Math.round(py)+storey*h,1,1).data).slice(0,3);}
+  return {apply,add,draw,tag,sample,setShift(index,x,z){shift[index].set(x,z);},dispose(){texture.dispose();}};
 }

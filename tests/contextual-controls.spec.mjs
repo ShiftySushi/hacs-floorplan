@@ -15,7 +15,6 @@ test('graphical card reveals controls and remembers a collapsible lighting panel
   await expect(card.locator('.inspector-slot')).toBeHidden();
   await page.reload();
   await expect(card.locator('.inspector-slot')).toBeHidden();
-  await card.getByRole('button',{name:'3D',exact:true}).click();
   await expect(card.locator('canvas')).toBeVisible();
   const bounds=await tools.boundingBox();expect(bounds.x).toBeGreaterThanOrEqual(0);expect(bounds.x+bounds.width).toBeLessThanOrEqual(page.viewportSize().width);
   if(info.project.name==='desktop'){

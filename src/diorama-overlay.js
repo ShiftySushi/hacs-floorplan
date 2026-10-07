@@ -1,6 +1,7 @@
 import {element} from './dom.js';
 
 const css=`
+.dio-overlay [hidden]{display:none!important}
 .dio-overlay{position:absolute;inset:0;pointer-events:none;font-family:Roboto,"Helvetica Neue",system-ui,sans-serif;color:#fff;font-variant-numeric:tabular-nums}
 .dio-weather{position:absolute;top:clamp(12px,3.2cqh,40px);right:clamp(14px,5cqw,110px);display:grid;grid-template-columns:auto auto;align-items:center;column-gap:clamp(14px,2.6cqw,48px);text-shadow:0 1px 10px #0009}
 .dio-weather svg.dio-sky{width:clamp(54px,6cqw,110px);height:auto;grid-row:1/3}
@@ -33,11 +34,11 @@ function sky(){
 }
 
 /** Screen-space furniture: the weather block, clock and per-room readouts. */
-export function createOverlay(plan,{compact=false}={}){
+export function createOverlay(plan,{compact=false,clock:showClock=false}={}){
   const root=element('div',{className:'dio-overlay'+(compact?' dio-compact':'')}),style=element('style',{text:css});
   const temp=element('div',{className:'dio-temp'}),facts=element('div',{className:'dio-facts'}),weather=element('div',{className:'dio-weather'},[sky(),temp,facts]);
   const time=element('span'),date=element('small'),clock=element('div',{className:'dio-clock'},[time,date]);
-  root.append(clock,weather);plan.append(style,root);
+  clock.hidden=!showClock;weather.hidden=true;root.append(clock,weather);plan.append(style,root);
   let pills=[],labels=[],measured=-1;
   const tick=()=>{const now=new Date();time.textContent=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});date.textContent=now.toLocaleDateString([],{weekday:'long',day:'numeric',month:'long'});};
   tick();const timer=setInterval(tick,15000);

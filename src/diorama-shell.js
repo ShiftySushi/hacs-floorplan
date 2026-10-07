@@ -20,7 +20,7 @@ export function buildShell(floor,towardsCamera,{holes=[],partition=LOW}={}){
   section.userData.noLightmap=true;
   const glass=new THREE.MeshBasicMaterial({color:'#31507f',transparent:true,opacity:.32,depthWrite:false,side:THREE.DoubleSide});
   const box=(w,h,d,x,y,z,material,parent)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);mesh.position.set(x,y+h/2,z);mesh.castShadow=mesh.receiveShadow=true;parent.add(mesh);return mesh;};
-  const textures=[],slabs=[];
+  const textures=[];
   for(const room of rooms){
     if(!room.points?.length)continue;
     const shape=new THREE.Shape(room.points.map(p=>new THREE.Vector2((p[0]/100-.5)*width,-(p[1]/100-.5)*depth)));
@@ -28,7 +28,7 @@ export function buildShell(floor,towardsCamera,{holes=[],partition=LOW}={}){
     const surface=room.material||'wood',colour=room.colour||({tile:'#c8d2d1',carpet:'#c4ada2'}[surface]||'#cbb89a');
     const map=surface==='tile'?tiles(colour):surface==='carpet'?fabric(colour):planks(colour);map.repeat.setScalar(surface==='tile'?1/.9:surface==='carpet'?2:1/1.6);textures.push(map);
     const slab=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:SLAB,bevelEnabled:false}),[new THREE.MeshLambertMaterial({map,color:new THREE.Color().setScalar(1-.2*THREE.MathUtils.smoothstep(new THREE.Color(colour).getHSL({}).l,.45,.75))}),section]);
-    slab.rotation.x=-Math.PI/2;slab.position.y=-SLAB;slab.receiveShadow=true;group.add(slab);slabs.push(slab);
+    slab.rotation.x=-Math.PI/2;slab.position.y=-SLAB;slab.receiveShadow=true;group.add(slab);
   }
   const walls=[];
   for(const plan of planCutaway(floor,[towardsCamera.x,towardsCamera.z],{low:partition})){
@@ -62,7 +62,7 @@ export function buildShell(floor,towardsCamera,{holes=[],partition=LOW}={}){
       }
     }
   }
-  return {group,position,walls,slabs,width,depth,dispose(){for(const texture of textures)texture.dispose();}};
+  return {group,position,walls,width,depth,dispose(){for(const texture of textures)texture.dispose();}};
 }
 
 /** Distance from a plan position to the nearest wall, with that wall. */

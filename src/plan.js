@@ -7,7 +7,6 @@ import { floorDimensions } from './scene.js';
 import { roomLightSources, lightAppearance, roomDarkness } from './illumination.js';
 import { heatingState } from './heating.js';
 import {radiatorEntity} from './live-data.js';
-import { pixelPattern, pixelRoomTrim } from './pixel-style.js';
 import { blendAppearance, panelFrame } from './light-animation.js';
 import { stageColour } from './daylight.js';
 import { tvIsOn, drawTVFrame } from './tv-animation.js';
@@ -65,7 +64,7 @@ export function renderPlan(floor, states, options={}) {
   const pointAt=e=>{const r=content.getBoundingClientRect();return orientPoint([(e.clientX-r.left)/r.width*100,(e.clientY-r.top)/r.height*100],transform,true).map(n=>Math.round(Math.max(0,Math.min(100,n))*10)/10);};
   function layout() {
     const lightingStates=stripLightStates(floor.objects || [],states);
-    const mode=options.mode || 'clean', pixel=['pokemon','zelda'].includes(mode),styleImage=pixel?floor.style_images?.[mode]:null;
+    const mode='clean', pixel=false,styleImage=null;
     transform=orientation(ratio,(floor.rotation || 0)+viewRotation);
     const {w,h,width,height}=transform,dims=floorDimensions({...floor,aspect_ratio:ratio});
     plan.style.aspectRatio=`${width}/${height}`;plan.style.setProperty('--plan-ratio',String(width/height));plan.dataset.mode=mode;svg.setAttribute('viewBox',`0 0 ${width} ${height}`);
@@ -73,7 +72,6 @@ export function renderPlan(floor, states, options={}) {
     const defs=svgElement('defs');group.append(defs);
     if(styleImage || floor.image)group.append(svgElement('image',{href:styleImage || floor.image,width:w,height:h,preserveAspectRatio:'none',opacity:styleImage?1:pixel?.1:1,style:pixel?'image-rendering:pixelated':''}));
     plan.style.background=`var(--fp-stage-background, ${stageColour(mode,options.daylight ?? .5)})`;
-    if(pixel)defs.append(pixelPattern(`${patternId}-wall`,mode,'wall'));
     const points=p=>p.map(([x,y])=>`${x/100*w},${y/100*h}`).join(' '), overlays=[];
     for(const room of floor.rooms || []) {
       const material=room.material || (mode==='zelda'?'tile':'wood'), id=`${patternId}-${defs.childNodes.length}`;
@@ -91,10 +89,9 @@ export function renderPlan(floor, states, options={}) {
       } else {
         for(let y=4;y<48;y+=8)for(let x=4;x<48;x+=8)pattern.append(svgElement('path',{d:mode==='zelda'?`M${x-2} ${y}h4v4h-4Z`:`M${x} ${y}h2`,fill:'none',stroke:'#ffffff','stroke-opacity':pixel?.22:.14,'stroke-width':pixel?2:1}));
       }
-      defs.append(pixel?pixelPattern(id,mode,material,room.colour):pattern);
+      defs.append(pattern);
       const state=roomState(room,states,floor),attrs={points:points(room.points),'vector-effect':'non-scaling-stroke'};
       if(!styleImage)group.append(svgElement('polygon',{...attrs,fill:`url(#${id})`,'fill-opacity':options.edit?.55:1,stroke:pixel?(mode==='pokemon'?'#765647':'#4a5946'):'#7a8788','stroke-width':pixel?5:1.5}));
-      if(pixel&&!styleImage)group.append(pixelRoomTrim(room.points.map(([x,y])=>[x/100*w,y/100*h]),mode));
       const clipId=`${id}-clip`,maskId=`${id}-shade`;
       const clip=svgElement('clipPath',{id:clipId});clip.append(svgElement('polygon',attrs));defs.append(clip);
       const mask=svgElement('mask',{id:maskId,maskUnits:'userSpaceOnUse',x:0,y:0,width:w,height:h,style:'mask-type:luminance'});

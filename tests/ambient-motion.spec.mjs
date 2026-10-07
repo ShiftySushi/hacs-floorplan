@@ -1,38 +1,17 @@
 import {test,expect} from '@playwright/test';
-test('entrance, progressive controls and optional idle orbit respect interaction',async({page},info)=>{
+test('entrance and progressive controls respect interaction',async({page},info)=>{
  await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));const card=page.locator('floorplan-card');
  await expect(card.locator('ha-card')).toHaveClass(/has-entered/);
- await card.getByRole('button',{name:'3D',exact:true}).click();
- await card.locator('.display-settings summary').click();
- await card.getByLabel('Slow idle rotation (3D)',{exact:true}).check();
- await card.locator('.display-settings summary').click();
- await page.mouse.move(0,0);
- await expect.poll(async()=>Number(await card.locator('.plan').getAttribute('data-idle-angle')),{timeout:12000}).toBeGreaterThan(.001);
- await card.locator('canvas').dispatchEvent('pointermove');
- await expect(card.locator('.plan')).toHaveAttribute('data-idle-angle','0');
- await card.locator('.display-settings summary').click();
- await card.getByLabel('Slow idle rotation (3D)',{exact:true}).uncheck();
- await card.locator('.display-settings summary').click();
+ await expect(card.locator('.plan-diorama canvas')).toBeVisible();
  await card.getByRole('button',{name:'Lighting',exact:true}).click();
+ await expect(card.locator('.inspector-slot')).toBeVisible();
  await page.screenshot({path:`/tmp/ambient-controls-${info.project.name}.png`});
 });
-test('reduced motion suppresses decoration but honours explicit idle rotation',async({page})=>{
- test.setTimeout(45000);
+test('reduced motion suppresses the entrance and holds the illustrated view still',async({page})=>{
  await page.emulateMedia({reducedMotion:'reduce'});await page.goto('/demo/');await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));const card=page.locator('floorplan-card');
- await card.getByRole('button',{name:'3D',exact:true}).click();
  await expect(card.locator('.plan')).toHaveCSS('animation-name','none');
- await expect(card.locator('.plan')).toHaveAttribute('data-idle-state','disabled');
- await card.locator('.display-settings summary').click();await card.getByLabel('Slow idle rotation (3D)',{exact:true}).check();
- await card.locator('.display-settings summary').click();await page.mouse.move(0,0);
- await expect.poll(async()=>Number(await card.locator('.plan').getAttribute('data-idle-angle')),{timeout:12000}).toBeGreaterThan(.001);
- await page.reload();
- await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-loading'));
- // Navigation completes before the restored WebGL view has painted. Start the
- // idle deadline after first paint and its visibility notification, especially
- // with software rendering on hosted runners.
- await expect(card.locator('canvas').first()).toBeVisible();
- await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
- await expect.poll(async()=>Number(await card.locator('.plan').getAttribute('data-idle-angle')),{timeout:12000}).toBeGreaterThan(.001);
- await card.locator('.display-settings summary').click();await card.getByLabel('Slow idle rotation (3D)',{exact:true}).uncheck();
- await expect(card.locator('.plan')).toHaveAttribute('data-idle-state','disabled');
+ // With reduced motion lamps hold a steady level instead of shimmering.
+ const plan=card.locator('.plan-diorama');await expect(plan.locator('canvas')).toBeVisible();
+ const lit=()=>plan.evaluate(node=>{const floor=document.querySelector('floorplan-card').config.floors[0],light=floor.entities.find(e=>e.entity.startsWith('light.'));return JSON.stringify(node.sampleLight(floor.id,[light.x,light.y]));});
+ const first=await lit();await page.waitForTimeout(700);expect(await lit()).toBe(first);
 });
