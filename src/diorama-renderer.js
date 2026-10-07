@@ -71,7 +71,7 @@ export function renderDiorama(input,states,options={}){
   const lambert=colour=>new THREE.MeshLambertMaterial({color:colour});
   const planPosition=floor=>{const {width,depth}=floorDimensions(floor);return (p,y=0)=>new THREE.Vector3((p[0]/100-.5)*width,y,(p[1]/100-.5)*depth);};
   const stairsOf=floor=>(floor?.objects||[]).filter(o=>o.type==='stairs'),ceilingOf=floor=>Math.max(2.4,...(floor.walls||[]).map(w=>w.height||2.4));
-  let elevation=0,ghosts=0;
+  let elevation=0,ghosts=0;const fallbacks=[];
   // Lamps are painted into a light map rather than added as real lights: see diorama-lightmap.js.
   const lightmap=createLightmap(floors.map(floor=>{const base=elevation;elevation+=ceilingOf(floor)+SLAB+(options.explode||0);return {...floorDimensions(floor),base};}));elevation=0;
   floors.forEach((floor,index)=>{
@@ -121,7 +121,7 @@ export function renderDiorama(input,states,options={}){
       if(object.type==='extractor_fan'&&(object.variant!=='wall'||options.hideExtractionFans))continue;
       if(object.type==='radiator'&&options.hideRadiators)continue;
       const fixture=['lamp','wall_light','nanoleaf_panels','tv_lightstrip'].includes(object.type);
-      const model=assets.build(object),middle=at.clone().setY(at.y+(object.height||.3)/2);
+      const model=assets.build(object);if(model.userData.fallback)fallbacks.push(object.id);const middle=at.clone().setY(at.y+(object.height||.3)/2);
       // Something hung on a wall that has been cut down below it would float in mid-air, so
       // it is drawn as a ghost: still there to read, and never hiding the room behind it.
       if(isHung(object)){const wall=nearestWall(at,shell.walls);if(wall.distance<.45&&wall.height<(object.elevation_m||0)+(object.height||.3)*.8){ghost(model);ghosts++;}}
@@ -394,6 +394,7 @@ export function renderDiorama(input,states,options={}){
   plan.reserve=pixels=>{const share=Math.max(0,Math.min(.5,pixels/(plan.clientWidth||1)));if(share!==reserved){reserved=share;refit=true;last=0;schedule();}};
   // Inspection hooks for tests and tuning: WebGL pixels cannot be read back reliably.
   plan.sampleLight=(floorId,point)=>{const storey=storeys.find(s=>s.floor.id===floorId);if(!storey)return null;const now=performance.now();animate(now,reducedMotion?0:now/1000);lightmap.draw();const at=storey.position(point);return lightmap.sample(storey.index,at.x,at.z);};
-  plan.stats=()=>{let meshes=0;scene.traverse(node=>{if(node.isMesh)meshes++;});return {ceilings:shells.flatMap(shell=>shell.group.children.filter(node=>node.userData.ceiling).map(node=>node.userData.ceiling)),televisions:televisions.map(tv=>({id:tv.object.id,on:tvIsOn(states[tv.object.media_entity])})),slideshows:televisions.filter(tv=>tv.slides.count).length,ghosts,meshes,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,programs:renderer.info.programs.length};};
+  plan.locate=(floorId,point,height=0)=>{const storey=storeys.find(s=>s.floor.id===floorId);if(!storey)return null;const p=storey.position(point,height).add(storey.group.position).project(camera);return [(p.x*.5+.5)*100,(-p.y*.5+.5)*100];};
+  plan.stats=()=>{let meshes=0;scene.traverse(node=>{if(node.isMesh)meshes++;});return {ceilings:shells.flatMap(shell=>shell.group.children.filter(node=>node.userData.ceiling).map(node=>node.userData.ceiling)),televisions:televisions.map(tv=>({id:tv.object.id,on:tvIsOn(states[tv.object.media_entity])})),slideshows:televisions.filter(tv=>tv.slides.count).length,ghosts,fallbacks,meshes,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,programs:renderer.info.programs.length};};
   plan.update=update;plan.dispose=dispose;update(states,options);return plan;
 }
