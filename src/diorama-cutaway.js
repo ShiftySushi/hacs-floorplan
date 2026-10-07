@@ -24,6 +24,25 @@ function footprint(object,metre){
 }
 
 /**
+ * Whether a sloping ceiling would come between the camera and the room. Sight lines are
+ * walked from points on the floor, and at table height, of every room towards the camera;
+ * a slope that any of them meets has to be drawn see-through. A slope that falls away
+ * from the viewer, down to a far wall, meets none and can stand as part of the backdrop.
+ * `slope.vertices` are four [x, y, height] points: floor-local percentages and metres.
+ */
+export function slopeHides(floor,slope,towards,{elevation=ELEVATION,grid=12}={}){
+  const {width,depth}=floorDimensions(floor),rooms=floor.rooms||[],v=slope.vertices.map(([x,y,h])=>[(x/100-.5)*width,h,(y/100-.5)*depth]);
+  const d=[towards[0]*Math.cos(elevation),Math.sin(elevation),towards[1]*Math.cos(elevation)],sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+  // Möller–Trumbore, for a ray leaving `origin` towards the camera.
+  const meets=(origin,a,b,c)=>{const e1=sub(b,a),e2=sub(c,a),p=cross(d,e2),det=dot(e1,p);if(Math.abs(det)<1e-9)return false;const s=sub(origin,a),u=dot(s,p)/det;if(u<0||u>1)return false;const q=cross(s,e1),w=dot(d,q)/det;return w>=0&&u+w<=1&&dot(e2,q)/det>.01;};
+  for(let i=0;i<=grid;i++)for(let j=0;j<=grid;j++){
+    const x=100*i/grid,y=100*j/grid;if(!rooms.some(room=>inside(x,y,room.points)))continue;
+    for(const height of [0,.9]){const origin=[(x/100-.5)*width,height,(y/100-.5)*depth];if(meets(origin,v[0],v[1],v[2])||meets(origin,v[0],v[2],v[3]))return true;}
+  }
+  return false;
+}
+
+/**
  * Decide every wall's height for one fixed viewing direction.
  *
  * Only three heights are ever used, so the cut reads as deliberate:

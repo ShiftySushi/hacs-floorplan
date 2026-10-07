@@ -93,7 +93,7 @@ button:hover:not(:disabled){box-shadow:0 2px 8px #243d3215;background:var(--fp-s
 .display-settings>summary{cursor:pointer;list-style:none}
 .stage-tools:has(.display-settings[open]){z-index:10}
 .display-popover{box-sizing:border-box;position:absolute;top:calc(100% + 8px);overflow:auto}.display-popover select{width:100%}.display-popover p{font-size:11px}
-.floorplan-dashboard .marker{scale:var(--fp-marker-scale,.8)}
+.floorplan-dashboard .marker{scale:calc(var(--fp-marker-scale,.8)*var(--fp-storey-scale,1))}
 .floorplan-dashboard[data-lights=hidden] .overlay-lights,.floorplan-dashboard[data-temperatures=hidden] .overlay-temperatures,.floorplan-dashboard[data-temperatures=hidden] .outdoor-temperature,.floorplan-dashboard[data-heating=hidden] .overlay-heating{display:none}
 .floorplan-dashboard[data-lights=always] .overlay-lights,.floorplan-dashboard[data-temperatures=always] .overlay-temperatures,.floorplan-dashboard[data-temperatures=always] .outdoor-temperature,.floorplan-dashboard[data-heating=always] .overlay-heating,.floorplan-dashboard[data-controls=always] .stage-tools,.floorplan-dashboard[data-controls=always] .docked-navigation,.floorplan-dashboard:has(.display-settings[open]) .stage-tools{opacity:1;transition-delay:0s}
 @container(max-width:759px){.floorplan-dashboard .plan-slot{padding-top:150px}.stage-tools .floor-tabs{flex-basis:auto;margin:0 auto 0 0}.stage-tools .stage-style{flex-basis:auto;margin-left:auto}.docked-navigation{gap:4px;padding:6px}.navigation-group+.navigation-group{padding-left:4px}.docked-navigation button{min-width:27px;padding:4px}.display-settings{position:static}.display-popover{right:0;left:auto;top:calc(100% + 6px);width:min(280px,100%)}}

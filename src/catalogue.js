@@ -40,13 +40,11 @@ export function panelArrangement(item,width,height) {
   return {radius,centres:raw.map(([x,y])=>[(x-(left+right)/2)*radius,(y-(top+bottom)/2)*radius])};
 }
 
-// Original, procedural top-down artwork. All styles share the same object anchor.
-export function objectGlyph(item, mode='clean') {
-  const pixel = mode==='pokemon' || mode==='zelda';
-  const palette = mode==='pokemon' ? ['#805345','#ebca96','#4c8b91','#efe1af'] : mode==='zelda' ? ['#544637','#b6975e','#69835e','#d1cc99'] : ['#586774','#bec8cf','#94aeb7','#e5e9e9'];
-  const [edge,wood,fabric,white]=palette;
-  const g=svgElement('g',{'stroke':edge,'stroke-width':pixel?4:2,'stroke-linejoin':pixel?'miter':'round','shape-rendering':pixel?'crispEdges':'geometricPrecision'});
-  const rect=(x,y,w,h,fill=wood,r=3)=>g.append(svgElement('rect',{x,y,width:w,height:h,rx:pixel?0:r,fill}));
+// Original, procedural top-down artwork drawn around one shared object anchor.
+export function objectGlyph(item) {
+  const [edge,wood,fabric,white]=['#586774','#bec8cf','#94aeb7','#e5e9e9'];
+  const g=svgElement('g',{'stroke':edge,'stroke-width':2,'stroke-linejoin':'round','shape-rendering':'geometricPrecision'});
+  const rect=(x,y,w,h,fill=wood,r=3)=>g.append(svgElement('rect',{x,y,width:w,height:h,rx:r,fill}));
   const line=(x1,y1,x2,y2,stroke=edge,width=2)=>g.append(svgElement('line',{x1,y1,x2,y2,stroke,'stroke-width':width}));
   const ellipse=(cx,cy,rx,ry,fill=white)=>g.append(svgElement('ellipse',{cx,cy,rx,ry,fill}));
   const colour=item.colour || fabric;
@@ -81,16 +79,5 @@ export function objectGlyph(item, mode='clean') {
   if(item.type==='sofa' && item.variant==='corner')rect(4,53,31,44,colour,6);
   if(item.type==='piano' && item.variant==='grand'){g.replaceChildren();g.append(svgElement('path',{d:'M8 94V8H58Q94 8 94 42L70 94Z',fill:wood}));rect(12,65,55,25,white,0);for(let i=20;i<66;i+=8)line(i,65,i,90);}
   if(item.type==='bed' && item.variant==='single'){rect(12,12,76,23,white,6);}
-  if(pixel && !['plant','lamp','tv','shower','toilet','sink','bath','stairs','kitchen_unit'].includes(item.type)) {
-    if(mode==='pokemon') {
-      // Handheld style: stepped highlight corners and warm inset wood grain.
-      g.append(svgElement('path',{d:'M7 22V10H22 M78 90H91V77',fill:'none',stroke:'#f4e6bc','stroke-width':3}));
-      if(['sofa','bed','chair'].includes(item.type))for(let x=22;x<85;x+=20)rect(x,65,5,5,'#d6b499',0);
-    } else {
-      // Adventure style: visible woven checker detailing and iron furniture studs.
-      if(['sofa','bed','rug','chair','office_chair'].includes(item.type))for(let y=48;y<83;y+=12)for(let x=22;x<83;x+=12)if((x+y)%24===10)rect(x,y,5,5,'#9ead7b',0);
-      for(const [x,y] of [[7,7],[87,7],[7,87],[87,87]])rect(x,y,5,5,'#d8c88b',0);
-    }
-  }
   return g;
 }

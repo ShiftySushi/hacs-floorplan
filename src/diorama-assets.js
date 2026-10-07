@@ -182,8 +182,8 @@ export function createAssets(){
   function picture(o){
     const {group,box}=kit(),w=o.width,h=o.height,d=o.depth;
     box(w,h,d,0,0,0,wood(o.colour||'#c4a27a'));box(w-.05,h-.05,.006,0,.025,d/2,'#f3efe3');
-    const art=new THREE.Mesh(new THREE.PlaneGeometry(w-.12,h-.12),new THREE.MeshLambertMaterial({color:'#6f8f8a'}));art.position.set(0,h/2,d/2+.005);group.add(art);
-    if(typeof o.artwork_image==='string'&&/^(\/(?!\/)|https?:\/\/|data:image\/(png|jpeg|webp);base64,)/.test(o.artwork_image))new THREE.TextureLoader().load(o.artwork_image,texture=>{texture.colorSpace=THREE.SRGBColorSpace;art.material.map=texture;art.material.color.set('#ffffff');art.material.needsUpdate=true;});
+    // The renderer paints this plane: see artwork3d.js.
+    const art=new THREE.Mesh(new THREE.PlaneGeometry(w-.12,h-.12),new THREE.MeshLambertMaterial({color:'#6f8f8a'}));art.position.set(0,h/2,d/2+.005);art.userData.artwork=true;group.add(art);
     return group;
   }
 
@@ -202,12 +202,20 @@ export function createAssets(){
     return group;
   }
 
+  // A plain strip is only its light. An addressable one shows how much of its length is lit,
+  // as a bar on the glow layer that strip-pattern.js resizes and recolours.
+  function strip(o){
+    const group=new THREE.Group();if(!o.pattern_entity)return group;
+    const bar=new THREE.Mesh(new THREE.BoxGeometry(o.width,.03,.03),new THREE.MeshBasicMaterial({color:'#ffffff'}));bar.position.y=o.height/2;bar.layers.set(1);bar.userData.stripEmitter=true;bar.visible=false;group.add(bar);
+    return group;
+  }
+
   const context={kit,mat,wood,cloth,tone,seeded,bookColours},kitchen=kitchenAssets(context),bathroom=bathroomAssets(context),bedroom=bedroomAssets(context),office=officeAssets(context);
   const hung=o=>{const model=o.variant==='towel_rail'?bathroom.towelRail(o):radiator(o);return model;};
   const builders={...kitchen,...bathroom,...bedroom,...office,sofa,tv,rug,radiator:hung,piano,display_cabinet:displayCabinet,computer,speaker,picture,
     bookshelf:o=>o.variant==='cubes'?office.cubes(o):bookshelf(o),sink:o=>kitchen.sink(o)||bathroom.sink(o),
     tv_bench:o=>cabinet(o,o.product_id?.startsWith('lyla-')?{colour:o.colour||'#ae784b'}:{colour:o.colour||'#252626',dark:true}),
-    side_table:o=>bedroom.side_table(o)||(o.variant?null:sideTable(o)),lamp:o=>o.product_id?.startsWith('mathmos-')?lavaLamp(o):null,tv_lightstrip:()=>new THREE.Group()};
+    side_table:o=>bedroom.side_table(o)||(o.variant?null:sideTable(o)),lamp:o=>o.product_id?.startsWith('mathmos-')?lavaLamp(o):null,tv_lightstrip:strip};
 
   /** Returns a positioned-at-origin model; unknown types fall back to the existing library. */
   function build(object){

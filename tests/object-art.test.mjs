@@ -5,7 +5,7 @@ import { objectArtwork } from '../src/object-art.js';
 function artwork(item,width,depth) {
   const previous=globalThis.document;
   globalThis.document={createElementNS:(_ns,tag)=>({tag,attrs:{},children:[],setAttribute(key,value){this.attrs[key]=String(value);},append(...children){this.children.push(...children);},replaceChildren(...children){this.children=children;}})};
-  try {return objectArtwork(item,'clean',width,depth);} finally {globalThis.document=previous;}
+  try {return objectArtwork(item,width,depth);} finally {globalThis.document=previous;}
 }
 const flatten=node=>[node,...node.children.flatMap(flatten)];
 
