@@ -1,13 +1,11 @@
 import { svgElement } from './dom.js';
 import { objectGlyph, panelArrangement } from './catalogue.js';
-import { retroFurniture } from './retro-furniture.js';
 import { productPreset } from './product-catalogue.js';
 
 // Draw in the rendered footprint, using one scale for small details in both axes.
 // Length changes add cabinet doors, cushions or treads instead of stretching them.
 export function objectArtwork(item, mode, width, depth) {
   const product=productPreset(item),footprint=()=>svgElement('rect',{width,height:depth,fill:item.type==='tv'?'none':item.colour || '#ac8059',stroke:'none','data-product-footprint':''});
-  const retro=retroFurniture(item,mode,width,depth);if(retro){if(product)retro.prepend(footprint());return retro;}
   const pixel=['pokemon','zelda'].includes(mode), unit=Math.min(width,depth), inset=unit*.05;
   const [edge,wood,fabric,white]=mode==='pokemon'?['#805345','#ebca96','#4c8b91','#efe1af']:mode==='zelda'?['#544637','#b6975e','#69835e','#d1cc99']:['#586774','#bec8cf','#94aeb7','#e5e9e9'];
   const g=svgElement('g',{stroke:edge,'stroke-width':unit*(pixel?.025:.015),'stroke-linejoin':pixel?'miter':'round','shape-rendering':pixel?'crispEdges':'geometricPrecision'});

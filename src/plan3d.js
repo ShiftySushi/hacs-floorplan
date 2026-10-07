@@ -11,7 +11,6 @@ import {wallDaylight,roomDaylightWindows} from './wall-daylight.js';
 import {lavaAppearance} from './lava3d.js';
 import {batchStaticModel} from './static-model3d.js';
 import { furniture3D } from './furniture3d.js';
-import { kenneyFurniture } from './kenney-furniture.js';
 import { renderPlan } from './plan.js';
 import { element, button } from './dom.js';
 import { floorDimensions } from './scene.js';
@@ -25,7 +24,6 @@ import {weather3D} from './weather3d.js';
 import {isPresenceSensor} from './presence-sensors.js';
 import {roomPresence} from './rooms.js';
 import { tvIsOn, drawTVFrame, tvSlideshow, tvSceneIndex } from './tv-animation.js';
-import { createSimsStyle } from './sims-style.js';
 
 /** Split a wall into solid rectangles; openings are real holes, not painted doors. */
 export function wallSections(length, height, openings = []) {
@@ -98,7 +96,7 @@ export function render3D(floor, states, options = {}) {
   try { renderer=new THREE.WebGLRenderer({antialias:options.quality!=='low',alpha:true,powerPreference:'low-power'}); }
   catch {const fallback=renderPlan(floor,states,{...options,mode:'clean'});fallback.prepend(element('p',{className:'hint',text:'3D is unavailable on this device. Showing the 2D floorplan.'}));fallback.update ||= ()=>{};fallback.dispose ||= ()=>{};return fallback;}
   const scene=new THREE.Scene(), world=new THREE.Group();scene.add(world);
-  const sims=options.mode==='sims'?createSimsStyle():null,home=sims?{azimuth:Math.PI/4,elevation:.615,zoom:1.25}:{azimuth:.4,elevation:1,zoom:1.35};
+  const home={azimuth:.4,elevation:1,zoom:1.35};
   if(options.exterior)Object.assign(home,{azimuth:-1,elevation:.75,zoom:1.35});
   const floors=(options.exterior||options.building)&&options.allFloors?.length?options.allFloors:[floor];
   if(floors.length>1&&!options.exterior)home.zoom=.95;
@@ -155,7 +153,6 @@ export function render3D(floor, states, options = {}) {
   storey.position.set(placement.x,placement.y,placement.z);storey.rotation.y=-(floor.rotation || 0)*Math.PI/180;
   const localWorld=storey;
   const content=new Map((floor.rooms || []).map(room=>{const group=new THREE.Group();localWorld.add(group);return [room.id,group];})),wallMeta=new Map((floor.walls || []).map(wall=>[wall,isExteriorWall(wall,floor)]));
-  if(sims&&index===0&&!options.isolatedRoom)sims.lawn(localWorld,width,depth);
   const position=(p,y=0)=>new THREE.Vector3((p[0]/100-.5)*width,y,(p[1]/100-.5)*depth);
   markerSpaces.set(floor.id,{floor,position,group:storey});
   if(floors.length>1){const node=element('span',{text:floor.name || floor.id});node.style.cssText='position:absolute;pointer-events:none;padding:4px 8px;border-radius:8px;background:#ffffffdc;color:#263b48;font-size:12px;font-weight:700;transform:translate(-50%,-50%);z-index:2';plan.append(node);storeyLabels.push({node,point:position([50,100],.1),group:storey});}
@@ -170,8 +167,7 @@ export function render3D(floor, states, options = {}) {
     // Fine board seams add scale without downloading textures.
     const edges=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:'#9c8d79'}));mesh.add(edges);
     const centre=room.points.reduce((a,p)=>[a[0]+p[0]/room.points.length,a[1]+p[1]/room.points.length],[0,0]);
-    const presence=sims?.presence(localWorld,position(centre,Math.max(2.4,...(floor.walls || []).map(w=>w.height || 2.4))+.35));
-    const state={room,floor,mesh,edges,presence,base:new THREE.Color(colour),group:content.get(room.id),value:options.follow?0:1};roomMeshes.push(state);state.group.userData.follow=state;
+    const state={room,floor,mesh,edges,base:new THREE.Color(colour),group:content.get(room.id),value:options.follow?0:1};roomMeshes.push(state);state.group.userData.follow=state;
   }
     for(const marker of (floor.entities || []).filter(e=>e.entity.startsWith('light.'))){
       if((floor.objects || []).some(o=>o.light_entity===marker.entity))continue;
@@ -194,7 +190,7 @@ export function render3D(floor, states, options = {}) {
     const group=new THREE.Group();group.position.copy(a);group.rotation.y=-Math.atan2(b.z-a.z,b.x-a.x);localWorld.add(group);
     const height=wall.height || 2.4;
     const externalWall=wallMeta.get(wall),pieces=[];
-    for(const r of wallSections(length,height,wall.openings))pieces.push(box(r.width,r.height,wall.thickness || .15,r.x,r.y,0,sims?.wallColour || '#ece8dc',group));
+    for(const r of wallSections(length,height,wall.openings))pieces.push(box(r.width,r.height,wall.thickness || .15,r.x,r.y,0,'#ece8dc',group));
     pieces.push(...wardrobeDoors(group,wall,length));
     for(const opening of wall.openings || []){
       const key=JSON.stringify([floor.id,wall.sourceWallId||wall.id,opening.id]);options.viewState ||= {};options.viewState.doors ||= {};
@@ -225,11 +221,10 @@ export function render3D(floor, states, options = {}) {
   }
   for(const join of wallJoins(floor.walls || [],width,depth)){
     const joined=(floor.walls || []).filter(wall=>[wall.a,wall.b].some(point=>Math.hypot((point[0]/100-.5)*width-join.x,(point[1]/100-.5)*depth-join.z)<.025));
-    const mesh=new THREE.Mesh(new THREE.CylinderGeometry(join.radius,join.radius,join.height,16),material(sims?.wallColour || '#ece8dc'));mesh.userData.externalWall=joined.length>0&&joined.every(wall=>wallMeta.get(wall));mesh.position.set(join.x,join.height/2,join.z);mesh.castShadow=true;mesh.receiveShadow=true;localWorld.add(mesh);wallMeshes.push(mesh);
+    const mesh=new THREE.Mesh(new THREE.CylinderGeometry(join.radius,join.radius,join.height,16),material('#ece8dc'));mesh.userData.externalWall=joined.length>0&&joined.every(wall=>wallMeta.get(wall));mesh.position.set(join.x,join.height/2,join.z);mesh.castShadow=true;mesh.receiveShadow=true;localWorld.add(mesh);wallMeshes.push(mesh);
   }
-  for(const object of floor.objects || []) {const model=(sims?kenneyFurniture(object):null) || furniture3D(object),room=objectRoom(object,floor);model.position.copy(position([object.x,object.y],.025+(object.elevation_m || 0)));(content.get(room?.id)||localWorld).add(model);
+  for(const object of floor.objects || []) {const model=furniture3D(object),room=objectRoom(object,floor);model.position.copy(position([object.x,object.y],.025+(object.elevation_m || 0)));(content.get(room?.id)||localWorld).add(model);
     if(isPresenceSensor(object))presenceModels.push({object,model});
-    sims?.furniture(model);
     if(options.hideLightFixtures&&['lamp','wall_light','nanoleaf_panels','tv_lightstrip'].includes(object.type))model.visible=false;
     if(options.hideExtractionFans&&object.type==='extractor_fan')model.visible=false;
     if(!isPresenceSensor(object)&&!object.light_entity&&!object.pattern_entity&&!['tv','picture','radiator','printer_3d'].includes(object.type))batchStaticModel(model);
@@ -368,8 +363,8 @@ export function render3D(floor, states, options = {}) {
       }});}
     const daylight=Math.max(0,Math.min(1,Number.isFinite(options.daylight)?options.daylight:daylightLevel(states)));
     ambient.intensity=.18+daylight*1.22;sun.intensity=daylight*1.5;
-    for(const {room,floor,mesh,edges,base,illumination,presence} of roomMeshes){mesh.material.color.copy(base).multiplyScalar(.85);
-      const occupied=roomPresence(room,floor).some(id=>states[id]?.state==='on');if(presence)presence.visible=occupied&&!options.hideOverlays;
+    for(const {room,floor,mesh,edges,base} of roomMeshes){mesh.material.color.copy(base).multiplyScalar(.85);
+      const occupied=roomPresence(room,floor).some(id=>states[id]?.state==='on');
       edges.material.color.set(occupied?'#00b58b':'#9c8d79');}
     for(const {id,glow,accent,follow} of lightMeshes){const {level,colour}=lightAppearance(visualStates[id]),visibility=follow?.value ?? (options.follow?0:1);glow.color.setRGB(colour[0]/255,colour[1]/255,colour[2]/255,THREE.SRGBColorSpace);glow.intensity=level*(accent?4:32)*visibility;}
     for(const {id,lens,shade,fitting} of fixtures){fitting.visible=!options.hideLightFixtures;const {level,colour}=lightAppearance(visualStates[id]);lens.material.emissive.setRGB(colour[0]/255,colour[1]/255,colour[2]/255,THREE.SRGBColorSpace);lens.material.emissiveIntensity=level*.8;shade.material.emissive.copy(lens.material.emissive);shade.material.emissiveIntensity=level*.2;}
@@ -430,6 +425,6 @@ export function render3D(floor, states, options = {}) {
   const intersection=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;if(!visible){cancelAnimationFrame(frame);clearTimeout(wakeTimer);frame=0;}if(visible){lastOrbit=performance.now();lastInteraction=lastOrbit;schedule();}});intersection.observe(plan);
   const visibility=()=>{if(document.hidden){cancelAnimationFrame(frame);clearTimeout(wakeTimer);frame=0;}else {lastOrbit=performance.now();lastInteraction=lastOrbit;schedule();}};document.addEventListener('visibilitychange',visibility);
   const contextLost=e=>{e.preventDefault();dispose();fallback=renderPlan(floor,states,{...options,mode:'clean'});plan.replaceChildren(element('p',{className:'hint',text:'3D graphics were interrupted. Showing 2D.'}),fallback);};renderer.domElement.addEventListener('webglcontextlost',contextLost);
-  function dispose(){fallback?.dispose?.();if(disposed)return;disposeWallOcclusion();for(const daylight of wallDaylights)daylight.dispose();disposed=true;cancelAnimationFrame(frame);clearTimeout(wakeTimer);resize.disconnect();intersection.disconnect();document.removeEventListener('visibilitychange',visibility);const geometries=new Set(),materials=new Set();scene.traverse(node=>{node.shadow?.dispose();if(node.geometry)geometries.add(node.geometry);if(node.material)for(const m of Array.isArray(node.material)?node.material:[node.material])materials.add(m);});geometries.forEach(g=>g.dispose());materials.forEach(m=>{m.map?.dispose();m.dispose();});televisions.forEach(tv=>{clearInterval(tv.timer);tv.slides.dispose();tv.texture.dispose();});artworks.forEach(a=>a.dispose());Object.values(textures).forEach(texture=>texture.dispose());sims?.dispose();renderer.dispose();}
+  function dispose(){fallback?.dispose?.();if(disposed)return;disposeWallOcclusion();for(const daylight of wallDaylights)daylight.dispose();disposed=true;cancelAnimationFrame(frame);clearTimeout(wakeTimer);resize.disconnect();intersection.disconnect();document.removeEventListener('visibilitychange',visibility);const geometries=new Set(),materials=new Set();scene.traverse(node=>{node.shadow?.dispose();if(node.geometry)geometries.add(node.geometry);if(node.material)for(const m of Array.isArray(node.material)?node.material:[node.material])materials.add(m);});geometries.forEach(g=>g.dispose());materials.forEach(m=>{m.map?.dispose();m.dispose();});televisions.forEach(tv=>{clearInterval(tv.timer);tv.slides.dispose();tv.texture.dispose();});artworks.forEach(a=>a.dispose());Object.values(textures).forEach(texture=>texture.dispose());renderer.dispose();}
   plan.update=update;plan.dispose=dispose;update(states,options);return plan;
 }

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {element} from './dom.js';
 import {lightAppearance} from './illumination.js';
 import {tvIsOn,drawTVFrame} from './tv-animation.js';
+import {renderPlan} from './plan.js';
 import {createInk} from './diorama-ink.js';
 import {createAssets} from './diorama-assets.js';
 import {floorDimensions} from './scene.js';
@@ -14,27 +15,36 @@ import {consolidate} from './diorama-merge.js';
 import {isHung,ELEVATION} from './diorama-cutaway.js';
 
 export {ELEVATION};
-const STAGE='#15161a';
+export const STAGE='#15161a';
 
 /**
  * Fixed-angle illustrated view of one storey or the whole stacked house. The
  * camera never orbits, so the cutaway, asset detail and lighting are all
  * composed for this single angle.
  *
- * Options: `azimuth` (radians; the default looks from the south-east), `weather`
- * ({temperature, high, low, humidity, wind} as display text), `readouts: false`
- * to omit room readouts, `storeyOffset` when `input` is not the lowest storey,
+ * Options the card supplies: `markers` ([{node, x, y, floorId, entity?, height?}],
+ * DOM nodes this view places and hides), `onLightClick(floorId, entityId)`,
+ * `quality`, `hideLightFixtures`, `hideRadiators`, `hideExtractionFans` and
+ * `storeyOffset` when `input` is not the lowest storey.
+ * Standalone extras: `azimuth` (radians; the default looks from the south-east),
+ * `forecast` ({temperature, high, low, humidity, wind} as display text),
+ * `readouts` and `clock` (built-in room readouts and clock, both off by default),
  * `alwaysRender` to keep drawing in a hidden document, and the layout tunings
  * `partition`, `gap`, `margin`, `spreadMargin` and `explode`.
  * The returned element has `update(states, options)`, `dispose()` and `stats()`.
+ * Without WebGL it returns the 2D plan of the first storey instead.
  */
 export function renderDiorama(input,states,options={}){
   const floors=[].concat(input),house=floors.length>1;
-  const plan=element('div',{className:'plan plan-diorama'});plan.style.cssText=`position:relative;width:100%;height:100%;overflow:hidden;background:${STAGE};container-type:size`;
-  const renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:'high-performance'});
+  // `plan-3d` asks the card to give this view the whole stage rather than a letterboxed plan.
+  const plan=element('div',{className:'plan plan-3d plan-diorama'});plan.style.cssText=`position:relative;width:100%;height:100%;overflow:hidden;background:${STAGE};container-type:size`;
+  const flat=text=>{const fallback=renderPlan(floors[0],states,{...options,mode:'clean'});fallback.prepend(element('p',{className:'hint',text}));fallback.update ||= ()=>{};fallback.dispose ||= ()=>{};return fallback;};
+  let renderer;
+  try{renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:'high-performance'});}
+  catch{return flat('3D is unavailable on this device. Showing the 2D floorplan.');}
   renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
   renderer.domElement.style.cssText='width:100%;height:100%;display:block';renderer.domElement.setAttribute('aria-label','Illustrated floorplan');plan.append(renderer.domElement);
-  const scene=new THREE.Scene(),ink=createInk(renderer,{stage:STAGE}),assets=createAssets(),overlay=createOverlay(plan,{compact:house}),reducedMotion=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const scene=new THREE.Scene(),ink=createInk(renderer,{stage:STAGE}),assets=createAssets(),overlay=createOverlay(plan,{compact:house,clock:options.clock===true}),reducedMotion=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const azimuth=options.azimuth??Math.PI/4,towards=new THREE.Vector3(Math.sin(azimuth),0,Math.cos(azimuth));
 
   // Night base: cool, never black, so warm lamps have something to push against.
@@ -43,7 +53,7 @@ export function renderDiorama(input,states,options={}){
   // A soft fill from the viewer keeps the backs of foreground furniture readable.
   const fill=new THREE.DirectionalLight('#d8c2ad',.7);fill.position.copy(towards).multiplyScalar(5).setY(3.2);scene.add(fill);
 
-  const haloMap=halo(),lights=[],animated=[],televisions=[],shells=[],pills=[],slabs=[],storeys=[];
+  const haloMap=halo(),lights=[],animated=[],televisions=[],shells=[],pills=[],storeys=[],targets=[],fittingHeights=new Map();
   function glowSprite(parent,at,size){
     const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:haloMap,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,opacity:0}));
     sprite.position.copy(at);sprite.scale.setScalar(size);sprite.layers.set(1);parent.add(sprite);return sprite;
@@ -59,23 +69,31 @@ export function renderDiorama(input,states,options={}){
     const ceiling=ceilingOf(floor),pitch=ceiling+SLAB,below=floors[index-1],arriving=stairsOf(below),top=house&&index===floors.length-1;
     // Every flight from the storey below needs its well cut through this slab.
     const shell=buildShell(floor,towards,{holes:arriving.map(o=>stairFootprint(o,planPosition(below))),partition:options.partition});
-    shell.group.position.y=elevation;scene.add(shell.group);shells.push(shell);const {position}=shell,base=elevation;slabs.push(...shell.slabs);
+    shell.group.position.y=elevation;scene.add(shell.group);shells.push(shell);const {position}=shell,base=elevation;
     const pool=(point,radius)=>{const room=(floor.rooms||[]).find(r=>insideRoom(point[0],point[1],r.points)),at=position(point);return lightmap.add({storey:index,x:at.x,z:at.z,radius,clip:room?.points.map(p=>{const v=position(p);return [v.x,v.z];})});};elevation+=pitch+(options.explode||0);
     const overhead=o=>stairsOf(floor).some(own=>position([own.x,own.y]).distanceTo(planPosition(below)([o.x,o.y]))<1.2);
     for(const o of arriving)if(top||!overhead(o)){const guard=stairGuard(o);guard.position.copy(planPosition(below)([o.x,o.y]));shell.group.add(guard);}
 
     for(const [i,marker] of (floor.entities||[]).filter(e=>e.entity.startsWith('light.')&&!(floor.objects||[]).some(o=>o.light_entity===e.entity)).entries()){
-      const pendant=marker.fixture==='pendant',spot=marker.fixture==='spot';if(!pendant&&!spot)continue;
+      // Anything that is not a pendant is treated as a ceiling light: a pool with no fitting.
+      const pendant=marker.fixture==='pendant';
       const height=marker.height_m??(pendant?ceiling-.3:ceiling-.04),at=position([marker.x,marker.y],height),entry={id:marker.entity,phase:(index*7+i)*1.9};
-      if(pendant){
+      targets.push({floorId:floor.id,id:marker.entity,index,local:at});fittingHeights.set(`${floor.id}:${marker.entity}`,height);
+      if(pendant&&!options.hideLightFixtures){
         const fitting=new THREE.Group();fitting.position.copy(at);shell.group.add(fitting);
         const cord=new THREE.Mesh(new THREE.CylinderGeometry(.007,.007,ceiling-height,6),lambert('#2b2726'));cord.position.y=(ceiling-height)/2+.12;fitting.add(cord);
         const shade=new THREE.Mesh(new THREE.LatheGeometry([[.03,.14],[.05,.13],[.15,.02],[.17,-.02]].map(([r,y])=>new THREE.Vector2(r,y)),24),new THREE.MeshLambertMaterial({color:'#d9b27a',side:THREE.DoubleSide,emissive:'#ffb866',emissiveIntensity:0}));fitting.add(shade);
         const bulb=new THREE.Mesh(new THREE.SphereGeometry(.045,12,8),new THREE.MeshBasicMaterial({color:'#3a332c'}));bulb.position.y=.02;fitting.add(bulb);
         entry.pool=pool([marker.x,marker.y],3.9);entry.power=.92;
         entry.sprite=glowSprite(shell.group,at,1.5);entry.shade=shade;entry.bulb=bulb;
-      }else{entry.pool=pool([marker.x,marker.y],2.7);entry.power=.9;}
+      }else{entry.pool=pool([marker.x,marker.y],pendant?3.9:2.7);entry.power=.9;}
       lights.push(entry);
+    }
+    // A room light with no marker and no lamp still lights its room, from the middle.
+    for(const room of floor.rooms||[])for(const id of room.lights||[]){
+      if((floor.entities||[]).some(e=>e.entity===id)||(floor.objects||[]).some(o=>o.light_entity===id)||!room.points?.length)continue;
+      const centre=room.points.reduce((a,p)=>[a[0]+p[0]/room.points.length,a[1]+p[1]/room.points.length],[0,0]);
+      lights.push({id,phase:lights.length*1.1,power:.85,pool:pool(centre,3.4)});
     }
 
     for(const object of floor.objects||[]){
@@ -88,16 +106,20 @@ export function renderDiorama(input,states,options={}){
       }
       // There is no ceiling to carry a ceiling fitting, and wall-hung things go with a wall
       // that has been cut down below them.
-      if(object.type==='extractor_fan'&&object.variant!=='wall')continue;
+      if(object.type==='extractor_fan'&&(object.variant!=='wall'||options.hideExtractionFans))continue;
+      if(object.type==='radiator'&&options.hideRadiators)continue;
+      const fixture=['lamp','wall_light','nanoleaf_panels','tv_lightstrip'].includes(object.type);
       if(isHung(object)){const wall=nearestWall(at,shell.walls);if(wall.distance<.45&&wall.height<(object.elevation_m||0)+(object.height||.3)*.8)continue;}
       const model=assets.build(object);
-      model.position.copy(at);shell.group.add(model);
+      model.position.copy(at);shell.group.add(model);if(fixture&&options.hideLightFixtures)model.visible=false;
       if(model.userData.animate)animated.push({object,model});
-      if(object.light_entity&&object.type!=='tv_lightstrip'){
+      // A strip synced to a TV takes its colour from the picture; any other lit object has its own pool.
+      if(object.light_entity&&!(object.type==='tv_lightstrip'&&object.sync_media_entity)){
         const glow=model.userData.glow,centre=at.clone().setY(at.y+(glow?glow.height:(object.height||.3)/2));
+        targets.push({floorId:floor.id,id:object.light_entity,index,local:centre});fittingHeights.set(`${floor.id}:${object.light_entity}`,centre.y);
         const entry={id:object.light_entity,fixedColour:glow?.colour,phase:lights.length*1.3,power:.7,emitters:[],pool:pool([object.x,object.y],1.5)};
         if(!glow)model.traverse(node=>{if(node.material?.emissive&&(!['wall_light','lamp'].includes(object.type)||node.userData.lightEmitter))entry.emitters.push(node.material);});
-        entry.sprite=glowSprite(shell.group,centre,.7);lights.push(entry);
+        if(!options.hideLightFixtures)entry.sprite=glowSprite(shell.group,centre,.7);lights.push(entry);
       }
       if(object.type==='tv'&&object.media_entity){
         const canvas=document.createElement('canvas');canvas.width=480;canvas.height=270;const context=canvas.getContext('2d',{willReadFrequently:true}),texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
@@ -110,10 +132,10 @@ export function renderDiorama(input,states,options={}){
       }
     }
     consolidate(shell.group);lightmap.tag(shell.group,index);
-    const storey={floor,index,group:shell.group,home:new THREE.Vector3(0,base,0),away:new THREE.Vector3(0,base,0),corners:[],width:shell.width,depth:shell.depth};storeys.push(storey);
+    const storey={floor,index,position,group:shell.group,home:new THREE.Vector3(0,base,0),away:new THREE.Vector3(0,base,0),corners:[],width:shell.width,depth:shell.depth};storeys.push(storey);
     for(const room of floor.rooms||[]){
       for(const p of room.points)for(const y of [-SLAB,ceiling])storey.corners.push(position(p,y));
-      if(room.temperature_entity||room.humidity_entity){const local=position(room.readout||room.points.reduce((a,p)=>[a[0]+p[0]/room.points.length,a[1]+p[1]/room.points.length],[0,0]),house?1.3:2.1);pills.push({room,anchor:()=>local.clone().add(shell.group.position)});}
+      if(room.temperature_entity||room.humidity_entity){const local=position(room.readout||room.points.reduce((a,p)=>[a[0]+p[0]/room.points.length,a[1]+p[1]/room.points.length],[0,0]),house?1.3:2.1);pills.push({room,index,local,anchor:()=>local.clone().add(shell.group.position)});}
     }
   });
 
@@ -137,44 +159,44 @@ export function renderDiorama(input,states,options={}){
     // Nudge the picture down a little so the weather block has clear sky.
     return [middle.x-half*aspect,middle.x+half*aspect,middle.y+half*1.08,middle.y-half*.92];
   }
+  // `reserved` is the share of the width, on the right, that a host panel covers. The
+  // picture is fitted into the rest and the view simply extends under the panel.
+  let reserved=0;
   function frame(aspect,spread){
-    const a=fit(bounds.home,aspect,options.margin??1.07),b=fit(bounds.away,aspect,options.spreadMargin??1.12),mix=i=>a[i]+(b[i]-a[i])*spread;
-    camera.left=mix(0);camera.right=mix(1);camera.top=mix(2);camera.bottom=mix(3);camera.updateProjectionMatrix();
+    const free=1-reserved,a=fit(bounds.home,aspect*free,options.margin??1.07),b=fit(bounds.away,aspect*free,options.spreadMargin??1.12),mix=i=>a[i]+(b[i]-a[i])*spread;
+    camera.left=mix(0);camera.right=camera.left+(mix(1)-camera.left)/free;camera.top=mix(2);camera.bottom=mix(3);camera.updateProjectionMatrix();
+    // Published so a host page can tell the view has been sized and framed.
+    plan.dataset.fittedBounds=JSON.stringify([camera.left,camera.right,camera.top,camera.bottom].map(n=>+n.toFixed(3)));
   }
   overlay.setLabels(house?storeys.map(storey=>{const local=new THREE.Vector3(Math.sign(towards.x)*storey.width/2,-SLAB,Math.sign(towards.z)*storey.depth/2);return {text:storey.floor.name||storey.floor.id,anchor:()=>local.clone().add(storey.group.position)};}):[]);
 
-  // A readout whose room sits under another storey from this angle would label the wrong floor.
-  scene.updateMatrixWorld(true);const sight=new THREE.Raycaster(),outward=camera.position.clone().sub(centre).normalize();
-  for(const pill of pills){sight.set(pill.anchor(),outward);pill.covered=sight.intersectObjects(slabs,false).length>0;}
+  // In the stack, a point is covered when its sight line to the camera meets the floor of a
+  // storey above. A readout or marker there would appear to label the wrong floor.
+  function covered(index,local){
+    for(const above of storeys.slice(index+1)){
+      const rise=above.home.y-SLAB-(storeys[index].home.y+local.y);if(rise<=0)continue;
+      const reach=rise/Math.tan(ELEVATION),x=((local.x+towards.x*reach)/above.width+.5)*100,y=((local.z+towards.z*reach)/above.depth+.5)*100;
+      if((above.floor.rooms||[]).some(room=>insideRoom(x,y,room.points)))return true;
+    }
+    return false;
+  }
+  for(const target of targets)target.covered=covered(target.index,target.local);
+  for(const pill of pills)pill.covered=covered(pill.index,pill.local);
   const reading=(id,digits,unit)=>{const value=Number(states[id]?.state);return id&&Number.isFinite(value)?`${value.toFixed(digits)}${unit}`:'';};
   function readouts(){
-    overlay.setWeather(options.weather);
-    overlay.setPills((options.readouts===false?[]:pills).map(({room,anchor,covered})=>({anchor,covered,facts:[['temperature',reading(room.temperature_entity,1,' °C')],['humidity',reading(room.humidity_entity,1,'%')],['air',reading(room.co2_entity,0,' ppm')]].filter(([,text])=>text)})).filter(p=>p.facts.length));
+    overlay.setWeather(options.forecast);
+    overlay.setPills((options.readouts===true?pills:[]).map(({room,anchor,covered})=>({anchor,covered,facts:[['temperature',reading(room.temperature_entity,1,' °C')],['humidity',reading(room.humidity_entity,1,'%')],['air',reading(room.co2_entity,0,' ppm')]].filter(([,text])=>text)})).filter(p=>p.facts.length));
   }
 
-  let frameId=0,disposed=false,visible=true,last=0,width=0,height=0;
+  let frameId=0,disposed=false,visible=true,last=0,width=0,height=0,refit=false,pace=32,called=0,drew=false,strikes=0,settle=performance.now()+1500;
   // Spread state: hovering opens the stack, a click or Enter pins it open.
-  let hovering=false,pinned=false,spread=0,spreadFrom=0,spreadStart=-1e9;const SPREAD_MS=850;
+  let hovering=false,pinned=false,spread=0,spreadFrom=0,spreadStart=-1e9;const SPREAD_MS=850;plan.dataset.spread='0';
   const wanted=()=>house&&(pinned||hovering)?1:0,ease=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
   function retarget(){const now=performance.now(),target=wanted();if(target!==Math.round(spreadGoal)){spreadFrom=spread;spreadGoal=target;spreadStart=now;}plan.dataset.spread=String(target);renderer.domElement.setAttribute('aria-pressed',String(!!pinned));last=0;schedule();}
   let spreadGoal=0;
   const colour=new THREE.Color();
-  function draw(now){
-    frameId=0;if(disposed||!visible||document.hidden&&!options.alwaysRender)return;
-    const moving=spread!==spreadGoal;
-    if(!reducedMotion||moving)frameId=requestAnimationFrame(draw);
-    // Lamps tick at about 30 fps; the spread itself runs at the display rate.
-    if(now-last<32&&!reducedMotion&&!moving)return;last=now;
-    const w=plan.clientWidth,h=plan.clientHeight;if(!w||!h)return;
-    if(w!==width||h!==height){width=w;height=h;renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio||1,2));renderer.setSize(w,h,false);frame(w/h,ease(spread));}
-    if(moving){
-      const linear=reducedMotion?1:Math.min(1,(now-spreadStart)/SPREAD_MS);spread=spreadFrom+(spreadGoal-spreadFrom)*linear;
-      // Storeys leave one after another, outermost first, and settle together.
-      for(const storey of storeys){const lag=storeys.length>1?(1-Math.abs(storey.index-(storeys.length-1)/2)/((storeys.length-1)/2))*.18:0,local=ease(Math.max(0,Math.min(1,(spread-lag*(spreadGoal?1:0))/(1-lag*(spreadGoal?1:0)))));
-        storey.group.position.lerpVectors(storey.home,storey.away,local);lightmap.setShift(storey.index,storey.group.position.x,storey.group.position.z);}
-      frame(w/h,ease(spread));
-    }
-    const t=reducedMotion?0:now/1000;
+  // Lamp, lava and TV levels for this instant, written to the light map sources and materials.
+  function animate(now,t){
     for(const entry of lights){
       const appearance=lightAppearance(states[entry.id]),level=appearance.level;
       // Two slow sines read as a living filament rather than a strobe.
@@ -202,26 +224,88 @@ export function renderDiorama(input,states,options={}){
       tv.sprite.material.color.copy(colour);tv.sprite.material.opacity=flicker*.3;
       for(const screen of tv.screens)screen.material.color.setScalar(on?.82+flicker*.2:1);
     }
+  }
+  function draw(now){
+    frameId=0;if(disposed||!visible||document.hidden&&!options.alwaysRender)return;
+    const moving=spread!==spreadGoal;
+    if(!reducedMotion||moving)frameId=requestAnimationFrame(draw);
+    // Lamps tick at about 30 fps; the spread itself runs at the display rate. If the frame
+    // after a drawn one arrives late, the graphics cannot keep up (a software renderer, an
+    // old tablet), so the ambient tick backs off until the page stays responsive.
+    const late=now-called;called=now;
+    // A clearly slow frame backs off at once. A mildly late one counts only when repeated and
+    // not during start-up, when shader compilation makes a fast device look slow.
+    if(drew){drew=false;if(late>120||late>50&&(now>settle&&++strikes>=2))pace=Math.min(2000,Math.max(pace*1.7,late*3));else if(late<=50){strikes=0;if(late<24)pace=Math.max(32,pace*.8);}}
+    plan.dataset.pace=String(Math.round(pace));
+    if(now-last<pace&&!reducedMotion&&!moving)return;last=now;drew=true;
+    const w=plan.clientWidth,h=plan.clientHeight;if(!w||!h)return;
+    if(w!==width||h!==height||refit){refit=false;width=w;height=h;renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio||1,options.quality==='low'?1:2));renderer.setSize(w,h,false);frame(w/h,ease(spread));}
+    if(moving){
+      const linear=reducedMotion?1:Math.min(1,(now-spreadStart)/SPREAD_MS);spread=spreadFrom+(spreadGoal-spreadFrom)*linear;
+      // Storeys leave one after another, outermost first, and settle together.
+      for(const storey of storeys){const lag=storeys.length>1?(1-Math.abs(storey.index-(storeys.length-1)/2)/((storeys.length-1)/2))*.18:0,local=ease(Math.max(0,Math.min(1,(spread-lag*(spreadGoal?1:0))/(1-lag*(spreadGoal?1:0)))));
+        storey.group.position.lerpVectors(storey.home,storey.away,local);lightmap.setShift(storey.index,storey.group.position.x,storey.group.position.z);}
+      frame(w/h,ease(spread));
+    }
+    const t=reducedMotion?0:now/1000;animate(now,t);
+    for(const marker of markers){
+      const storey=storeys.find(s=>s.floor.id===marker.floorId)||storeys[0],p=marker.local.clone().add(storey.group.position).project(camera);
+      marker.node.style.left=`${(p.x*.5+.5)*100}%`;marker.node.style.top=`${(-p.y*.5+.5)*100}%`;marker.node.hidden=marker.covered&&spread<.6;
+    }
     lightmap.draw();overlay.layout(camera,spread);ink.render(scene,camera,t);
   }
   const schedule=()=>{if(!frameId&&!disposed)frameId=requestAnimationFrame(draw);};
-  function update(nextStates,nextOptions={}){states=nextStates;options={...options,...nextOptions};readouts();last=0;schedule();}
+  let markers=[];
+  function update(nextStates,nextOptions={}){
+    states=nextStates;options={...options,...nextOptions};if(fallback){fallback.update?.(states,options);return;}
+    // Keep an unchanged room readout's node in place so focus and open panels survive a refresh.
+    const previous=new Map(markers.filter(m=>m.node.matches('.room-readout')).map(m=>[`${m.floorId}:${m.node.dataset.roomId}`,m])),next=(options.markers||[]).filter(marker=>storeys.some(s=>s.floor.id===marker.floorId)),retained=new Set();
+    for(const marker of next){
+      const storey=storeys.find(s=>s.floor.id===marker.floorId),height=marker.height??fittingHeights.get(`${marker.floorId}:${marker.entity}`)??.35;
+      marker.local=storey.position([marker.x,marker.y],height);marker.covered=covered(storey.index,marker.local);
+      if(!marker.node.matches('.room-readout'))continue;
+      const signature=marker.node.outerHTML,old=previous.get(`${marker.floorId}:${marker.node.dataset.roomId}`);
+      if(old?.signature===signature){marker.node=old.node;retained.add(old.node);}
+      marker.signature=signature;
+    }
+    for(const marker of markers)if(!retained.has(marker.node))marker.node.remove();
+    markers=next;let anchor=null;
+    for(let i=markers.length-1;i>=0;i--){const node=markers[i].node;if(!retained.has(node))plan.insertBefore(node,anchor);anchor=node;}
+    readouts();last=0;schedule();
+  }
+  // A click on a lamp switches it; anywhere else it pins the spread open or lets it close.
+  function lightAt(event){
+    if(!options.onLightClick)return null;
+    const rect=renderer.domElement.getBoundingClientRect();let best=null,nearest=28;
+    for(const target of targets){
+      if(target.covered&&spread<.6)continue;
+      const p=target.local.clone().add(storeys[target.index].group.position).project(camera),distance=Math.hypot((p.x*.5+.5)*rect.width+rect.left-event.clientX,(-p.y*.5+.5)*rect.height+rect.top-event.clientY);
+      if(distance<nearest){nearest=distance;best=target;}
+    }
+    return best;
+  }
+  renderer.domElement.addEventListener('click',event=>{const light=lightAt(event);if(light)options.onLightClick(light.floorId,light.id);else if(house){pinned=!pinned;retarget();}});
+  let fallback;
+  renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();dispose();fallback=flat('3D graphics were interrupted. Showing 2D.');plan.replaceChildren(fallback);});
   if(house){
     const canvas=renderer.domElement;canvas.tabIndex=0;canvas.setAttribute('role','button');canvas.setAttribute('aria-label','Illustrated floorplan. Activate to spread the floors apart or stack them again.');canvas.style.cursor='pointer';
     plan.addEventListener('pointerenter',e=>{if(e.pointerType!=='mouse')return;hovering=true;retarget();});
     plan.addEventListener('pointerleave',()=>{hovering=false;retarget();});
-    canvas.addEventListener('click',()=>{pinned=!pinned;retarget();});
     canvas.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pinned=!pinned;retarget();}else if(e.key==='Escape'&&pinned){pinned=false;retarget();}});
   }
   const resize=new ResizeObserver(()=>{last=0;schedule();});resize.observe(plan);
   const intersection=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;if(visible)schedule();});intersection.observe(plan);
-  const visibility=()=>{if(!document.hidden)schedule();};document.addEventListener('visibilitychange',visibility);
+  const visibility=()=>{if(!document.hidden){settle=performance.now()+1500;schedule();}};document.addEventListener('visibilitychange',visibility);
   function dispose(){
-    if(disposed)return;disposed=true;cancelAnimationFrame(frameId);resize.disconnect();intersection.disconnect();document.removeEventListener('visibilitychange',visibility);
+    fallback?.dispose?.();if(disposed)return;disposed=true;cancelAnimationFrame(frameId);resize.disconnect();intersection.disconnect();document.removeEventListener('visibilitychange',visibility);
     const geometries=new Set(),materials=new Set();scene.traverse(node=>{node.shadow?.dispose();if(node.geometry)geometries.add(node.geometry);for(const m of [node.material].flat())if(m)materials.add(m);});
     geometries.forEach(g=>g.dispose());materials.forEach(m=>{m.map?.dispose();m.dispose();});
     haloMap.dispose();lightmap.dispose();for(const shell of shells)shell.dispose();assets.dispose();overlay.dispose();ink.dispose();renderer.dispose();
   }
-  plan.stats=()=>{let meshes=0;scene.traverse(node=>{if(node.isMesh)meshes++;});return {meshes,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,programs:renderer.info.programs.length};};
+  /** Keep the picture clear of `pixels` of host UI along the right edge of the stage. */
+  plan.reserve=pixels=>{const share=Math.max(0,Math.min(.5,pixels/(plan.clientWidth||1)));if(share!==reserved){reserved=share;refit=true;last=0;schedule();}};
+  // Inspection hooks for tests and tuning: WebGL pixels cannot be read back reliably.
+  plan.sampleLight=(floorId,point)=>{const storey=storeys.find(s=>s.floor.id===floorId);if(!storey)return null;const now=performance.now();animate(now,reducedMotion?0:now/1000);lightmap.draw();const at=storey.position(point);return lightmap.sample(storey.index,at.x,at.z);};
+  plan.stats=()=>{let meshes=0;scene.traverse(node=>{if(node.isMesh)meshes++;});return {televisions:televisions.map(tv=>({id:tv.object.id,on:tvIsOn(states[tv.object.media_entity])})),meshes,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,programs:renderer.info.programs.length};};
   plan.update=update;plan.dispose=dispose;update(states,options);return plan;
 }

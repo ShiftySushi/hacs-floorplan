@@ -6,7 +6,7 @@ test('presence and temperature tints update independently with an outdoor readou
   await expect(card.locator('.temperature-marker.occupied.temp-warm')).toBeVisible();
   await expect(card.getByRole('button',{name:/temperature: 26.0 °C · Presence detected/})).toBeVisible();
   const outside=card.getByRole('button',{name:'Outdoor temperature: 10.0 °C',exact:true});await expect(outside).toHaveClass(/temp-cool/);
-  const a=await outside.boundingBox(),b=await card.locator('.plan').boundingBox();expect(a.x+a.width).toBeLessThanOrEqual(b.x);
+  const a=await outside.boundingBox(),b=await card.locator('.plan-slot').boundingBox();expect(a.x).toBeGreaterThanOrEqual(b.x);expect(a.x+a.width).toBeLessThan(b.x+b.width/2);
   await page.evaluate(()=>{const c=document.querySelector('floorplan-card');c.hass={...c._hass,states:{...c._hass.states,'binary_sensor.occupancy':{state:'off'},'sensor.indoor':{state:'17',attributes:{unit_of_measurement:'°C'}}}};});
   await expect(card.locator('.temperature-marker.occupied')).toHaveCount(0);
   await expect(card.locator('.temperature-marker.temp-cool')).toBeVisible();
@@ -36,14 +36,9 @@ test('room temperature and radiator status follow entities and expose HA control
   });
   const card=page.locator('floorplan-card');
   await expect(card.getByRole('button',{name:/temperature: 20.4 °C/})).toBeVisible();
-  await expect(card.locator('[data-heating-glow]')).toHaveCount(0);
   await card.getByRole('button',{name:'Radiator: idle',exact:true}).click();
   await expect(page.locator('#events')).toContainText('climate.room');
   await page.evaluate(()=>{const c=document.querySelector('floorplan-card');c.hass={...c._hass,states:{...c._hass.states,'climate.room':{state:'heat',attributes:{hvac_action:'heating'}}}};});
-  await expect(card.locator('[data-heating-glow="radiator-test"]')).toHaveCount(1);
-  await expect(card.getByRole('button',{name:'Radiator: heating',exact:true})).toBeVisible();
-  await card.getByRole('button',{name:'3D',exact:true}).click();
-  await expect(card.getByRole('button',{name:/temperature: 20.4 °C/})).toBeVisible();
   await expect(card.getByRole('button',{name:'Radiator: heating',exact:true})).toBeVisible();
   await page.evaluate(()=>{const c=document.querySelector('floorplan-card');c.hass={...c._hass,states:{...c._hass.states,'sensor.room_temperature':{state:'unavailable'},'climate.room':{state:'unavailable'}}};});
   await expect(card.getByRole('button',{name:/temperature: 20.4 °C/})).toHaveCount(0);
