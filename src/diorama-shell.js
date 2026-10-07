@@ -1,8 +1,7 @@
 import * as THREE from 'three';
 import {floorDimensions} from './scene.js';
-import {wallSections} from './plan3d.js';
 import {planks,tiles,fabric} from './diorama-textures.js';
-import {planCutaway,slopeHides,LOW,KERB} from './diorama-cutaway.js';
+import {planCutaway,slopeHides,wallSections,LOW,KERB} from './diorama-cutaway.js';
 
 const inside=(x,y,points)=>{let hit=false;for(let i=0,j=points.length-1;i<points.length;j=i++){const a=points[i],b=points[j];if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])hit=!hit;}return hit;};
 export const SLAB=.28;

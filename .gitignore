@@ -3,6 +3,7 @@ node_modules/
 test-results/
 playwright-report/
 ci-reports/
+asset-review/
 # Personal source images, outlines and models are local assets, not plugin code.
 floorplans/
 # Portable card configurations contain personal layouts and entity IDs.
