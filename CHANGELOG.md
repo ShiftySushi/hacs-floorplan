@@ -8,6 +8,15 @@ Notable changes to Floorplan Card. Versions follow [Semantic Versioning](https:/
 
 - **Breaking:** the **External** tab is now drawn in the illustrated style, from the same fixed angle as the rooms, and follows daylight. The orbiting camera, its zoom and reset controls, **Hide walls and roof** and the **Slow idle rotation** display setting are removed; choose a floor or **All** to see inside.
 
+### Added
+
+- **Follow** keeps occupied rooms lit across the whole house and dims the rest; **Focus room** does the same for one chosen room of a floor.
+- Rain, snow, fog and cloud are drawn in the External view, and both illustrated views have a sky that pales towards the horizon.
+
+### Fixed
+
+- Ghosted wall fittings were drawn almost black; they are now lit like the rest of the room.
+
 ## 0.2.0 - 2026-10-07
 
 The card's interior is now one illustrated, fixed-angle view. This replaces every earlier live style, so it changes how an existing dashboard looks.

@@ -4,7 +4,7 @@ import {weatherEntity} from './weather.js';
 import { displaySettings, displayFields } from './display-settings.js';
 import { styles } from './styles.js';
 import { element, button, field, preserveFocus, updatePanel } from './dom.js';
-import { roomState } from './rooms.js';
+import { roomState, roomPresence } from './rooms.js';
 import { icon, iconButton } from './icons.js';
 import { renderPlan } from './plan.js';
 import { renderExterior } from './diorama-exterior.js';
@@ -53,13 +53,13 @@ export class FloorplanCard extends HTMLElement {
     const identity=JSON.stringify([location.pathname,this.config.title,this.config.floors.map(f=>f.id)]);
     let hash=2166136261;for(const char of identity)hash=Math.imul(hash^char.charCodeAt(0),16777619);
     const key=`floorplan-view-${hash>>>0}`;
-    if(this.viewStorageKey!==key){this.viewStorageKey=key;this.viewStates={};this.blindStates={};this.inspectorOpen=false;this.building=this.config.floors.length>1;try{const saved=JSON.parse(localStorage.getItem(key));if(saved){this.floorId=saved.floorId;this.building=!!saved.building;this.exterior=!!saved.exterior;this.hideOverlays=!!saved.hideOverlays;this.inspectorOpen=!!saved.inspectorOpen;this.displayPreferences=saved.display;this.viewStates=saved.cameras || {};this.blindStates=saved.blinds || {};}}catch{}}
+    if(this.viewStorageKey!==key){this.viewStorageKey=key;this.viewStates={};this.blindStates={};this.inspectorOpen=false;this.follow=false;this.focusRooms={};this.building=this.config.floors.length>1;try{const saved=JSON.parse(localStorage.getItem(key));if(saved){this.floorId=saved.floorId;this.building=!!saved.building;this.exterior=!!saved.exterior;this.hideOverlays=!!saved.hideOverlays;this.inspectorOpen=!!saved.inspectorOpen;this.displayPreferences=saved.display;this.viewStates=saved.cameras || {};this.blindStates=saved.blinds || {};this.follow=!!saved.follow;this.focusRooms=saved.focusRooms || {};}}catch{}}
     if (!this.config.floors.some(f => f.id === this.floorId)) this.floorId = this.config.floors[0]?.id;
     const configured = new Set([...this.config.floors.flatMap(f => [...f.entities.map(e => e.entity), ...f.rooms.flatMap(r => r.lights), ...(f.objects || []).map(o=>o.light_entity).filter(Boolean)]), ...this.config.groups.flatMap(g => g.entities)]);
     this.selected = new Set([...this.selected].filter(id => configured.has(id))); this.render();
   }
   set hass(hass) { const next=sceneState(hass,this.watchedEntities);this._hass = hass;if(next===this.hassSceneState)return;this.hassSceneState=next; if (!['INPUT', 'SELECT'].includes(this.shadowRoot.activeElement?.tagName)) this.render(); else this.deferredUpdate = true; }
-  saveView(){try{localStorage.setItem(this.viewStorageKey,JSON.stringify({floorId:this.floorId,building:!!this.building,exterior:!!this.exterior,hideOverlays:!!this.hideOverlays,inspectorOpen:!!this.inspectorOpen,display:this.displayPreferences,cameras:this.viewStates,blinds:this.blindStates}));}catch{}}
+  saveView(){try{localStorage.setItem(this.viewStorageKey,JSON.stringify({floorId:this.floorId,building:!!this.building,exterior:!!this.exterior,hideOverlays:!!this.hideOverlays,inspectorOpen:!!this.inspectorOpen,display:this.displayPreferences,cameras:this.viewStates,blinds:this.blindStates,follow:!!this.follow,focusRooms:this.focusRooms}));}catch{}}
   getCardSize() { return 12; }
   getGridOptions() { return { columns: 12, min_columns: 6 }; }
   toggle(ids) {
@@ -110,12 +110,15 @@ export class FloorplanCard extends HTMLElement {
     const tabs = element('div', { className: 'row floor-tabs', role: 'group', 'aria-label': 'Floors' });
     // Interior and exterior are both drawn in the illustrated, fixed-angle style.
     const exterior=this.exterior&&this.config.exterior?.items.length?this.config.exterior:undefined,mode=exterior?'3d':'diorama';
+    // Follow shows the whole house and keeps only occupied rooms lit; it needs a room with a presence sensor.
+    const followable=this.config.floors.some(f=>f.rooms.some(r=>roomPresence(r,f).length)),following=!!this.follow&&followable&&!exterior;
+    if(following)this.building=this.config.floors.length>1;
     const allFloors=!!this.building&&!exterior&&this.config.floors.length>1;
-    this.config.floors.forEach(floor => tabs.append(iconButton(floor.name || floor.id,'floor', () => { this.floorId = floor.id; this.exterior=false; this.building=false; this.render(); }, { 'aria-pressed': String(floor.id === this.floorId&&!exterior&&!allFloors) })));
+    this.config.floors.forEach(floor => tabs.append(iconButton(floor.name || floor.id,'floor', () => { this.floorId = floor.id; this.exterior=false; this.building=false; this.follow=false; this.render(); }, { 'aria-pressed': String(floor.id === this.floorId&&!exterior&&!allFloors) })));
     const weather={...this.config.weather,entity:weatherEntity(this.config)};
     const daylight=daylightLevel(states,new Date(),this._hass?.config,weather.entity);this.planSlot.style.setProperty('--fp-stage-background',stageShade(daylight));
-    if(this.config.exterior?.items.length)tabs.append(iconButton('External','cube',()=>{this.exterior=true;this.building=false;this.render();},{'aria-pressed':String(!!exterior)}));
-    if(this.config.floors.length>1)tabs.append(iconButton('All','floor',()=>{this.building=true;this.exterior=false;this.render();},{'aria-pressed':String(!!allFloors)}));
+    if(this.config.exterior?.items.length)tabs.append(iconButton('External','cube',()=>{this.exterior=true;this.building=false;this.follow=false;this.render();},{'aria-pressed':String(!!exterior)}));
+    if(this.config.floors.length>1)tabs.append(iconButton('All','floor',()=>{this.building=true;this.exterior=false;this.follow=false;this.render();},{'aria-pressed':String(!!allFloors)}));
     const stageTools=element('div',{className:'stage-tools'},[tabs,iconButton(this.hideOverlays?'Show overlays':'Hide overlays','eye',()=>{this.hideOverlays=!this.hideOverlays;this.render();},{'aria-pressed':String(!!this.hideOverlays),title:this.hideOverlays?'Show overlays':'Hide overlays',className:'overlay-toggle'})]);
     stageTools.append(iconButton(this.inspectorOpen?'Hide lighting':'Lighting','bulb',()=>{this.inspectorOpen=!this.inspectorOpen;this.render();},{'aria-expanded':String(!!this.inspectorOpen),'aria-controls':'lighting-panel',title:this.inspectorOpen?'Hide lighting':'Lighting',className:'inspector-toggle'}));
     const settings=element('details',{className:'display-settings',open:!!this.displayOpen},[element('summary',{'aria-label':'Display settings',title:'Display settings'},[icon('sliders')]),element('div',{className:'display-popover'},[element('h3',{text:'Display settings'}),element('p',{className:'display-description',text:'Choose what stays visible on your floorplan.'}),...displayFields(display,next=>{this.displayPreferences=next;this.displayOpen=true;this.render();}),element('p',{className:'muted',text:'Saved for this browser. Set shared defaults in the card editor.'})])]);
@@ -126,6 +129,10 @@ export class FloorplanCard extends HTMLElement {
       control.replaceChildren(control.querySelector('svg'));
     }
     const utilities=element('div',{className:'stage-utilities',role:'group','aria-label':'Floorplan tools'},[stageTools.querySelector('.overlay-toggle'),stageTools.querySelector('.inspector-toggle'),settings]);
+    if(followable){const toggle=iconButton('Follow','presence',()=>{this.follow=!following;if(this.follow)this.exterior=false;this.saveView();this.render();},{'aria-pressed':String(following),title:following?'Stop following occupied rooms':'Keep occupied rooms lit and dim the rest',className:'follow-toggle'});utilities.prepend(toggle);}
+    // One room of the floor on show can be picked out the same way, by hand.
+    const shown=this.config.floors.find(f=>f.id===this.floorId);
+    if(!exterior&&!allFloors&&!following&&shown?.rooms.length>1)utilities.prepend(element('select',{'aria-label':'Focus room',title:'Keep one room lit and dim the rest',className:'room-isolation',onchange:e=>{this.focusRooms[this.floorId]=e.target.value;this.saveView();this.render();}},[element('option',{value:'',text:'Whole floor',selected:!this.focusRooms?.[this.floorId]}),...shown.rooms.map(r=>element('option',{value:r.id,text:r.name||r.id,selected:this.focusRooms?.[this.floorId]===r.id}))]));
     stageTools.append(utilities,header);
     this.headerSlot.replaceChildren();
     this.card.classList.toggle('inspector-collapsed',!this.inspectorOpen);
@@ -191,7 +198,7 @@ export class FloorplanCard extends HTMLElement {
         if(item.contact_entity)node.append(element('small',{text:doorDescription(item,states)}));
         return {node,world:[item.x||0,(item.y||0)+(item.height||1),item.z||0]};
       });
-      const options={...this.config.appearance,exterior,hideLightFixtures:display.hide_light_fixtures,hideRadiators:display.hide_radiators,hideExtractionFans:display.hide_extraction_fans,spreadOrder:display.ground_left?'ground-left':'compact',labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays?[]:[...exteriorMarkers,...markers],daylight,building:allFloors,allFloors:this.config.floors,storeyOffset:this.config.floors.indexOf(floor)};
+      const options={...this.config.appearance,exterior,hideLightFixtures:display.hide_light_fixtures,hideRadiators:display.hide_radiators,hideExtractionFans:display.hide_extraction_fans,spreadOrder:display.ground_left?'ground-left':'compact',focusRooms:following?markerFloors.flatMap(f=>f.rooms.filter(r=>roomState(r,states,f).occupied).map(r=>`${f.id}:${r.id}`)):!allFloors&&this.focusRooms?.[floor.id]?[`${floor.id}:${this.focusRooms[floor.id]}`]:[],labels:!this.hideOverlays&&this.config.appearance?.labels,hideOverlays:!!this.hideOverlays,mode,markers:this.hideOverlays?[]:[...exteriorMarkers,...markers],daylight,building:allFloors,allFloors:this.config.floors,storeyOffset:this.config.floors.indexOf(floor)};
       options.onLightClick=(floorId,id)=>this.activateLight(floorId,id);
       options.onEntityClick=entityId=>this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId},bubbles:true,composed:true}));
       options.weather=weather;

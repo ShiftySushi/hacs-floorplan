@@ -37,6 +37,7 @@ const MARKER_METRE=34;
  * DOM nodes this view places and hides), `onLightClick(floorId, entityId)`,
  * `quality`, `hideLightFixtures`, `hideRadiators`, `hideExtractionFans`, `daylight` (0 for
  * the evening scene to 1 for full day), `blindStates` (saved closed blinds by key) and
+ * `focusRooms` (['floorId:roomId'], rooms to keep lit while every other room dims),
  * `storeyOffset` when `input` is not the lowest storey, and `spreadOrder` (`compact` or
  * `ground-left`) for the direction the stacked storeys slide apart.
  * Standalone extras: `azimuth` (radians; the default looks from the south-east),
@@ -216,15 +217,23 @@ export function renderDiorama(input,states,options={}){
   let frameId=0,disposed=false,visible=true,last=0,width=0,height=0,refit=false,pace=32,called=0,drew=false,strikes=0,quick=0,settle=performance.now()+1500;const START_PACE=250;
   // Spread state: hovering opens the stack, a click or Enter pins it open.
   let hoverTimer=0,hovering=false,pinned=false,spread=0,spreadFrom=0,spreadStart=-1e9;const SPREAD_MS=850,HOVER_MS=350;plan.dataset.spread='0';
-  const wanted=()=>house&&(pinned||hovering)?1:0,ease=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+  // A focused room may be on a storey the stack covers, so focus holds the storeys apart.
+  const wanted=()=>house&&(pinned||hovering||focusKey)?1:0,ease=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
   function retarget(){const now=performance.now(),target=wanted();if(target!==Math.round(spreadGoal)){spreadFrom=spread;spreadGoal=target;spreadStart=now;}plan.dataset.spread=String(target);renderer.domElement.setAttribute('aria-pressed',String(!!pinned));last=0;schedule();}
   let spreadGoal=0;
   const colour=new THREE.Color();
   // Daylight brightens and cools the room light (see diorama-rig.js), washes the lamps out
   // and lifts the stage; windows let it in unless their blind is down.
-  let stage='',scaled='';
+  let stage='',scaled='',focusKey='';const dim=createGlide(0,900);plan.dataset.focus='0';
+  // Follow mode and room focus: the chosen rooms keep their light and the rest fall back.
+  function refocus(){
+    const chosen=new Set(options.focusRooms||[]),regions=storeys.flatMap(storey=>(storey.floor.rooms||[]).filter(room=>room.points?.length&&chosen.has(`${storey.floor.id}:${room.id}`)).map(room=>({storey:storey.index,points:room.points.map(p=>{const v=storey.position(p);return [v.x,v.z];})})));
+    const key=regions.length?JSON.stringify(regions):'';if(key===focusKey)return;
+    // The outlines stay painted while the dimming eases away, so rooms do not jump.
+    if(key)lightmap.setFocus(regions);focusKey=key;plan.dataset.focus=String(regions.length);if(house)retarget();
+  }
   function grade(now){
-    const graded=rig.grade(options.daylight,now,reducedMotion),day=graded.day;lightmap.setGain(1-.5*day);
+    const graded=rig.grade(options.daylight,now,reducedMotion),day=graded.day;lightmap.setGain(1-.5*day);lightmap.setDim(dim(focusKey?.72:0,now,reducedMotion));
     // The host watches this element's style, so it is written only when the grade moves.
     if(graded.stage!==stage){stage=graded.stage;ink.setStage(stage,graded.horizon);plan.style.background=stage;plan.dataset.daylight=day.toFixed(2);}
     let closed=0;
@@ -340,6 +349,7 @@ export function renderDiorama(input,states,options={}){
     markers=next;let anchor=null;
     for(let i=markers.length-1;i>=0;i--){const node=markers[i].node;if(!retained.has(node))plan.insertBefore(node,anchor);anchor=node;}
     for(const art of artworks)art.update(states);
+    refocus();
     readouts();last=0;schedule();
   }
   // A click on a lamp switches it, a turning frame swaps between landscape and portrait as it
