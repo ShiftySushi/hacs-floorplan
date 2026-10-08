@@ -1,5 +1,7 @@
 # Project commands and CI
 
+Bosun project: hacs-floorplan
+
 - Node.js 22; `npm ci --ignore-scripts` installs locked Three.js and development tooling (esbuild and Playwright).
 - `npm run check` checks syntax, HACS packaging and the committed build's reproducibility.
 - `npm test` runs unit and publication-boundary regression tests.
