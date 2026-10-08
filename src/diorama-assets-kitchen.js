@@ -22,6 +22,16 @@ export function kitchenAssets({kit,tone,wood,cloth,seeded}){
       else shaker(box,bay-.012,tall-.01,x,.11,front,colour,{steelColour:handles});}
     return group;
   }
+  // A freestanding run: doors to the front and a worktop that overhangs the back as a breakfast bar.
+  function island(o){
+    const {group,box,cyl,ball}=kit(),w=o.width,d=o.depth,h=o.height,colour=o.colour||'#6f8f92',top=o.worktop_colour||'#e9e4d8',bar=Math.min(.26,d*.3),body=d-bar;
+    box(w-.06,.1,body-.08,0,0,bar/2,'#2f2c2a');box(w,h-.14,body,0,.1,bar/2,colour);box(w+.03,.04,d+.02,0,h-.04,0,top);
+    const bays=Math.max(1,Math.round(w/.55)),bay=w/bays;
+    for(let i=0;i<bays;i++)shaker(box,bay-.012,h-.17,-w/2+bay*(i+.5),.11,d/2,colour,{steelColour:o.handle_colour||steel});
+    for(const side of [-1,1])box(.05,h-.04,.05,side*(w/2-.04),0,-d/2+.04,tone(colour,-.05));
+    cyl(.09,.05,w*.22,h,d*.05,'#d8cdb8',.14);for(const [x,z,fruit] of [[-.04,0,'#d9a441'],[.04,.02,'#c0503c'],[0,-.04,'#8fae5a']])ball(.045,w*.22+x,h+.07,d*.05+z,fruit);
+    return group;
+  }
   function cooker(o){
     const {group,box,cyl}=kit(),w=o.width,d=o.depth,h=o.height;
     box(w-.02,.1,d-.08,0,0,-.03,'#2f2c2a');box(w,h-.14,d-.03,0,.1,-.015,'#2b2d30');box(w+.012,.04,d+.02,0,h-.04,0,'#444544');
@@ -77,7 +87,7 @@ export function kitchenAssets({kit,tone,wood,cloth,seeded}){
     soft(w,.07,d,0,.43,0,seat,.03);const rest=soft(w-.02,h*.36,.045,0,h*.6,-d/2+.03,seat,.02);rest.rotation.x=-.08;
     return group;
   }
-  return {dining_table:diningTable,chair,fridge,
+  return {dining_table:diningTable,chair,fridge,island:o=>o.variant||o.product_id?null:island(o),
     kitchen_unit:o=>o.variant==='cooker'?cooker(o):o.variant==='extractor'?hood(o):['wall','glass'].includes(o.variant)?wallUnit(o):base(o),
     sink:o=>o.variant==='inset'?sink(o):null};
 }

@@ -7,6 +7,7 @@ Notable changes to Floorplan Card. Versions follow [Semantic Versioning](https:/
 ### Changed
 
 - **Breaking:** the **External** tab is now drawn in the illustrated style, from the same fixed angle as the rooms, and follows daylight. The orbiting camera, its zoom and reset controls, **Hide walls and roof** and the **Slow idle rotation** display setting are removed; choose a floor or **All** to see inside.
+- The computer chair, kitchen island, plant, floor lamp, outdoor wall light, computer tower, speaker and wall-mounted extractor fan are redrawn for the illustrated view. A floor lamp's shade now glows with its light.
 
 ### Added
 
@@ -18,6 +19,8 @@ Notable changes to Floorplan Card. Versions follow [Semantic Versioning](https:/
 ### Fixed
 
 - Ghosted wall fittings were drawn almost black; they are now lit like the rest of the room.
+- Repeated edits in the editor's review step could exhaust the browser's WebGL contexts and drop a live view to 2D; discarded views now release theirs at once.
+- A marker under an upper storey no longer shows for a moment after a refresh in the **All** view.
 
 ## 0.2.0 - 2026-10-07
 

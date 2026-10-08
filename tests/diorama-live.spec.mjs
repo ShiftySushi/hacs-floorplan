@@ -94,3 +94,13 @@ test('a blind and a turning frame can be reached and worked from the keyboard',a
   const box=await plan.boundingBox();for(const spot of [blind,frame]){const at=await spot.boundingBox();expect(at.x).toBeGreaterThan(box.x);expect(at.x+at.width).toBeLessThan(box.x+box.width);}
   await page.screenshot({path:test.info().outputPath('keyboard-hotspot.png')});
 });
+
+test('every redrawn furniture type has an illustrated model, and a floor lamp lights its own shade',async({page})=>{
+  const types=[['office_chair',.65,.65,1.1],['island',1.6,.9,.9],['plant',.5,.5,.9],['lamp',.4,.4,1.5],['wall_light',.14,.07,.26],['computer',.22,.45,.45],['speaker',.4,.16,.39],['extractor_fan',.2,.06,.2],['pegboard',.76,.035,.56],['printer_3d',.4,.4,.5],['nanoleaf_panels',1.8,.05,.8],['hue_motion_sensor',.055,.028,.055]];
+  const {plan}=await open(page,{objects:types.map(([type,width,depth,height],i)=>({id:type,type,width,depth,height,x:15+i%4*22,y:20+Math.floor(i/4)*28,...(type==='extractor_fan'?{variant:'wall'}:{}),...(type==='lamp'?{light_entity:'light.diner'}:{})})),
+    states:{'light.diner':{state:'on',attributes:{brightness:255,rgb_color:[255,120,40],supported_color_modes:['rgb']}}}});
+  expect((await plan.evaluate(node=>node.stats())).fallbacks).toEqual([]);
+  // The lamp's pool takes the light's colour: warm, so red leads blue under it.
+  await expect.poll(async()=>{const lit=await plan.evaluate(node=>node.sampleLight(document.querySelector('floorplan-card').config.floors[0].id,[81,20]));return lit[0]-lit[2];},{timeout:8000}).toBeGreaterThan(20);
+  await page.screenshot({path:test.info().outputPath('redrawn-furniture.png')});
+});

@@ -7,6 +7,7 @@ import {kitchenAssets} from './diorama-assets-kitchen.js';
 import {bathroomAssets} from './diorama-assets-bathroom.js';
 import {bedroomAssets} from './diorama-assets-bedroom.js';
 import {officeAssets} from './diorama-assets-office.js';
+import {livingAssets} from './diorama-assets-living.js';
 
 const tone=(colour,l,s=0)=>'#'+new THREE.Color(colour).offsetHSL(0,s,l).getHexString();
 // Illustration keeps its darks readable: near-black furniture is drawn as charcoal, so
@@ -210,17 +211,20 @@ export function createAssets(){
     return group;
   }
 
-  const context={kit,mat,wood,cloth,tone,seeded,bookColours},kitchen=kitchenAssets(context),bathroom=bathroomAssets(context),bedroom=bedroomAssets(context),office=officeAssets(context);
+  const context={kit,mat,wood,cloth,tone,seeded,bookColours},kitchen=kitchenAssets(context),bathroom=bathroomAssets(context),bedroom=bedroomAssets(context),office=officeAssets(context),living=livingAssets(context);
   const hung=o=>{const model=o.variant==='towel_rail'?bathroom.towelRail(o):radiator(o);return model;};
-  const builders={...kitchen,...bathroom,...bedroom,...office,sofa,tv,rug,radiator:hung,piano,display_cabinet:displayCabinet,computer,speaker,picture,
+  const builders={...kitchen,...bathroom,...bedroom,...office,office_chair:living.office_chair,plant:living.plant,wall_light:living.wall_light,extractor_fan:living.extractor_fan,sofa,tv,rug,radiator:hung,piano,display_cabinet:displayCabinet,picture,
+    computer:o=>computer(o)||(o.variant||o.product_id?null:living.tower(o)),speaker:o=>speaker(o)||(o.variant||o.product_id?null:living.bookshelfSpeaker(o)),
     bookshelf:o=>o.variant==='cubes'?office.cubes(o):bookshelf(o),sink:o=>kitchen.sink(o)||bathroom.sink(o),
     tv_bench:o=>cabinet(o,o.product_id?.startsWith('lyla-')?{colour:o.colour||'#ae784b'}:{colour:o.colour||'#252626',dark:true}),
-    side_table:o=>bedroom.side_table(o)||(o.variant?null:sideTable(o)),lamp:o=>o.product_id?.startsWith('mathmos-')?lavaLamp(o):null,tv_lightstrip:strip};
+    side_table:o=>bedroom.side_table(o)||(o.variant?null:sideTable(o)),lamp:o=>o.product_id?.startsWith('mathmos-')?lavaLamp(o):o.product_id?null:living.lamp(o),tv_lightstrip:strip};
 
+  // Library models built for one product and already composed for this angle; kept as they are.
+  const kept=new Set(['hue_motion_sensor','everything_presence_pro','everything_presence_one','everything_presence_lite','pegboard','printer_3d','nanoleaf_panels']);
   /** Returns a positioned-at-origin model; unknown types fall back to the existing library. */
   function build(object){
     const o={width:1,depth:.6,height:.8,...object},model=builders[o.type]?.(o);
-    if(!model){const fallback=furniture3D(object);fallback.userData.fallback=true;fallback.traverse(node=>{for(const material of [node.material].flat())if(material?.color&&!material.userData.lifted&&!material.map){material.color.set(lift('#'+material.color.getHexString()));material.userData.lifted=true;}});return fallback;}
+    if(!model){const fallback=furniture3D(object);fallback.userData.fallback=!kept.has(o.type);fallback.traverse(node=>{for(const material of [node.material].flat())if(material?.color&&!material.userData.lifted&&!material.map){material.color.set(lift('#'+material.color.getHexString()));material.userData.lifted=true;}});return fallback;}
     model.rotation.y=-(o.rotation||0)*Math.PI/180;return model;
   }
   return {build,dispose(){for(const texture of textures.values())texture.dispose();}};
