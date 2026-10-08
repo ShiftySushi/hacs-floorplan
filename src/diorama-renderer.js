@@ -131,7 +131,7 @@ export function renderDiorama(input,states,options={}){
         // A frame that can change picture or turn on its side stays a separate, clickable model.
         const turning=!!(object.media_entity||object.artwork_portrait_image);if(turning)model.userData.live=true;
         const art=artwork3D(object,model,options.viewState||={},`${floor.id}:${object.id}`,()=>{last=0;schedule();});artworks.push(art);
-        if(turning)frames.push({art,index,local:middle});
+        if(turning)frames.push({art,index,local:middle,name:object.name||'Picture frame'});
       }
       if(object.type==='printer_3d'&&object.status_entity){model.userData.live=true;printers.push({object,model});}
       if(object.presence_entities?.length){const leds=[];model.traverse(node=>{if(node.userData.presenceLED)leds.push(node.material);});const sprite=glowSprite(shell.group,middle,.2);sprite.material.color.set('#57e0a8');sensors.push({object,leds,sprite});}
@@ -208,6 +208,10 @@ export function renderDiorama(input,states,options={}){
   for(const pill of pills)pill.covered=covered(pill.index,pill.local);
   for(const frame of frames)frame.covered=covered(frame.index,frame.local);
   const blinds=windows.filter(entry=>entry.blind);for(const blind of blinds)blind.covered=covered(blind.index,blind.local);
+  // Frames and blinds are only drawn on the canvas, so each also gets a focusable hotspot for the keyboard.
+  const turn=frame=>{frame.art.toggle();options.onViewChange?.();},pull=blind=>{(options.blindStates||={})[blind.key]=options.blindStates[blind.key]!==true;options.onViewChange?.();last=0;schedule();};
+  const spot=(target,label,pressed,activate)=>({anchor:()=>target.local.clone().add(storeys[target.index].group.position),covered:target.covered,label,pressed,activate});
+  overlay.setHotspots([...frames.map(frame=>spot(frame,`${frame.name}: turned to portrait`,()=>frame.art.portrait,()=>turn(frame))),...blinds.map(blind=>spot(blind,`${blind.opening.name||'Window'} blind: drawn`,()=>options.blindStates?.[blind.key]===true,()=>pull(blind)))]);
   const reading=(id,digits,unit)=>{const value=Number(states[id]?.state);return id&&Number.isFinite(value)?`${value.toFixed(digits)}${unit}`:'';};
   function readouts(){
     overlay.setWeather(options.forecast);
@@ -340,6 +344,8 @@ export function renderDiorama(input,states,options={}){
     for(const marker of next){
       const storey=storeys.find(s=>s.floor.id===marker.floorId),height=marker.height??fittingHeights.get(`${marker.floorId}:${marker.entity}`)??.35;
       marker.local=storey.position([marker.x,marker.y],height);marker.covered=covered(storey.index,marker.local);
+      // Hidden from the start, so a covered marker never shows before the next frame is drawn.
+      marker.node.hidden=marker.covered&&spread<.6;
       if(!marker.node.matches('.room-readout'))continue;
       const signature=marker.node.outerHTML,old=previous.get(`${marker.floorId}:${marker.node.dataset.roomId}`);
       if(old?.signature===signature){marker.node=old.node;retained.add(old.node);}
@@ -365,8 +371,8 @@ export function renderDiorama(input,states,options={}){
   };
   renderer.domElement.addEventListener('click',event=>{
     const light=options.onLightClick&&nearest(event,targets),frame=!light&&nearest(event,frames),blind=!light&&!frame&&nearest(event,blinds);
-    if(light)options.onLightClick(light.floorId,light.id);else if(frame){frame.art.toggle();options.onViewChange?.();}
-    else if(blind){(options.blindStates||={})[blind.key]=options.blindStates[blind.key]!==true;options.onViewChange?.();last=0;schedule();}
+    if(light)options.onLightClick(light.floorId,light.id);else if(frame)turn(frame);
+    else if(blind)pull(blind);
     else if(house){pinned=!pinned;retarget();}
   });
   let fallback;

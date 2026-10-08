@@ -79,3 +79,18 @@ test('daylight comes in through a window unless its blind is drawn, and fades in
   await set({'sun.sun':{state:'below_horizon',attributes:{elevation:-20}}});
   await expect.poll(async()=>sum(await light([50,12])),{timeout:10000}).toBe(0);
 });
+
+test('a blind and a turning frame can be reached and worked from the keyboard',async({page})=>{
+  const {plan}=await open(page,{door:{id:'window',type:'window',name:'Garden window',offset:.75,width:1.6,height:1.2,sill:.9,blinds:true},
+    objects:[{id:'frame',type:'picture',name:'Hall frame',x:25,y:2,width:.7,depth:.04,height:.5,elevation_m:1.3,media_entity:'media_player.frame'}]});
+  const blind=plan.getByRole('button',{name:'Garden window blind: drawn'}),frame=plan.getByRole('button',{name:'Hall frame: turned to portrait'});
+  await expect(blind).toHaveAttribute('aria-pressed','false');await expect(frame).toHaveAttribute('aria-pressed','false');
+  await blind.focus();await page.keyboard.press('Enter');
+  await expect(blind).toHaveAttribute('aria-pressed','true');await expect(plan).toHaveAttribute('data-blinds-closed','1');
+  await frame.focus();await page.keyboard.press('Space');
+  await expect(frame).toHaveAttribute('aria-pressed','true');
+  expect(await page.evaluate(()=>Object.values(document.querySelector('floorplan-card').viewStates).some(view=>Object.values(view.portraits||{}).includes(true)))).toBe(true);
+  // The hotspots sit on the things they work, inside the drawing.
+  const box=await plan.boundingBox();for(const spot of [blind,frame]){const at=await spot.boundingBox();expect(at.x).toBeGreaterThan(box.x);expect(at.x+at.width).toBeLessThan(box.x+box.width);}
+  await page.screenshot({path:test.info().outputPath('keyboard-hotspot.png')});
+});

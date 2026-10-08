@@ -27,5 +27,5 @@ export function artwork3D(object,model,view,key,changed){
     load(url,fallback||safeArtwork(object.artwork_image));
   }
   paint();
-  return {model,update,toggle(){view.portraits ??={};view.portraits[key]=!view.portraits[key];paint();update(lastStates);changed();},dispose(){disposed=true;serial++;texture.dispose();}};
+  return {model,update,get portrait(){return !!view.portraits?.[key];},toggle(){view.portraits ??={};view.portraits[key]=!view.portraits[key];paint();update(lastStates);changed();},dispose(){disposed=true;serial++;texture.dispose();}};
 }

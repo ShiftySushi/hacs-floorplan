@@ -80,7 +80,7 @@ Furniture editing opens in neutral **2D edit**. Choose **3D preview** to see tha
 
 The illustrated view follows your home as it changes. Lights fade between states over about half a second, and wall panels play their Breathe, Wave or Rainbow effect. An addressable strip shows how much of its length is lit. A radiator glows while it is heating, a door with a contact sensor stands open or shut with it, a printer's toolhead moves while it prints and its screen turns red on an error, and a presence sensor's status light comes on when it detects someone. A TV with `tv_scenes` shows those stills, five minutes each, instead of the generated films. A framed picture bound to a media player shows what is playing; click a frame that has a media player or a portrait image to turn it between landscape and portrait.
 
-The view follows the time of day. In the evening it is a dim scene lit by your lamps; as the sun rises the rooms brighten, the lamps fade into the daylight and light falls through each outside window. Click a window blind to draw or open it: a drawn blind keeps the daylight out, and the choice is saved in the current browser. The sun's height comes from Home Assistant's Sun integration, with cloud cover from your weather entity.
+The view follows the time of day. In the evening it is a dim scene lit by your lamps; as the sun rises the rooms brighten, the lamps fade into the daylight and light falls through each outside window. Click a window blind to draw or open it: a drawn blind keeps the daylight out, and the choice is saved in the current browser. From the keyboard, Tab reaches each blind and each picture frame that can turn; Enter or Space works it. The sun's height comes from Home Assistant's Sun integration, with cloud cover from your weather entity.
 
 Sloping ceilings and rooflights are drawn where they fall away from the viewer, as part of the backdrop; a slope that would cover the room is drawn see-through instead, and a rooflight lets daylight in like a window. Fitted wardrobe fronts follow their wall: full doors where the wall stands, and only their lower part where it is cut down.
 
@@ -88,7 +88,7 @@ Anything hung on a wall that the view cuts away, such as kitchen wall cupboards 
 
 **Follow**, the person icon in the floorplan tools, shows the whole house and keeps only the rooms whose presence sensors are active fully lit; every other room dims, and the storeys spread so an occupied room is never hidden under the floor above. It appears once a room has a presence sensor, and choosing a floor, External or All leaves it. On a single floor, **Focus room** picks one room out the same way by hand. Both choices are saved in the current browser.
 
-In the **All** view, rest the pointer on the drawing for a moment, click it, or press Enter to spread the storeys apart. Display settings offer **Ground floor on the left when spread**; without it the storeys take whichever order nests them most closely.
+In the **All** view, rest the pointer on the drawing for a moment, click it, or press Enter to spread the storeys apart. Display settings offer **Ground floor on the left when spread**; without it the storeys take whichever order nests them most closely. A room with several light markers shows one marker with their count here; choose it to open that floor and its individual lights. Turning on **Select lights** shows every marker again.
 
 ### Not yet in the illustrated view
 
