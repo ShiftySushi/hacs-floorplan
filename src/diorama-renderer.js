@@ -344,6 +344,8 @@ export function renderDiorama(input,states,options={}){
     for(const marker of next){
       const storey=storeys.find(s=>s.floor.id===marker.floorId),height=marker.height??fittingHeights.get(`${marker.floorId}:${marker.entity}`)??.35;
       marker.local=storey.position([marker.x,marker.y],height);marker.covered=covered(storey.index,marker.local);
+      // Hidden from the start, so a covered marker never shows before the next frame is drawn.
+      marker.node.hidden=marker.covered&&spread<.6;
       if(!marker.node.matches('.room-readout'))continue;
       const signature=marker.node.outerHTML,old=previous.get(`${marker.floorId}:${marker.node.dataset.roomId}`);
       if(old?.signature===signature){marker.node=old.node;retained.add(old.node);}
