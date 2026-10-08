@@ -6,6 +6,7 @@ const assets = new Map([
   ['/src/demo-boot.css', ['src/demo-boot.css', 'text/css']],
   ['/demo/', ['demo/index.html', 'text/html']],
   ['/demo/sample.svg', ['demo/sample.svg', 'image/svg+xml']],
+  ['/demo/icon.svg', ['demo/icon.svg', 'image/svg+xml']],
   ['/dist/hacs-floorplan.js', ['dist/hacs-floorplan.js', 'text/javascript']],
   ['/src/demo-workspace.js', ['src/demo-workspace.js', 'text/javascript']],
   ['/src/icons.js', ['src/icons.js', 'text/javascript']],

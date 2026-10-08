@@ -83,7 +83,7 @@ export function renderExterior(exterior,floor,states,options={}){
   function dispose(){
     fallback?.dispose?.();if(disposed)return;disposed=true;released=true;cancelAnimationFrame(frameId);clearTimeout(timer);resize.disconnect();intersection.disconnect();document.removeEventListener('visibilitychange',visibility);
     const geometries=new Set(),materials=new Set();scene.traverse(node=>{if(node.geometry)geometries.add(node.geometry);for(const material of [node.material].flat())if(material)materials.add(material);});
-    geometries.forEach(geometry=>geometry.dispose());materials.forEach(material=>{material.map?.dispose();material.dispose();});ink.dispose();renderer.dispose();
+    geometries.forEach(geometry=>geometry.dispose());materials.forEach(material=>{material.map?.dispose();material.dispose();});ink.dispose();renderer.dispose();renderer.forceContextLoss();
   }
   /** Keep the picture clear of `pixels` of host UI along the right edge of the stage. */
   plan.reserve=pixels=>{const share=Math.max(0,Math.min(.5,pixels/(plan.clientWidth||1)));if(share!==reserved){reserved=share;refit=true;schedule();}};

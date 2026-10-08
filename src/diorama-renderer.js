@@ -376,7 +376,7 @@ export function renderDiorama(input,states,options={}){
     else if(house){pinned=!pinned;retarget();}
   });
   let fallback;
-  renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();dispose();fallback=flat('3D graphics were interrupted. Showing 2D.');plan.replaceChildren(fallback);});
+  renderer.domElement.addEventListener('webglcontextlost',event=>{if(disposed)return;event.preventDefault();dispose();fallback=flat('3D graphics were interrupted. Showing 2D.');plan.replaceChildren(fallback);});
   if(house){
     const canvas=renderer.domElement;canvas.tabIndex=0;canvas.setAttribute('role','button');canvas.setAttribute('aria-label','Illustrated floorplan. Activate to spread the floors apart or stack them again.');canvas.style.cursor='pointer';
     // Hover opens the stack only once the pointer has rested on the drawing itself. Opening
@@ -395,6 +395,8 @@ export function renderDiorama(input,states,options={}){
     geometries.forEach(g=>g.dispose());materials.forEach(m=>{m.map?.dispose();m.dispose();});
     for(const art of artworks)art.dispose();for(const tv of televisions){clearInterval(tv.timer);tv.slides.dispose();}
     haloMap.dispose();lightmap.dispose();for(const shell of shells)shell.dispose();assets.dispose();overlay.dispose();ink.dispose();renderer.dispose();
+    // Browsers keep only a few WebGL contexts and drop the oldest; hand this one back now, not at collection.
+    renderer.forceContextLoss();
   }
   /** Keep the picture clear of `pixels` of host UI along the right edge of the stage. */
   plan.reserve=pixels=>{const share=Math.max(0,Math.min(.5,pixels/(plan.clientWidth||1)));if(share!==reserved){reserved=share;refit=true;last=0;schedule();}};

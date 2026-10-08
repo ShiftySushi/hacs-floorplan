@@ -13,7 +13,7 @@ const columns=4,rowsPerSheet=3,perSheet=columns*rowsPerSheet,cell=2.8,width=colu
 // Towards the south-east camera is straight down the screen, so a caption placed just in
 // front of a model's footprint sits directly beneath it.
 const at=slot=>[((slot%columns)+.4)/columns*100,(Math.floor(slot/columns)+.4)/rowsPerSheet*100];
-const sheet=number=>entries.slice(number*perSheet,(number+1)*perSheet).map((entry,slot)=>{const [x,y]=at(slot);const below=Math.min(1.2,(entry.width+entry.depth)/4+.25);return {caption:entry.label,point:[x+below/width*100,y+below/depth*100],object:{id:`review-${slot}`,type:entry.type,...(entry.variant?{variant:entry.variant}:{}),x,y,width:entry.width,depth:entry.depth,height:entry.height,rotation:0}};});
+const sheet=number=>entries.slice(number*perSheet,(number+1)*perSheet).map((entry,slot)=>{const [x,y]=at(slot);const below=Math.min(1.2,(entry.width+entry.depth)/4+.25);return {caption:entry.label,point:[x+below/width*100,y+below/depth*100],object:{id:`review-${slot}`,type:entry.type,...(entry.variant?{variant:entry.variant}:{}),x,y,width:entry.width,...(entry.type==='extractor_fan'&&entry.variant==='wall'?{depth:entry.height,height:entry.depth}:{depth:entry.depth,height:entry.height}),rotation:0}};});
 
 const port=process.env.PORT||'8127',server=spawn(process.execPath,['scripts/serve-demo.mjs'],{stdio:'ignore',env:{...process.env,PORT:port}});
 await new Promise(resolve=>setTimeout(resolve,1200));await mkdir('asset-review',{recursive:true});
