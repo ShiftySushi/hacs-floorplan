@@ -15,6 +15,7 @@ const collectionStyles='.collection-controls{display:grid;grid-template-columns:
 import {sceneEntities,sceneState} from './ha-updates.js';
 import {informationPanel,informationStyles} from './information-panel.js';
 import {lightToggleIds} from './light-targets.js';
+import {clusterLights} from './marker-clusters.js';
 import {roomPanel,roomPanelStyles,openRoom,cameraThumbnail} from './room-panel.js';
 import {roomEnvironment,radiatorEntity,objectRoom,printerState,doorState,doorDescription,sensorText} from './live-data.js';
 import {refreshCalendars} from './calendar-data.js';
@@ -147,8 +148,10 @@ export class FloorplanCard extends HTMLElement {
       const markers = [];
       const markerFloors=allFloors||exterior?this.config.floors:[floor];
       for(const floor of markerFloors) {
+      // With every storey drawn small, a room's lights share one marker that opens its floor.
+      const clusters=allFloors&&!this.selectionMode?clusterLights(floor):[],clustered=new Set(clusters.flatMap(cluster=>cluster.items));
       floor.entities.forEach(item => {
-        if(display.hide_cameras&&item.entity.startsWith('camera.'))return;
+        if(display.hide_cameras&&item.entity.startsWith('camera.')||clustered.has(item))return;
         const state = item.unbound?undefined:states[item.entity]; const light = item.entity.startsWith('light.');
         const name = item.name || state?.attributes.friendly_name || item.entity;
         const text = item.unbound?'Not connected':!available(state) ? 'Unavailable' : light ? state.state === 'on' ? 'On' : 'Off' : `${state.state} ${state.attributes.unit_of_measurement || ''}`.trim();
@@ -166,6 +169,12 @@ export class FloorplanCard extends HTMLElement {
         if(this.config.appearance?.labels)marker.append(element('span',{className:'marker-label',text:name}));
         markers.push({ node: marker, x: item.x, y: item.y, entity:item.entity, floorId:floor.id });
       });
+      for(const {room,items,x,y} of clusters) {
+        const lit=items.filter(item=>!item.unbound&&available(states[item.entity])&&states[item.entity].state==='on').length,label=`${room.name||'Room'}: ${items.length} lights, ${lit} on. Show ${floor.name||floor.id}`;
+        const marker=button('',()=>{this.floorId=floor.id;this.building=false;this.follow=false;this.render();},{className:`marker overlay-lights light-cluster${lit?' on':''}`,title:label,'aria-label':label});
+        marker.append(icon('bulb'),element('small',{className:'cluster-count',text:String(items.length)}));
+        markers.push({node:marker,x,y,entity:items[0].entity,floorId:floor.id});
+      }
       for(const room of floor.rooms || []) {
         const temperature=roomTemperature(room,states);
         const presence=roomState(room,states,floor);

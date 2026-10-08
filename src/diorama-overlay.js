@@ -16,6 +16,8 @@ const css=`
 .dio-overlay svg.dio-icon{width:1.05em;height:1.05em;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;opacity:.85}
 .dio-compact .dio-pill{font-size:clamp(9px,.74cqw,13px);gap:.8em;padding:.32em .7em}
 .dio-label{position:absolute;transform:translate(-50%,10px);font-size:clamp(11px,1.15cqw,19px);font-weight:600;letter-spacing:.16em;text-transform:uppercase;opacity:0;white-space:nowrap;text-shadow:0 1px 8px #000a}
+.dio-overlay button.dio-hotspot{position:absolute;transform:translate(-50%,-50%);width:44px;height:44px;min-width:0;min-height:0;padding:0;border:0;border-radius:50%;background:none;box-shadow:none;opacity:0;pointer-events:none}
+.dio-overlay button.dio-hotspot:focus-visible{opacity:1;outline:3px solid #fff;outline-offset:0;box-shadow:0 0 0 6px #000a}
 .dio-pill{transition:opacity .25s}.dio-pill{position:absolute;transform:translate(-50%,-50%);display:flex;gap:1.1em;padding:.42em .95em;border-radius:99px;background:#2a2b30b8;border:1px solid #ffffff14;backdrop-filter:blur(6px);font-size:clamp(11px,1.02cqw,17px);font-weight:500;box-shadow:0 2px 14px #0005}
 `;
 const paths={
@@ -39,7 +41,7 @@ export function createOverlay(plan,{compact=false,clock:showClock=false}={}){
   const temp=element('div',{className:'dio-temp'}),facts=element('div',{className:'dio-facts'}),weather=element('div',{className:'dio-weather'},[sky(),temp,facts]);
   const time=element('span'),date=element('small'),clock=element('div',{className:'dio-clock'},[time,date]);
   clock.hidden=!showClock;weather.hidden=true;root.append(clock,weather);plan.append(style,root);
-  let pills=[],labels=[],measured=-1;
+  let pills=[],labels=[],spots=[],measured=-1;
   const tick=()=>{const now=new Date();time.textContent=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});date.textContent=now.toLocaleDateString([],{weekday:'long',day:'numeric',month:'long'});};
   tick();const timer=setInterval(tick,15000);
   return {
@@ -51,6 +53,8 @@ export function createOverlay(plan,{compact=false,clock:showClock=false}={}){
     setPills(next){for(const pill of pills)pill.node.remove();pills=next.map(pill=>{const node=element('div',{className:'dio-pill'});for(const [name,text] of pill.facts)node.append(fact(name,text));root.append(node);return {...pill,node};});measured=-1;},
     /** Storey captions, shown only while the storeys are spread apart. */
     setLabels(next){for(const label of labels)label.node.remove();labels=next.map(label=>{const node=element('div',{className:'dio-label',text:label.text});root.append(node);return {...label,node};});},
+    /** Keyboard stand-ins for things clicked on the canvas: {anchor, covered, label, pressed: () => boolean, activate}. */
+    setHotspots(next){for(const spot of spots)spot.node.remove();spots=next.map(spot=>{const node=element('button',{className:'dio-hotspot',type:'button','aria-label':spot.label});node.addEventListener('click',()=>spot.activate());root.append(node);return {...spot,node};});},
     /** Anchors are functions so readouts follow a storey as it slides. `spread` runs 0 (stacked) to 1. */
     layout(camera,spread=0){
       const place=(node,anchor)=>{const p=anchor().project(camera);node.style.left=`${(p.x*.5+.5)*100}%`;node.style.top=`${(-p.y*.5+.5)*100}%`;};
@@ -62,6 +66,7 @@ export function createOverlay(plan,{compact=false,clock:showClock=false}={}){
         for(let pass=0;pass<placed.length;pass++){const hit=placed.find(other=>Math.abs(other.x-item.x)<(other.pill.w+item.pill.w)/2+4&&Math.abs(other.y-item.y)<(other.pill.h+item.pill.h)/2+3);if(!hit)break;item.y=hit.y+(hit.pill.h+item.pill.h)/2+3;}
         placed.push(item);item.pill.node.style.left=`${item.x}px`;item.pill.node.style.top=`${item.y}px`;
       }
+      for(const spot of spots){place(spot.node,spot.anchor);spot.node.hidden=spot.covered&&spread<.6;const pressed=String(!!spot.pressed());if(spot.state!==pressed){spot.state=pressed;spot.node.setAttribute('aria-pressed',pressed);}}
       for(const {anchor,node} of labels){place(node,anchor);node.style.opacity=String(Math.max(0,spread*2-1)*.8);}
     },
     dispose(){clearInterval(timer);root.remove();style.remove();}

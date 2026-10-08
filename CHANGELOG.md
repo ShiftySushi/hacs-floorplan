@@ -12,6 +12,8 @@ Notable changes to Floorplan Card. Versions follow [Semantic Versioning](https:/
 
 - **Follow** keeps occupied rooms lit across the whole house and dims the rest; **Focus room** does the same for one chosen room of a floor.
 - Rain, snow, fog and cloud are drawn in the External view, and both illustrated views have a sky that pales towards the horizon.
+- In the **All** view a room's light markers gather into one counted marker that opens its floor, so a small screen is less crowded.
+- Window blinds and turning picture frames can be reached with Tab and worked with Enter or Space.
 
 ### Fixed
 
